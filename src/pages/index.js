@@ -500,8 +500,16 @@ export default function Home() {
   const {siteConfig} = useDocusaurusContext();
   return (
     <Layout
-      title={translate({id: "meta.title", message: `欢迎来到${siteConfig.title}`})}
-      description={translate({id: "meta.description", message: "全栈开发工程师的博客，分享Web开发见解、教程和最佳实践"})}
+      title={translate({
+        id: "meta.title", 
+        message: "欢迎来到Laby的博客",
+        description: "Homepage meta title"
+      })}
+      description={translate({
+        id: "meta.description", 
+        message: "全栈开发工程师的博客，分享Web开发见解、教程和最佳实践",
+        description: "Homepage meta description"
+      })}
     >
       <HeroHeader />
       <main>

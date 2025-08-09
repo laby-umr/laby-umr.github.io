@@ -108,6 +108,12 @@ const config = {
             language: 'zh-CN',
           },
         },
+        sitemap: {
+          changefreq: 'weekly',
+          priority: 0.5,
+          ignorePatterns: ['/tags/**'],
+          filename: 'sitemap.xml',
+        },
         theme: {
           customCss: './src/css/custom.css',
         },
@@ -166,7 +172,7 @@ const config = {
               },
               {
                 label: '知识库导航',
-                to: '/docs',
+                to: '/docs/intro',
               },
             ],
           },
@@ -187,10 +193,6 @@ const config = {
             title: '更多',
             items: [
               {
-                label: 'RSS订阅',
-                to: '/blog/rss.xml',
-              },
-              {
                 label: '关于我',
                 to: '/about',
               },
@@ -204,6 +206,14 @@ const config = {
         darkTheme: prismThemes.dracula,
         additionalLanguages: ['java', 'scala', 'go', 'rust', 'swift'],
       },
+      // 添加元数据，有助于SEO
+      metadata: [
+        {name: 'keywords', content: 'blog, javascript, typescript, react, vue, java, spring, 前端, 后端, 全栈开发'},
+        {name: 'twitter:card', content: 'summary_large_image'},
+        {property: 'og:type', content: 'website'},
+        {property: 'og:title', content: 'Laby的博客 - 探索现代Web开发的全部领域'},
+        {property: 'og:description', content: '关注前后端开发、DevOps和系统架构设计的技术博客'},
+      ],
     }),
 };
 
