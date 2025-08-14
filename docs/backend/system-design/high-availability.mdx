@@ -1,21 +1,827 @@
 ---
-sidebar_position: 2
-title: "高可用"
-description: "高可用系统设计与实践"
+sidebar_position: 3
+title: "高可用性系统设计"
+description: "深入理解高可用性系统设计原理、故障处理与容错机制"
 authors: [Laby]
 last_update:
   date: 2025-08-07
   author: Laby
 ---
 
-# 高可用
+# 高可用性系统设计
 
-## 负载均衡
+高可用性系统设计是构建稳定可靠、持续提供服务系统的核心技术。通过冗余设计、故障转移、监控告警等机制，可以构建出高可用的系统。
 
-## 故障转移
+:::tip 核心价值
+高可用性 = 冗余设计 + 故障转移 + 容错机制 + 监控告警 + 自动恢复
+:::
 
-## 容灾备份
+## 1. 高可用性基础
 
-## 监控告警
+### 1.1 可用性指标
 
-## 面试题 
+高可用性系统的核心指标：
+
+| 指标 | 说明 | 目标值 |
+|------|------|--------|
+| **可用性 (Availability)** | 系统正常运行时间比例 | 99.9%+ |
+| **MTBF (Mean Time Between Failures)** | 平均故障间隔时间 | 越长越好 |
+| **MTTR (Mean Time To Repair)** | 平均故障修复时间 | 越短越好 |
+| **RTO (Recovery Time Objective)** | 恢复时间目标 | < 5分钟 |
+| **RPO (Recovery Point Objective)** | 恢复点目标 | < 1分钟 |
+
+```java title="可用性监控示例"
+@Component
+public class AvailabilityMonitor {
+    
+    private final MeterRegistry meterRegistry;
+    private final AtomicLong totalRequests = new AtomicLong(0);
+    private final AtomicLong failedRequests = new AtomicLong(0);
+    private final AtomicLong startTime = new AtomicLong(System.currentTimeMillis());
+    
+    public AvailabilityMonitor(MeterRegistry meterRegistry) {
+        this.meterRegistry = meterRegistry;
+    }
+    
+    public void recordRequest(boolean success) {
+        totalRequests.incrementAndGet();
+        if (!success) {
+            failedRequests.incrementAndGet();
+        }
+        
+        // 计算可用性
+        double availability = calculateAvailability();
+        
+        // 记录到监控系统
+        Gauge.builder("system.availability")
+            .register(meterRegistry, this, AvailabilityMonitor::calculateAvailability);
+    }
+    
+    public double calculateAvailability() {
+        long total = totalRequests.get();
+        long failed = failedRequests.get();
+        
+        if (total == 0) {
+            return 100.0;
+        }
+        
+        return ((double) (total - failed) / total) * 100;
+    }
+    
+    public long getUptime() {
+        return System.currentTimeMillis() - startTime.get();
+    }
+    
+    public double getMTBF() {
+        // 计算平均故障间隔时间
+        long totalTime = getUptime();
+        long failureCount = failedRequests.get();
+        
+        if (failureCount == 0) {
+            return Double.MAX_VALUE;
+        }
+        
+        return (double) totalTime / failureCount;
+    }
+}
+```
+
+### 1.2 故障类型分析
+
+```java title="故障分类与处理"
+public enum FailureType {
+    // 硬件故障
+    HARDWARE_FAILURE("硬件故障", "服务器、网络设备、存储设备故障"),
+    
+    // 软件故障
+    SOFTWARE_FAILURE("软件故障", "程序崩溃、内存泄漏、死锁"),
+    
+    // 网络故障
+    NETWORK_FAILURE("网络故障", "网络中断、延迟过高、丢包"),
+    
+    // 人为故障
+    HUMAN_ERROR("人为故障", "配置错误、误操作、代码缺陷"),
+    
+    // 自然灾害
+    NATURAL_DISASTER("自然灾害", "地震、火灾、洪水"),
+    
+    // 外部依赖故障
+    EXTERNAL_DEPENDENCY("外部依赖故障", "第三方服务故障、API限流");
+    
+    private final String name;
+    private final String description;
+    
+    FailureType(String name, String description) {
+        this.name = name;
+        this.description = description;
+    }
+}
+
+@Component
+public class FailureHandler {
+    
+    private final Map<FailureType, FailureStrategy> strategies = new HashMap<>();
+    
+    public FailureHandler() {
+        strategies.put(FailureType.HARDWARE_FAILURE, new HardwareFailureStrategy());
+        strategies.put(FailureType.SOFTWARE_FAILURE, new SoftwareFailureStrategy());
+        strategies.put(FailureType.NETWORK_FAILURE, new NetworkFailureStrategy());
+        strategies.put(FailureType.EXTERNAL_DEPENDENCY, new ExternalDependencyStrategy());
+    }
+    
+    public void handleFailure(FailureType type, String details) {
+        FailureStrategy strategy = strategies.get(type);
+        if (strategy != null) {
+            strategy.handle(details);
+        } else {
+            log.error("未知故障类型: {}", type);
+        }
+    }
+}
+
+interface FailureStrategy {
+    void handle(String details);
+}
+
+class HardwareFailureStrategy implements FailureStrategy {
+    @Override
+    public void handle(String details) {
+        // 硬件故障处理：切换到备用服务器
+        log.info("处理硬件故障: {}", details);
+        // 执行故障转移逻辑
+    }
+}
+```
+
+## 2. 冗余设计
+
+### 2.1 硬件冗余
+
+```java title="硬件冗余配置"
+@Configuration
+public class HardwareRedundancyConfig {
+    
+    @Bean
+    @Primary
+    public DataSource primaryDataSource() {
+        HikariConfig config = new HikariConfig();
+        config.setJdbcUrl("jdbc:mysql://primary-db:3306/test");
+        config.setUsername("root");
+        config.setPassword("password");
+        config.setMaximumPoolSize(20);
+        return new HikariDataSource(config);
+    }
+    
+    @Bean
+    public DataSource secondaryDataSource() {
+        HikariConfig config = new HikariConfig();
+        config.setJdbcUrl("jdbc:mysql://secondary-db:3306/test");
+        config.setUsername("root");
+        config.setPassword("password");
+        config.setMaximumPoolSize(20);
+        return new HikariDataSource(config);
+    }
+    
+    @Bean
+    public DataSource routingDataSource() {
+        RoutingDataSource routingDataSource = new RoutingDataSource();
+        Map<Object, Object> targetDataSources = new HashMap<>();
+        targetDataSources.put("primary", primaryDataSource());
+        targetDataSources.put("secondary", secondaryDataSource());
+        routingDataSource.setTargetDataSources(targetDataSources);
+        routingDataSource.setDefaultTargetDataSource(primaryDataSource());
+        return routingDataSource;
+    }
+}
+
+// 数据源路由
+public class RoutingDataSource extends AbstractRoutingDataSource {
+    
+    @Override
+    protected Object determineCurrentLookupKey() {
+        return DataSourceContextHolder.getDataSourceType();
+    }
+}
+
+// 数据源上下文
+public class DataSourceContextHolder {
+    
+    private static final ThreadLocal<String> contextHolder = new ThreadLocal<>();
+    
+    public static void setDataSourceType(String dataSourceType) {
+        contextHolder.set(dataSourceType);
+    }
+    
+    public static String getDataSourceType() {
+        return contextHolder.get();
+    }
+    
+    public static void clearDataSourceType() {
+        contextHolder.remove();
+    }
+}
+```
+
+### 2.2 软件冗余
+
+```java title="服务冗余设计"
+@Service
+public class ServiceRedundancy {
+    
+    @Autowired
+    private List<EmailService> emailServices;
+    
+    @Autowired
+    private CircuitBreaker circuitBreaker;
+    
+    public void sendEmail(String to, String subject, String content) {
+        // 尝试所有可用的邮件服务
+        for (EmailService emailService : emailServices) {
+            try {
+                if (circuitBreaker.isHealthy(emailService.getClass().getSimpleName())) {
+                    emailService.sendEmail(to, subject, content);
+                    return; // 发送成功，退出
+                }
+            } catch (Exception e) {
+                log.error("邮件服务 {} 发送失败", emailService.getClass().getSimpleName(), e);
+                circuitBreaker.recordFailure(emailService.getClass().getSimpleName());
+            }
+        }
+        
+        // 所有服务都失败，记录错误
+        log.error("所有邮件服务都不可用");
+        throw new ServiceUnavailableException("邮件服务不可用");
+    }
+}
+
+// 熔断器实现
+@Component
+public class CircuitBreaker {
+    
+    private Map<String, CircuitBreakerState> states = new ConcurrentHashMap<>();
+    
+    public boolean isHealthy(String serviceName) {
+        CircuitBreakerState state = states.get(serviceName);
+        if (state == null) {
+            state = new CircuitBreakerState();
+            states.put(serviceName, state);
+        }
+        return state.isHealthy();
+    }
+    
+    public void recordFailure(String serviceName) {
+        CircuitBreakerState state = states.get(serviceName);
+        if (state != null) {
+            state.recordFailure();
+        }
+    }
+    
+    public void recordSuccess(String serviceName) {
+        CircuitBreakerState state = states.get(serviceName);
+        if (state != null) {
+            state.recordSuccess();
+        }
+    }
+}
+
+class CircuitBreakerState {
+    private AtomicInteger failureCount = new AtomicInteger(0);
+    private AtomicLong lastFailureTime = new AtomicLong(0);
+    private AtomicBoolean isOpen = new AtomicBoolean(false);
+    
+    private static final int FAILURE_THRESHOLD = 5;
+    private static final long TIMEOUT = 60000; // 60秒
+    
+    public boolean isHealthy() {
+        if (isOpen.get()) {
+            long now = System.currentTimeMillis();
+            if (now - lastFailureTime.get() > TIMEOUT) {
+                // 尝试半开状态
+                isOpen.set(false);
+                failureCount.set(0);
+                return true;
+            }
+            return false;
+        }
+        return true;
+    }
+    
+    public void recordFailure() {
+        failureCount.incrementAndGet();
+        lastFailureTime.set(System.currentTimeMillis());
+        
+        if (failureCount.get() >= FAILURE_THRESHOLD) {
+            isOpen.set(true);
+        }
+    }
+    
+    public void recordSuccess() {
+        failureCount.set(0);
+        isOpen.set(false);
+    }
+}
+```
+
+## 3. 故障转移机制
+
+### 3.1 自动故障转移
+
+```java title="自动故障转移实现"
+@Component
+public class AutoFailover {
+    
+    @Autowired
+    private List<DataSource> dataSources;
+    
+    private AtomicInteger currentIndex = new AtomicInteger(0);
+    private AtomicBoolean[] healthStatus;
+    
+    @PostConstruct
+    public void init() {
+        healthStatus = new AtomicBoolean[dataSources.size()];
+        for (int i = 0; i < healthStatus.length; i++) {
+            healthStatus[i] = new AtomicBoolean(true);
+        }
+        
+        // 启动健康检查
+        startHealthCheck();
+    }
+    
+    public DataSource getHealthyDataSource() {
+        for (int i = 0; i < dataSources.size(); i++) {
+            int index = (currentIndex.get() + i) % dataSources.size();
+            if (healthStatus[index].get()) {
+                return dataSources.get(index);
+            }
+        }
+        throw new ServiceUnavailableException("没有可用的数据源");
+    }
+    
+    public void switchToNextDataSource() {
+        int current = currentIndex.get();
+        int next = (current + 1) % dataSources.size();
+        currentIndex.set(next);
+        log.info("切换到数据源: {}", next);
+    }
+    
+    @Scheduled(fixedRate = 5000)
+    public void healthCheck() {
+        for (int i = 0; i < dataSources.size(); i++) {
+            boolean healthy = checkDataSourceHealth(dataSources.get(i));
+            healthStatus[i].set(healthy);
+            
+            if (!healthy) {
+                log.warn("数据源 {} 不健康", i);
+            }
+        }
+    }
+    
+    private boolean checkDataSourceHealth(DataSource dataSource) {
+        try (Connection conn = dataSource.getConnection()) {
+            conn.createStatement().execute("SELECT 1");
+            return true;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+}
+```
+
+### 3.2 负载均衡故障转移
+
+```java title="负载均衡故障转移"
+@Component
+public class LoadBalancerFailover {
+    
+    private List<Server> servers = new ArrayList<>();
+    private AtomicInteger currentIndex = new AtomicInteger(0);
+    
+    public LoadBalancerFailover() {
+        // 初始化服务器列表
+        servers.add(new Server("server1:8080", true));
+        servers.add(new Server("server2:8080", true));
+        servers.add(new Server("server3:8080", true));
+    }
+    
+    public String getNextHealthyServer() {
+        for (int i = 0; i < servers.size(); i++) {
+            int index = (currentIndex.get() + i) % servers.size();
+            Server server = servers.get(index);
+            
+            if (server.isHealthy()) {
+                currentIndex.set(index);
+                return server.getAddress();
+            }
+        }
+        
+        throw new ServiceUnavailableException("没有可用的服务器");
+    }
+    
+    public void markServerUnhealthy(String address) {
+        for (Server server : servers) {
+            if (server.getAddress().equals(address)) {
+                server.setHealthy(false);
+                log.warn("标记服务器 {} 为不健康状态", address);
+                break;
+            }
+        }
+    }
+    
+    public void markServerHealthy(String address) {
+        for (Server server : servers) {
+            if (server.getAddress().equals(address)) {
+                server.setHealthy(true);
+                log.info("标记服务器 {} 为健康状态", address);
+                break;
+            }
+        }
+    }
+    
+    @Scheduled(fixedRate = 10000)
+    public void healthCheck() {
+        for (Server server : servers) {
+            boolean healthy = checkServerHealth(server.getAddress());
+            server.setHealthy(healthy);
+        }
+    }
+    
+    private boolean checkServerHealth(String address) {
+        try {
+            RestTemplate restTemplate = new RestTemplate();
+            restTemplate.getForObject("http://" + address + "/health", String.class);
+            return true;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+}
+
+class Server {
+    private String address;
+    private AtomicBoolean healthy;
+    
+    public Server(String address, boolean healthy) {
+        this.address = address;
+        this.healthy = new AtomicBoolean(healthy);
+    }
+    
+    // getter和setter方法
+    public String getAddress() { return address; }
+    public boolean isHealthy() { return healthy.get(); }
+    public void setHealthy(boolean healthy) { this.healthy.set(healthy); }
+}
+```
+
+## 4. 容错机制
+
+### 4.1 熔断器模式
+
+```java title="熔断器实现"
+@Component
+public class CircuitBreakerPattern {
+    
+    private Map<String, CircuitBreaker> circuitBreakers = new ConcurrentHashMap<>();
+    
+    public <T> T execute(String serviceName, Supplier<T> supplier) {
+        CircuitBreaker circuitBreaker = getOrCreateCircuitBreaker(serviceName);
+        
+        if (circuitBreaker.isOpen()) {
+            throw new CircuitBreakerOpenException("熔断器已打开: " + serviceName);
+        }
+        
+        try {
+            T result = supplier.get();
+            circuitBreaker.recordSuccess();
+            return result;
+        } catch (Exception e) {
+            circuitBreaker.recordFailure();
+            throw e;
+        }
+    }
+    
+    private CircuitBreaker getOrCreateCircuitBreaker(String serviceName) {
+        return circuitBreakers.computeIfAbsent(serviceName, k -> new CircuitBreaker());
+    }
+}
+
+class CircuitBreaker {
+    private AtomicInteger failureCount = new AtomicInteger(0);
+    private AtomicLong lastFailureTime = new AtomicLong(0);
+    private AtomicBoolean isOpen = new AtomicBoolean(false);
+    
+    private static final int FAILURE_THRESHOLD = 5;
+    private static final long TIMEOUT = 60000; // 60秒
+    
+    public boolean isOpen() {
+        if (isOpen.get()) {
+            long now = System.currentTimeMillis();
+            if (now - lastFailureTime.get() > TIMEOUT) {
+                // 尝试半开状态
+                isOpen.set(false);
+                failureCount.set(0);
+                return false;
+            }
+            return true;
+        }
+        return false;
+    }
+    
+    public void recordSuccess() {
+        failureCount.set(0);
+        isOpen.set(false);
+    }
+    
+    public void recordFailure() {
+        failureCount.incrementAndGet();
+        lastFailureTime.set(System.currentTimeMillis());
+        
+        if (failureCount.get() >= FAILURE_THRESHOLD) {
+            isOpen.set(true);
+        }
+    }
+}
+```
+
+### 4.2 降级策略
+
+```java title="服务降级实现"
+@Service
+public class ServiceDegradation {
+    
+    @Autowired
+    private CircuitBreakerPattern circuitBreaker;
+    
+    public UserInfo getUserInfo(Long userId) {
+        try {
+            return circuitBreaker.execute("user-service", () -> {
+                // 调用用户服务
+                return callUserService(userId);
+            });
+        } catch (Exception e) {
+            log.warn("用户服务调用失败，使用降级策略", e);
+            return getFallbackUserInfo(userId);
+        }
+    }
+    
+    public List<Product> getProducts(String category) {
+        try {
+            return circuitBreaker.execute("product-service", () -> {
+                // 调用商品服务
+                return callProductService(category);
+            });
+        } catch (Exception e) {
+            log.warn("商品服务调用失败，使用降级策略", e);
+            return getFallbackProducts(category);
+        }
+    }
+    
+    private UserInfo getFallbackUserInfo(Long userId) {
+        // 降级策略：返回缓存数据或默认数据
+        UserInfo fallback = new UserInfo();
+        fallback.setId(userId);
+        fallback.setName("用户" + userId);
+        fallback.setEmail("user" + userId + "@example.com");
+        return fallback;
+    }
+    
+    private List<Product> getFallbackProducts(String category) {
+        // 降级策略：返回热门商品
+        List<Product> fallback = new ArrayList<>();
+        fallback.add(new Product(1L, "热门商品1", 99.99));
+        fallback.add(new Product(2L, "热门商品2", 199.99));
+        return fallback;
+    }
+}
+```
+
+## 5. 监控告警
+
+### 5.1 健康检查
+
+```java title="健康检查实现"
+@Component
+public class HealthCheckService {
+    
+    @Autowired
+    private DataSource dataSource;
+    
+    @Autowired
+    private RedisTemplate<String, Object> redisTemplate;
+    
+    @Autowired
+    private RestTemplate restTemplate;
+    
+    public HealthStatus checkSystemHealth() {
+        HealthStatus status = new HealthStatus();
+        
+        // 检查数据库
+        status.setDatabase(checkDatabaseHealth());
+        
+        // 检查Redis
+        status.setRedis(checkRedisHealth());
+        
+        // 检查外部服务
+        status.setExternalService(checkExternalServiceHealth());
+        
+        // 检查磁盘空间
+        status.setDiskSpace(checkDiskSpace());
+        
+        // 检查内存使用
+        status.setMemoryUsage(checkMemoryUsage());
+        
+        return status;
+    }
+    
+    private boolean checkDatabaseHealth() {
+        try (Connection conn = dataSource.getConnection()) {
+            conn.createStatement().execute("SELECT 1");
+            return true;
+        } catch (Exception e) {
+            log.error("数据库健康检查失败", e);
+            return false;
+        }
+    }
+    
+    private boolean checkRedisHealth() {
+        try {
+            redisTemplate.opsForValue().get("health_check");
+            return true;
+        } catch (Exception e) {
+            log.error("Redis健康检查失败", e);
+            return false;
+        }
+    }
+    
+    private boolean checkExternalServiceHealth() {
+        try {
+            restTemplate.getForObject("http://external-service/health", String.class);
+            return true;
+        } catch (Exception e) {
+            log.error("外部服务健康检查失败", e);
+            return false;
+        }
+    }
+    
+    private boolean checkDiskSpace() {
+        File root = new File("/");
+        long freeSpace = root.getFreeSpace();
+        long totalSpace = root.getTotalSpace();
+        double usagePercent = (double) (totalSpace - freeSpace) / totalSpace * 100;
+        
+        return usagePercent < 90; // 磁盘使用率小于90%
+    }
+    
+    private boolean checkMemoryUsage() {
+        Runtime runtime = Runtime.getRuntime();
+        long maxMemory = runtime.maxMemory();
+        long usedMemory = runtime.totalMemory() - runtime.freeMemory();
+        double usagePercent = (double) usedMemory / maxMemory * 100;
+        
+        return usagePercent < 80; // 内存使用率小于80%
+    }
+}
+
+class HealthStatus {
+    private boolean database;
+    private boolean redis;
+    private boolean externalService;
+    private boolean diskSpace;
+    private boolean memoryUsage;
+    
+    // getter和setter方法
+}
+```
+
+### 5.2 告警机制
+
+```java title="告警系统实现"
+@Component
+public class AlertSystem {
+    
+    @Autowired
+    private HealthCheckService healthCheckService;
+    
+    @Autowired
+    private EmailService emailService;
+    
+    @Autowired
+    private SmsService smsService;
+    
+    @Scheduled(fixedRate = 30000) // 每30秒检查一次
+    public void checkAndAlert() {
+        HealthStatus status = healthCheckService.checkSystemHealth();
+        
+        if (!status.isDatabase()) {
+            sendAlert("数据库服务异常", "数据库连接失败，请立即检查");
+        }
+        
+        if (!status.isRedis()) {
+            sendAlert("Redis服务异常", "Redis连接失败，请立即检查");
+        }
+        
+        if (!status.isExternalService()) {
+            sendAlert("外部服务异常", "外部服务调用失败，请立即检查");
+        }
+        
+        if (!status.isDiskSpace()) {
+            sendAlert("磁盘空间不足", "磁盘使用率超过90%，请立即清理");
+        }
+        
+        if (!status.isMemoryUsage()) {
+            sendAlert("内存使用率过高", "内存使用率超过80%，请立即检查");
+        }
+    }
+    
+    private void sendAlert(String title, String message) {
+        log.error("告警: {} - {}", title, message);
+        
+        // 发送邮件告警
+        try {
+            emailService.sendAlertEmail(title, message);
+        } catch (Exception e) {
+            log.error("发送邮件告警失败", e);
+        }
+        
+        // 发送短信告警
+        try {
+            smsService.sendAlertSms(title, message);
+        } catch (Exception e) {
+            log.error("发送短信告警失败", e);
+        }
+    }
+}
+```
+
+## 6. 面试题精选
+
+### 6.1 基础概念题
+
+**Q: 什么是高可用性？如何衡量系统可用性？**
+
+A: 高可用性是指系统能够持续提供服务的能力。衡量指标包括：
+- **可用性**：系统正常运行时间比例，通常以百分比表示
+- **MTBF**：平均故障间隔时间，越长越好
+- **MTTR**：平均故障修复时间，越短越好
+- **RTO**：恢复时间目标，系统恢复的时间要求
+- **RPO**：恢复点目标，数据丢失的时间窗口
+
+**Q: 如何设计一个高可用系统？**
+
+A: 设计高可用系统的方法：
+- **冗余设计**：硬件冗余、软件冗余、地理冗余
+- **故障转移**：自动故障检测和切换机制
+- **负载均衡**：分散请求压力，提高系统容量
+- **容错机制**：熔断器、降级策略、重试机制
+- **监控告警**：实时监控系统状态，及时发现问题
+
+### 6.2 架构设计题
+
+**Q: 如何实现数据库的高可用？**
+
+A: 数据库高可用实现方法：
+- **主从复制**：读写分离、故障转移
+- **集群部署**：多节点部署、数据同步
+- **分库分表**：水平分片、垂直分片
+- **备份恢复**：定期备份、快速恢复
+- **监控告警**：性能监控、故障告警
+
+**Q: 如何设计微服务的高可用架构？**
+
+A: 微服务高可用架构设计：
+- **服务注册发现**：Eureka、Consul、Zookeeper
+- **负载均衡**：Ribbon、LoadBalancer
+- **熔断降级**：Hystrix、Resilience4j
+- **配置中心**：Spring Cloud Config、Apollo
+- **链路追踪**：Sleuth、Zipkin
+
+### 6.3 故障处理题
+
+**Q: 如何处理系统故障？**
+
+A: 系统故障处理方法：
+- **故障检测**：健康检查、监控告警
+- **故障隔离**：快速隔离故障节点
+- **故障转移**：自动切换到备用节点
+- **故障恢复**：修复故障、恢复服务
+- **故障分析**：根因分析、预防措施
+
+**Q: 如何设计容错机制？**
+
+A: 容错机制设计方法：
+- **熔断器模式**：防止故障扩散
+- **降级策略**：提供基本服务
+- **重试机制**：处理临时故障
+- **超时控制**：避免长时间等待
+- **限流保护**：防止系统过载
+
+:::tip 高可用性学习要点
+1. **理解可用性指标**：掌握MTBF、MTTR、RTO、RPO等概念
+2. **掌握冗余设计**：学会硬件冗余、软件冗余、地理冗余
+3. **熟悉故障处理**：了解故障检测、隔离、转移、恢复
+4. **学会容错机制**：掌握熔断器、降级、重试等模式
+5. **了解监控告警**：学会健康检查、性能监控、故障告警
+:::
+
+---
+
+通过本章的学习，你应该已经掌握了高可用性系统设计的核心概念、架构模式和最佳实践。高可用性系统设计是构建稳定可靠系统的重要技能，掌握这些技术可以帮助你设计出高可用的系统。在实际项目中，合理运用这些技术可以大大提高系统的稳定性和可靠性。 

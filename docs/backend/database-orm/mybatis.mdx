@@ -1,757 +1,135 @@
 ---
-sidebar_position: 2
-title: "MyBatis"
-description: "MyBatis ORM框架详解"
+sidebar_position: 3
+title: MyBatis框架详解
+description: 深入理解MyBatis核心原理、映射配置与高级特性应用
 authors: [Laby]
+tags: [MyBatis, ORM框架, SQL映射, 持久层, Java]
 last_update:
-  date: 2025-08-07
+  date: 2025-08-11
   author: Laby
 ---
 
-# MyBatis
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+import CodeBlock from '@theme/CodeBlock';
 
-MyBatis是一个优秀的持久层框架，它支持自定义SQL、存储过程和高级映射。MyBatis避免了几乎所有的JDBC代码和手动设置参数以及获取结果集。
+# MyBatis框架详解
 
-## 核心原理
+MyBatis是一款优秀的持久层框架，支持自定义SQL、存储过程以及高级映射。MyBatis避免了几乎所有的JDBC代码和手动设置参数以及获取结果集，通过简单的XML配置或注解，将接口与SQL语句进行映射，专注于SQL本身，赋予开发者更多的控制权和灵活性。
 
-### 1. MyBatis架构
+:::tip 核心价值
+**MyBatis = 灵活SQL + 简化JDBC + 优雅映射 + 动态查询**
+- 🚀 **半自动ORM**：手写SQL，自动映射结果集，控制与灵活并存
+- 🎯 **动态SQL**：强大的条件判断、循环、分支能力，生成复杂查询
+- 💡 **优雅设计**：接口与实现分离，仅需定义接口，无需实现类
+- 🔧 **可插拔架构**：插件机制支持自定义拦截和处理，易于扩展
+- 🛡️ **缓存支持**：一级缓存与二级缓存，提升查询性能
+:::
 
-```java
-// 1. SqlSessionFactory构建
-public class MyBatisConfig {
-    
-    public static SqlSessionFactory buildSqlSessionFactory() throws IOException {
-        String resource = "mybatis-config.xml";
-        InputStream inputStream = Resources.getResourceAsStream(resource);
-        SqlSessionFactory sqlSessionFactory = new SqlSessionFactoryBuilder().build(inputStream);
-        return sqlSessionFactory;
-    }
-}
+## 1. MyBatis核心原理与架构
 
-// 2. SqlSession使用
-public class UserDao {
-    
-    private SqlSessionFactory sqlSessionFactory;
-    
-    public UserDao(SqlSessionFactory sqlSessionFactory) {
-        this.sqlSessionFactory = sqlSessionFactory;
-    }
-    
-    public User findById(Long id) {
-        try (SqlSession sqlSession = sqlSessionFactory.openSession()) {
-            return sqlSession.selectOne("com.example.UserMapper.findById", id);
-        }
-    }
-    
-    public List`<User>` findAll() {
-        try (SqlSession sqlSession = sqlSessionFactory.openSession()) {
-            return sqlSession.selectList("com.example.UserMapper.findAll");
-        }
-    }
-    
-    public void insert(User user) {
-        try (SqlSession sqlSession = sqlSessionFactory.openSession()) {
-            sqlSession.insert("com.example.UserMapper.insert", user);
-            sqlSession.commit();
-        }
-    }
-}
-```
+### 1.1 MyBatis工作原理
 
-### 2. 配置文件
+### 1.2 核心组件剖析
 
-```xml
-<!-- mybatis-config.xml -->
-<?xml version="1.0" encoding="UTF-8" ?>
-<!DOCTYPE configuration PUBLIC "-//mybatis.org//DTD Config 3.0//EN" 
-"http://mybatis.org/dtd/mybatis-3-config.dtd">
-<configuration>
-    
-    <!-- 环境配置 -->
-    <environments default="development">
-        <environment id="development">
-            <transactionManager type="JDBC"/>
-            <dataSource type="POOLED">
-                <property name="driver" value="com.mysql.cj.jdbc.Driver"/>
-                <property name="url" value="jdbc:mysql://localhost:3306/test"/>
-                <property name="username" value="root"/>
-                <property name="password" value="password"/>
-            </dataSource>
-        </environment>
-    </environments>
-    
-    <!-- 映射器 -->
-    <mappers>
-        <mapper resource="com/example/UserMapper.xml"/>
-    </mappers>
-    
-    <!-- 设置 -->
-    <settings>
-        <setting name="mapUnderscoreToCamelCase" value="true"/>
-        <setting name="cacheEnabled" value="true"/>
-        <setting name="lazyLoadingEnabled" value="true"/>
-    </settings>
-    
-    <!-- 类型别名 -->
-    <typeAliases>
-        <typeAlias alias="User" type="com.example.User"/>
-    </typeAliases>
-    
-</configuration>
-```
+### 1.3 执行流程详解
 
-### 3. 映射器接口
+## 2. 配置体系详解
 
-```java
-// 1. 基础映射器接口
-public interface UserMapper {
-    
-    User findById(Long id);
-    
-    List`<User>` findAll();
-    
-    List`<User>` findByCondition(UserQuery query);
-    
-    int insert(User user);
-    
-    int update(User user);
-    
-    int deleteById(Long id);
-    
-    int count();
-}
+### 2.1 全局配置文件
 
-// 2. 高级映射器接口
-public interface UserMapper {
-    
-    // 一对一关联
-    User findByIdWithProfile(Long id);
-    
-    // 一对多关联
-    User findByIdWithOrders(Long id);
-    
-    // 多对多关联
-    User findByIdWithRoles(Long id);
-    
-    // 批量操作
-    int batchInsert(List`<User>` users);
-    
-    int batchUpdate(List`<User>` users);
-    
-    int batchDelete(List`<Long>` ids);
-    
-    // 分页查询
-    List`<User>` findByPage(@Param("offset") int offset, @Param("limit") int limit);
-}
-```
+### 2.2 环境与数据源配置
 
-### 4. XML映射文件
+### 2.3 类型处理器与别名
 
-```xml
-<!-- UserMapper.xml -->
-<?xml version="1.0" encoding="UTF-8" ?>
-<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" 
-"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
-<mapper namespace="com.example.UserMapper">
-    
-    <!-- 结果映射 -->
-    <resultMap id="UserResultMap" type="User">
-        <id column="id" property="id"/>
-        <result column="name" property="name"/>
-        <result column="email" property="email"/>
-        <result column="created_at" property="createdAt"/>
-    </resultMap>
-    
-    <!-- 基础查询 -->
-    <select id="findById" resultMap="UserResultMap">
-        SELECT id, name, email, created_at
-        FROM users
-        WHERE id = #{id}
-    </select>
-    
-    <select id="findAll" resultMap="UserResultMap">
-        SELECT id, name, email, created_at
-        FROM users
-        ORDER BY id
-    </select>
-    
-    <!-- 条件查询 -->
-    <select id="findByCondition" resultMap="UserResultMap">
-        SELECT id, name, email, created_at
-        FROM users
-        <where>
-            <if test="name != null and name != ''">
-                AND name LIKE CONCAT('%', #{name}, '%')
-            </if>
-            <if test="email != null and email != ''">
-                AND email LIKE CONCAT('%', #{email}, '%')
-            </if>
-            <if test="startDate != null">
-                AND created_at >= #{startDate}
-            </if>
-            <if test="endDate != null">
-                AND created_at <= #{endDate}
-            </if>
-        </where>
-        ORDER BY id
-    </select>
-    
-    <!-- 插入 -->
-    <insert id="insert" parameterType="User" useGeneratedKeys="true" keyProperty="id">
-        INSERT INTO users (name, email, created_at)
-        VALUES (#{name}, #{email}, NOW())
-    </insert>
-    
-    <!-- 更新 -->
-    <update id="update" parameterType="User">
-        UPDATE users
-        <set>
-            <if test="name != null">name = #{name},</if>
-            <if test="email != null">email = #{email},</if>
-        </set>
-        WHERE id = #{id}
-    </update>
-    
-    <!-- 删除 -->
-    <delete id="deleteById">
-        DELETE FROM users WHERE id = #{id}
-    </delete>
-    
-    <!-- 统计 -->
-    <select id="count" resultType="int">
-        SELECT COUNT(*) FROM users
-    </select>
-    
-</mapper>
-```
+### 2.4 插件与日志配置
 
-## 动态SQL
+## 3. 映射文件与SQL构建
 
-### 1. if条件
+### 3.1 XML映射文件详解
 
-```xml
-<!-- 条件查询 -->
-<select id="findByCondition" resultMap="UserResultMap">
-    SELECT id, name, email, created_at
-    FROM users
-    <where>
-        <if test="name != null and name != ''">
-            AND name LIKE CONCAT('%', #{name}, '%')
-        </if>
-        <if test="email != null and email != ''">
-            AND email LIKE CONCAT('%', #{email}, '%')
-        </if>
-        <if test="age != null">
-            AND age = #{age}
-        </if>
-        <if test="status != null">
-            AND status = #{status}
-        </if>
-    </where>
-    ORDER BY id
-</select>
-```
+### 3.2 注解映射方式
 
-### 2. choose-when-otherwise
+### 3.3 两种映射方式对比
 
-```xml
-<!-- 多条件选择 -->
-<select id="findByCondition" resultMap="UserResultMap">
-    SELECT id, name, email, created_at
-    FROM users
-    <where>
-        <choose>
-            <when test="name != null and name != ''">
-                AND name LIKE CONCAT('%', #{name}, '%')
-            </when>
-            <when test="email != null and email != ''">
-                AND email LIKE CONCAT('%', #{email}, '%')
-            </when>
-            <otherwise>
-                AND status = 'ACTIVE'
-            </otherwise>
-        </choose>
-    </where>
-    ORDER BY id
-</select>
-```
+### 3.4 SQL构建器使用
 
-### 3. trim-set-where
+## 4. 动态SQL与复杂查询
 
-```xml
-<!-- 更新语句 -->
-<update id="updateUser" parameterType="User">
-    UPDATE users
-    <set>
-        <if test="name != null">name = #{name},</if>
-        <if test="email != null">email = #{email},</if>
-        <if test="age != null">age = #{age},</if>
-        <if test="status != null">status = #{status},</if>
-        updated_at = NOW()
-    </set>
-    WHERE id = #{id}
-</update>
+### 4.1 条件查询构建
 
-<!-- 查询语句 -->
-<select id="findByCondition" resultMap="UserResultMap">
-    SELECT id, name, email, created_at
-    FROM users
-    <trim prefix="WHERE" prefixOverrides="AND|OR">
-        <if test="name != null and name != ''">
-            AND name LIKE CONCAT('%', #{name}, '%')
-        </if>
-        <if test="email != null and email != ''">
-            AND email LIKE CONCAT('%', #{email}, '%')
-        </if>
-    </trim>
-    ORDER BY id
-</select>
-```
+### 4.2 循环与批量操作
 
-### 4. foreach循环
+### 4.3 动态表名与列名
 
-```xml
-<!-- 批量查询 -->
-<select id="findByIds" resultMap="UserResultMap">
-    SELECT id, name, email, created_at
-    FROM users
-    WHERE id IN
-    <foreach collection="ids" item="id" open="(" separator="," close=")">
-        #{id}
-    </foreach>
-</select>
+### 4.4 多数据库支持
 
-<!-- 批量插入 -->
-<insert id="batchInsert" parameterType="java.util.List">
-    INSERT INTO users (name, email, created_at)
-    VALUES
-    <foreach collection="list" item="user" separator=",">
-        (#{user.name}, #{user.email}, NOW())
-    </foreach>
-</insert>
+## 5. 结果映射与关联查询
 
-<!-- 批量更新 -->
-<update id="batchUpdate" parameterType="java.util.List">
-    <foreach collection="list" item="user" separator=";">
-        UPDATE users
-        SET name = #{user.name}, email = #{user.email}, updated_at = NOW()
-        WHERE id = #{user.id}
-    </foreach>
-</update>
+### 5.1 基础结果映射
 
-<!-- 批量删除 -->
-<delete id="batchDelete" parameterType="java.util.List">
-    DELETE FROM users
-    WHERE id IN
-    <foreach collection="list" item="id" open="(" separator="," close=")">
-        #{id}
-    </foreach>
-</delete>
-```
+### 5.2 一对一关联查询
 
-### 5. bind绑定
+### 5.3 一对多关联查询
 
-```xml
-<!-- 使用bind进行字符串处理 -->
-<select id="findByCondition" resultMap="UserResultMap">
-    <bind name="namePattern" value="'%' + name + '%'"/>
-    <bind name="emailPattern" value="'%' + email + '%'"/>
-    
-    SELECT id, name, email, created_at
-    FROM users
-    <where>
-        <if test="name != null and name != ''">
-            AND name LIKE #{namePattern}
-        </if>
-        <if test="email != null and email != ''">
-            AND email LIKE #{emailPattern}
-        </if>
-    </where>
-    ORDER BY id
-</select>
-```
+### 5.4 鉴别器映射
 
-## 插件机制
+## 6. 缓存机制与性能优化
 
-### 1. 插件接口
+### 6.1 一级缓存机制
 
-```java
-// 1. 插件接口
-public interface Interceptor {
-    
-    Object intercept(Invocation invocation) throws Throwable;
-    
-    Object plugin(Object target);
-    
-    void setProperties(Properties properties);
-}
+### 6.2 二级缓存配置
 
-// 2. 分页插件
-@Intercepts({
-    @Signature(type = Executor.class, method = "query", 
-               args = {MappedStatement.class, Object.class, RowBounds.class, ResultHandler.class})
-})
-public class PageInterceptor implements Interceptor {
-    
-    @Override
-    public Object intercept(Invocation invocation) throws Throwable {
-        Object[] args = invocation.getArgs();
-        MappedStatement ms = (MappedStatement) args[0];
-        Object parameter = args[1];
-        RowBounds rowBounds = (RowBounds) args[2];
-        ResultHandler resultHandler = (ResultHandler) args[3];
-        
-        // 检查是否需要分页
-        if (rowBounds == RowBounds.DEFAULT) {
-            return invocation.proceed();
-        }
-        
-        // 获取原始SQL
-        BoundSql boundSql = ms.getBoundSql(parameter);
-        String sql = boundSql.getSql();
-        
-        // 构建分页SQL
-        String pageSql = buildPageSql(sql, rowBounds);
-        
-        // 执行分页查询
-        return executePageQuery(ms, parameter, pageSql, resultHandler);
-    }
-    
-    private String buildPageSql(String sql, RowBounds rowBounds) {
-        StringBuilder pageSql = new StringBuilder();
-        pageSql.append("SELECT * FROM (");
-        pageSql.append(sql);
-        pageSql.append(") temp LIMIT ");
-        pageSql.append(rowBounds.getOffset());
-        pageSql.append(", ");
-        pageSql.append(rowBounds.getLimit());
-        return pageSql.toString();
-    }
-    
-    @Override
-    public Object plugin(Object target) {
-        return Plugin.wrap(target, this);
-    }
-    
-    @Override
-    public void setProperties(Properties properties) {
-        // 设置插件属性
-    }
-}
-```
+### 6.3 自定义缓存实现
 
-### 2. 日志插件
+### 6.4 性能优化策略
 
-```java
-// 日志插件
-@Intercepts({
-    @Signature(type = Executor.class, method = "update", 
-               args = {MappedStatement.class, Object.class}),
-    @Signature(type = Executor.class, method = "query", 
-               args = {MappedStatement.class, Object.class, RowBounds.class, ResultHandler.class})
-})
-public class LogInterceptor implements Interceptor {
-    
-    private static final Logger logger = LoggerFactory.getLogger(LogInterceptor.class);
-    
-    @Override
-    public Object intercept(Invocation invocation) throws Throwable {
-        long startTime = System.currentTimeMillis();
-        
-        try {
-            Object result = invocation.proceed();
-            
-            long endTime = System.currentTimeMillis();
-            long duration = endTime - startTime;
-            
-            // 记录SQL执行日志
-            MappedStatement ms = (MappedStatement) invocation.getArgs()[0];
-            String sqlId = ms.getId();
-            
-            logger.info("SQL执行完成 - ID: {}, 耗时: {}ms", sqlId, duration);
-            
-            return result;
-        } catch (Exception e) {
-            logger.error("SQL执行失败", e);
-            throw e;
-        }
-    }
-    
-    @Override
-    public Object plugin(Object target) {
-        return Plugin.wrap(target, this);
-    }
-    
-    @Override
-    public void setProperties(Properties properties) {
-        // 设置插件属性
-    }
-}
-```
+## 7. 插件开发与定制扩展
 
-### 3. 插件配置
+### 7.1 插件机制原理
 
-```xml
-<!-- mybatis-config.xml -->
-<configuration>
-    
-    <!-- 插件配置 -->
-    <plugins>
-        <!-- 分页插件 -->
-        <plugin interceptor="com.example.PageInterceptor">
-            <property name="dialect" value="mysql"/>
-        </plugin>
-        
-        <!-- 日志插件 -->
-        <plugin interceptor="com.example.LogInterceptor">
-            <property name="logLevel" value="INFO"/>
-        </plugin>
-        
-        <!-- 性能监控插件 -->
-        <plugin interceptor="com.example.PerformanceInterceptor">
-            <property name="slowQueryThreshold" value="1000"/>
-        </plugin>
-    </plugins>
-    
-</configuration>
-```
+### 7.2 自定义插件开发
 
-## 缓存机制
+### 7.3 分页插件实现
 
-### 1. 一级缓存
+### 7.4 性能监控插件
 
-```java
-// 1. 一级缓存（SqlSession级别）
-public class UserService {
-    
-    private SqlSessionFactory sqlSessionFactory;
-    
-    public User findById(Long id) {
-        try (SqlSession sqlSession = sqlSessionFactory.openSession()) {
-            UserMapper mapper = sqlSession.getMapper(UserMapper.class);
-            
-            // 第一次查询，会执行SQL
-            User user1 = mapper.findById(id);
-            
-            // 第二次查询，从缓存获取
-            User user2 = mapper.findById(id);
-            
-            // user1和user2是同一个对象
-            return user1;
-        }
-    }
-    
-    public void clearCache() {
-        try (SqlSession sqlSession = sqlSessionFactory.openSession()) {
-            // 清除一级缓存
-            sqlSession.clearCache();
-        }
-    }
-}
+## 8. MyBatis实战应用场景
 
-// 2. 一级缓存配置
-<settings>
-    <!-- 启用一级缓存 -->
-    <setting name="localCacheScope" value="SESSION"/>
-    <!-- 或者设置为STATEMENT，每次查询都清除缓存 -->
-    <!-- <setting name="localCacheScope" value="STATEMENT"/> -->
-</settings>
-```
+### 8.1 多表复杂查询
 
-### 2. 二级缓存
+### 8.2 存储过程调用
 
-```xml
-<!-- 1. 二级缓存配置 -->
-<cache
-    eviction="LRU"
-    flushInterval="60000"
-    size="512"
-    readOnly="true"/>
+### 8.3 批量数据处理
 
-<!-- 2. 映射器级别的二级缓存 -->
-<mapper namespace="com.example.UserMapper">
-    
-    <!-- 启用二级缓存 -->
-    <cache
-        eviction="LRU"
-        flushInterval="60000"
-        size="512"
-        readOnly="true"/>
-    
-    <select id="findById" resultMap="UserResultMap" useCache="true">
-        SELECT id, name, email, created_at
-        FROM users
-        WHERE id = #{id}
-    </select>
-    
-    <insert id="insert" parameterType="User" flushCache="true">
-        INSERT INTO users (name, email, created_at)
-        VALUES (#{name}, #{email}, NOW())
-    </insert>
-    
-    <update id="update" parameterType="User" flushCache="true">
-        UPDATE users
-        SET name = #{name}, email = #{email}, updated_at = NOW()
-        WHERE id = #{id}
-    </update>
-    
-    <delete id="deleteById" flushCache="true">
-        DELETE FROM users WHERE id = #{id}
-    </delete>
-    
-</mapper>
-```
+### 8.4 动态权限SQL
 
-### 3. 自定义缓存
+## 9. 总结与最佳实践
 
-```java
-// 1. 自定义缓存实现
-public class RedisCache implements Cache {
-    
-    private final String id;
-    private final RedisTemplate<String, Object> redisTemplate;
-    
-    public RedisCache(String id) {
-        this.id = id;
-        this.redisTemplate = SpringContextHolder.getBean(RedisTemplate.class);
-    }
-    
-    @Override
-    public String getId() {
-        return id;
-    }
-    
-    @Override
-    public void putObject(Object key, Object value) {
-        String cacheKey = buildCacheKey(key);
-        redisTemplate.opsForValue().set(cacheKey, value, Duration.ofMinutes(30));
-    }
-    
-    @Override
-    public Object getObject(Object key) {
-        String cacheKey = buildCacheKey(key);
-        return redisTemplate.opsForValue().get(cacheKey);
-    }
-    
-    @Override
-    public Object removeObject(Object key) {
-        String cacheKey = buildCacheKey(key);
-        redisTemplate.delete(cacheKey);
-        return null;
-    }
-    
-    @Override
-    public void clear() {
-        // 清除所有相关缓存
-        Set<String> keys = redisTemplate.keys(id + ":*");
-        if (keys != null && !keys.isEmpty()) {
-            redisTemplate.delete(keys);
-        }
-    }
-    
-    @Override
-    public int getSize() {
-        Set<String> keys = redisTemplate.keys(id + ":*");
-        return keys != null ? keys.size() : 0;
-    }
-    
-    @Override
-    public ReadWriteLock getReadWriteLock() {
-        return null;
-    }
-    
-    private String buildCacheKey(Object key) {
-        return id + ":" + key.toString();
-    }
-}
+### 9.1 MyBatis使用规范
 
-// 2. 缓存工厂
-public class RedisCacheFactory implements CacheFactory {
-    
-    @Override
-    public Cache buildCache(String id) {
-        return new RedisCache(id);
-    }
-}
-```
+### 9.2 常见问题解决方案
 
-### 4. 缓存配置
+### 9.3 MyBatis技术栈扩展
 
-```xml
-<!-- mybatis-config.xml -->
-<configuration>
-    
-    <settings>
-        <!-- 启用二级缓存 -->
-        <setting name="cacheEnabled" value="true"/>
-    </settings>
-    
-    <!-- 自定义缓存工厂 -->
-    <objectFactory type="com.example.RedisCacheFactory"/>
-    
-</configuration>
+## 10. 面试题精选
 
-<!-- UserMapper.xml -->
-<mapper namespace="com.example.UserMapper">
-    
-    <!-- 使用自定义缓存 -->
-    <cache type="com.example.RedisCache"/>
-    
-    <select id="findById" resultMap="UserResultMap" useCache="true">
-        SELECT id, name, email, created_at
-        FROM users
-        WHERE id = #{id}
-    </select>
-    
-</mapper>
-```
+### 10.1 基础原理面试题
 
-## 面试题
+### 10.2 配置与映射面试题
 
-### 1. MyBatis的核心组件有哪些？
+### 10.3 缓存与性能面试题
 
-**答案：**
-- SqlSessionFactory：会话工厂，负责创建SqlSession
-- SqlSession：会话对象，提供CRUD操作接口
-- Executor：执行器，负责SQL执行
-- MappedStatement：映射语句，包含SQL信息
-- ResultSetHandler：结果集处理器
-- ParameterHandler：参数处理器
-- TypeHandler：类型处理器
+### 10.4 插件与扩展面试题
 
-### 2. MyBatis的动态SQL有哪些标签？
+:::tip MyBatis学习要点
+1. **理解核心原理**：掌握SqlSessionFactory、SqlSession、Mapper接口的工作机制
+2. **熟练配置映射**：灵活运用XML配置和注解方式，了解各自的应用场景
+3. **掌握动态SQL**：学会使用if、choose、where、foreach等动态SQL标签
+4. **关联查询应用**：理解一对一、一对多关联查询的实现方式和性能考量
+5. **缓存机制应用**：合理配置和使用缓存，提升查询性能
+:::
 
-**答案：**
-- if：条件判断
-- choose-when-otherwise：多条件选择
-- where：WHERE子句
-- set：SET子句
-- trim：字符串处理
-- foreach：循环处理
-- bind：变量绑定
+---
 
-### 3. MyBatis的缓存机制是怎样的？
-
-**答案：**
-- 一级缓存：SqlSession级别，默认开启
-- 二级缓存：Mapper级别，需要配置开启
-- 缓存策略：LRU、FIFO、SOFT、WEAK
-- 缓存配置：eviction、flushInterval、size、readOnly
-
-### 4. MyBatis的插件机制原理？
-
-**答案：**
-- 基于动态代理实现
-- 通过Interceptor接口定义插件
-- 使用Plugin.wrap()包装目标对象
-- 支持多个插件链式调用
-- 可以拦截Executor、ParameterHandler、ResultSetHandler、StatementHandler
-
-### 5. MyBatis如何实现分页？
-
-**答案：**
-- 使用RowBounds进行内存分页
-- 使用分页插件（如PageHelper）
-- 自定义分页插件
-- 手动编写分页SQL
-- 使用数据库特定的分页语法 
+通过本章的学习，你应该已经掌握了MyBatis框架的核心原理、配置使用和高级特性。作为一款流行的持久层框架，MyBatis在保持灵活性的同时，大大简化了JDBC代码，使开发者能够专注于SQL本身。理解MyBatis的工作原理和使用技巧，不仅能帮助你编写出更优雅高效的数据访问代码，还能在复杂查询和性能优化方面得心应手。希望本章内容能为你的MyBatis学习和实践提供有价值的指导。 

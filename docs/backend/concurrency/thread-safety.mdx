@@ -1,126 +1,727 @@
 ---
 sidebar_position: 7
-title: "线程安全"
-description: "Java线程安全概念与实践"
+title: "Java线程安全详解"
+description: "全面介绍Java线程安全概念、实现策略、常见问题与最佳实践"
 authors: [Laby]
 last_update:
-  date: 2025-08-07
+  date: 2025-01-07
   author: Laby
 ---
 
-# 线程安全
+# Java 线程安全详解
 
-线程安全是多线程编程中的核心概念，指在多线程环境下，程序能够正确执行，不会出现数据不一致或异常结果。
+线程安全是多线程编程中的核心概念，指在多线程环境下，程序能够正确执行，不会出现数据不一致或异常结果。本文将详细介绍线程安全的实现策略、常见问题及解决方案。
 
-## 线程安全策略
+## 1. 线程安全概述
 
-### 1. 不可变对象
-不可变对象是线程安全的，因为对象创建后状态不会改变。
+### 1.1 什么是线程安全？
 
-```java
-public final class ImmutablePerson {
-    private final String name;
-    private final int age;
+:::tip 核心概念
+线程安全是指多线程环境下，程序能够正确执行，不会出现数据不一致或异常结果。线程安全的代码在多线程并发执行时，能够保证数据的正确性和一致性。
+:::
+
+### 1.2 线程安全的重要性
+
+| 重要性 | 具体体现 | 业务价值 |
+|--------|----------|----------|
+| **数据一致性** | 避免数据损坏和不一致 | 保证业务逻辑正确性 |
+| **系统稳定性** | 防止程序崩溃和异常 | 提高系统可用性 |
+| **性能优化** | 避免不必要的同步开销 | 提升系统性能 |
+| **可维护性** | 代码逻辑清晰，易于调试 | 降低维护成本 |
+
+### 1.3 线程安全级别
+
+```java title="线程安全级别示例"
+public class ThreadSafetyLevels {
     
-    public ImmutablePerson(String name, int age) {
-        this.name = name;
-        this.age = age;
+    /**
+     * 1. 不可变对象 - 最高级别的线程安全
+     * 对象创建后状态永远不会改变
+     */
+    public static final class ImmutablePoint {
+        private final int x;
+        private final int y;
+        
+        public ImmutablePoint(int x, int y) {
+            this.x = x;
+            this.y = y;
+        }
+        
+        public int getX() { return x; }
+        public int getY() { return y; }
+        
+        // 返回新对象而不是修改现有对象
+        public ImmutablePoint move(int dx, int dy) {
+            return new ImmutablePoint(x + dx, y + dy);
+        }
     }
     
-    public String getName() {
-        return name;
+    /**
+     * 2. 无状态对象 - 天然线程安全
+     * 不包含任何状态信息
+     */
+    public static class StatelessCalculator {
+        public int add(int a, int b) {
+            return a + b;
+        }
+        
+        public int multiply(int a, int b) {
+            return a * b;
+        }
     }
     
-    public int getAge() {
-        return age;
+    /**
+     * 3. 有状态但线程安全的对象
+     * 通过同步机制保护状态
+     */
+    public static class ThreadSafeCounter {
+        private int count = 0;
+        private final Object lock = new Object();
+        
+        public synchronized void increment() {
+            count++;
+        }
+        
+        public synchronized int getCount() {
+            return count;
+        }
+    }
+    
+    /**
+     * 4. 有状态且非线程安全的对象
+     * 需要外部同步保护
+     */
+    public static class UnsafeCounter {
+        private int count = 0;
+        
+        public void increment() {
+            count++; // 非原子操作
+        }
+        
+        public int getCount() {
+            return count;
+        }
     }
 }
 ```
 
-### 2. 同步机制
+## 2. 线程安全实现策略
+
+### 2.1 不可变对象策略
+
+不可变对象是线程安全的最简单实现方式，因为对象创建后状态永远不会改变。
+
+```java title="不可变对象实现示例"
+public class ImmutableObjectExamples {
+    
+    /**
+     * 不可变字符串类
+     */
+    public static final class ImmutableString {
+        private final char[] value;
+        
+        public ImmutableString(char[] value) {
+            // 防御性复制，避免外部修改
+            this.value = Arrays.copyOf(value, value.length);
+        }
+        
+        public char[] getValue() {
+            // 返回副本，避免外部修改
+            return Arrays.copyOf(value, value.length);
+        }
+        
+        public char charAt(int index) {
+            if (index < 0 || index >= value.length) {
+                throw new IndexOutOfBoundsException();
+            }
+            return value[index];
+        }
+        
+        public int length() {
+            return value.length;
+        }
+        
+        // 字符串连接返回新对象
+        public ImmutableString concat(ImmutableString other) {
+            char[] newValue = new char[value.length + other.value.length];
+            System.arraycopy(value, 0, newValue, 0, value.length);
+            System.arraycopy(other.value, 0, newValue, value.length, other.value.length);
+            return new ImmutableString(newValue);
+        }
+    }
+    
+    /**
+     * 不可变配置类
+     */
+    public static final class ImmutableConfig {
+        private final Map<String, String> properties;
+        
+        public ImmutableConfig(Map<String, String> properties) {
+            // 创建不可变Map
+            this.properties = Collections.unmodifiableMap(new HashMap<>(properties));
+        }
+        
+        public String getProperty(String key) {
+            return properties.get(key);
+        }
+        
+        public Map<String, String> getAllProperties() {
+            // 返回不可变视图
+            return properties;
+        }
+        
+        // 添加新配置返回新对象
+        public ImmutableConfig withProperty(String key, String value) {
+            Map<String, String> newProperties = new HashMap<>(properties);
+            newProperties.put(key, value);
+            return new ImmutableConfig(newProperties);
+        }
+    }
+    
+    /**
+     * 不可变日期时间类
+     */
+    public static final class ImmutableDateTime {
+        private final LocalDateTime dateTime;
+        
+        public ImmutableDateTime(LocalDateTime dateTime) {
+            this.dateTime = dateTime;
+        }
+        
+        public LocalDateTime getDateTime() {
+            return dateTime;
+        }
+        
+        // 时间操作返回新对象
+        public ImmutableDateTime plusDays(long days) {
+            return new ImmutableDateTime(dateTime.plusDays(days));
+        }
+        
+        public ImmutableDateTime plusHours(long hours) {
+            return new ImmutableDateTime(dateTime.plusHours(hours));
+        }
+        
+        public ImmutableDateTime minusMinutes(long minutes) {
+            return new ImmutableDateTime(dateTime.minusMinutes(minutes));
+        }
+    }
+    
+    /**
+     * 不可变集合类
+     */
+    public static final class ImmutableCollection<T> {
+        private final List<T> elements;
+        
+        public ImmutableCollection(Collection<T> elements) {
+            this.elements = Collections.unmodifiableList(new ArrayList<>(elements));
+        }
+        
+        public List<T> getElements() {
+            return elements;
+        }
+        
+        public T get(int index) {
+            return elements.get(index);
+        }
+        
+        public int size() {
+            return elements.size();
+        }
+        
+        // 添加元素返回新集合
+        public ImmutableCollection<T> add(T element) {
+            List<T> newElements = new ArrayList<>(elements);
+            newElements.add(element);
+            return new ImmutableCollection<>(newElements);
+        }
+        
+        // 移除元素返回新集合
+        public ImmutableCollection<T> remove(T element) {
+            List<T> newElements = new ArrayList<>(elements);
+            newElements.remove(element);
+            return new ImmutableCollection<>(newElements);
+        }
+    }
+}
+```
+
+### 2.2 同步机制策略
+
 使用synchronized关键字或Lock接口来保护共享资源。
 
-```java
-public class ThreadSafeCounter {
-    private int count = 0;
-    private final Object lock = new Object();
+```java title="同步机制实现示例"
+public class SynchronizationExamples {
     
-    // 方法级同步
+    /**
+     * 方法级同步
+     */
+    public static class MethodSynchronizedCounter {
+    private int count = 0;
+    
+        // 整个方法同步
     public synchronized void increment() {
         count++;
     }
     
-    // 代码块同步
-    public void incrementWithBlock() {
+        public synchronized void decrement() {
+            count--;
+        }
+        
+        public synchronized int getCount() {
+            return count;
+        }
+        
+        // 静态方法同步
+        public static synchronized void staticMethod() {
+            System.out.println("静态同步方法");
+        }
+    }
+    
+    /**
+     * 代码块同步
+     */
+    public static class BlockSynchronizedCounter {
+        private int count = 0;
+        private final Object lock = new Object();
+        
+        public void increment() {
+            // 只同步关键代码块
         synchronized (lock) {
             count++;
         }
     }
     
-    // 使用ReentrantLock
-    private final ReentrantLock reentrantLock = new ReentrantLock();
+        public void decrement() {
+            synchronized (lock) {
+                count--;
+            }
+        }
+        
+        public int getCount() {
+            synchronized (lock) {
+                return count;
+            }
+        }
+        
+        // 使用this作为锁
+        public void incrementWithThis() {
+            synchronized (this) {
+                count++;
+            }
+        }
+    }
     
-    public void incrementWithLock() {
-        reentrantLock.lock();
+    /**
+     * 使用ReentrantLock
+     */
+    public static class ReentrantLockCounter {
+        private int count = 0;
+        private final ReentrantLock lock = new ReentrantLock();
+        
+        public void increment() {
+            lock.lock();
         try {
             count++;
         } finally {
-            reentrantLock.unlock();
+                lock.unlock(); // 确保锁被释放
+            }
+        }
+        
+        public void decrement() {
+            lock.lock();
+            try {
+                count--;
+            } finally {
+                lock.unlock();
+            }
+        }
+        
+        public int getCount() {
+            lock.lock();
+            try {
+                return count;
+            } finally {
+                lock.unlock();
+            }
+        }
+        
+        // 尝试获取锁
+        public boolean tryIncrement() {
+            if (lock.tryLock()) {
+                try {
+                    count++;
+                    return true;
+                } finally {
+                    lock.unlock();
+                }
+            }
+            return false;
+        }
+    }
+    
+    /**
+     * 读写锁分离
+     */
+    public static class ReadWriteLockCache {
+        private final Map<String, String> cache = new HashMap<>();
+        private final ReadWriteLock lock = new ReentrantReadWriteLock();
+        private final Lock readLock = lock.readLock();
+        private final Lock writeLock = lock.writeLock();
+        
+        public String get(String key) {
+            readLock.lock();
+            try {
+                return cache.get(key);
+            } finally {
+                readLock.unlock();
+            }
+        }
+        
+        public void put(String key, String value) {
+            writeLock.lock();
+            try {
+                cache.put(key, value);
+            } finally {
+                writeLock.unlock();
+            }
+        }
+        
+        public void remove(String key) {
+            writeLock.lock();
+            try {
+                cache.remove(key);
+            } finally {
+                writeLock.unlock();
+            }
+        }
+        
+        public int size() {
+            readLock.lock();
+            try {
+                return cache.size();
+            } finally {
+                readLock.unlock();
+            }
         }
     }
 }
 ```
 
-### 3. 原子操作
-使用原子类来保证操作的原子性。
+### 2.3 原子操作策略
 
-```java
-public class AtomicCounter {
+使用原子类来保证操作的原子性，避免使用同步机制。
+
+```java title="原子操作实现示例"
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.atomic.AtomicIntegerArray;
+
+public class AtomicOperationExamples {
+    
+    /**
+     * 基本类型原子类
+     */
+    public static class AtomicCounter {
     private AtomicInteger count = new AtomicInteger(0);
+        private AtomicLong total = new AtomicLong(0);
+        private AtomicBoolean flag = new AtomicBoolean(false);
     
     public void increment() {
         count.incrementAndGet();
     }
+        
+        public void decrement() {
+            count.decrementAndGet();
+    }
     
     public int getCount() {
         return count.get();
+        }
+        
+        public void addToTotal(long value) {
+            total.addAndGet(value);
+        }
+        
+        public long getTotal() {
+            return total.get();
+        }
+        
+        public boolean compareAndSetFlag(boolean expect, boolean update) {
+            return flag.compareAndSet(expect, update);
+        }
+        
+        public boolean getFlag() {
+            return flag.get();
+        }
+        
+        // 复杂原子操作
+        public int incrementAndGetWithLimit(int limit) {
+            while (true) {
+                int current = count.get();
+                if (current >= limit) {
+                    return current;
+                }
+                if (count.compareAndSet(current, current + 1)) {
+                    return current + 1;
+                }
+            }
+        }
+    }
+    
+    /**
+     * 引用类型原子类
+     */
+    public static class AtomicReferenceExample {
+        private AtomicReference<String> reference = new AtomicReference<>("initial");
+        
+        public void setValue(String value) {
+            reference.set(value);
+        }
+        
+        public String getValue() {
+            return reference.get();
+        }
+        
+        public boolean compareAndSet(String expect, String update) {
+            return reference.compareAndSet(expect, update);
+        }
+        
+        // 原子更新对象
+        public void updateValue(String newValue) {
+            while (true) {
+                String current = reference.get();
+                if (reference.compareAndSet(current, newValue)) {
+                    break;
+                }
+            }
+        }
+    }
+    
+    /**
+     * 数组原子类
+     */
+    public static class AtomicArrayExample {
+        private AtomicIntegerArray array;
+        
+        public AtomicArrayExample(int size) {
+            this.array = new AtomicIntegerArray(size);
+        }
+        
+        public void set(int index, int value) {
+            array.set(index, value);
+        }
+        
+        public int get(int index) {
+            return array.get(index);
+        }
+        
+        public int incrementAndGet(int index) {
+            return array.incrementAndGet(index);
+        }
+        
+        public boolean compareAndSet(int index, int expect, int update) {
+            return array.compareAndSet(index, expect, update);
+        }
+        
+        public int addAndGet(int index, int delta) {
+            return array.addAndGet(index, delta);
+        }
+    }
+    
+    /**
+     * 字段更新器
+     */
+    public static class FieldUpdaterExample {
+        private volatile int count = 0;
+        private static final AtomicIntegerFieldUpdater<FieldUpdaterExample> COUNT_UPDATER =
+            AtomicIntegerFieldUpdater.newUpdater(FieldUpdaterExample.class, "count");
+        
+        public void increment() {
+            COUNT_UPDATER.incrementAndGet(this);
+        }
+        
+        public int getCount() {
+            return COUNT_UPDATER.get(this);
+        }
+        
+        public boolean compareAndSet(int expect, int update) {
+            return COUNT_UPDATER.compareAndSet(this, expect, update);
+        }
     }
 }
 ```
 
-### 4. 线程本地存储
-使用ThreadLocal来为每个线程提供独立的变量副本。
+### 2.4 线程本地存储策略
 
-```java
-public class ThreadLocalExample {
-    private static ThreadLocal<String> threadLocal = new ThreadLocal<>();
+使用ThreadLocal为每个线程提供独立的变量副本。
+
+```java title="线程本地存储示例"
+public class ThreadLocalExamples {
     
-    public static void setValue(String value) {
-        threadLocal.set(value);
-    }
-    
-    public static String getValue() {
-        return threadLocal.get();
+    /**
+     * 基本ThreadLocal使用
+     */
+    public static class ThreadLocalCounter {
+        private static final ThreadLocal<Integer> counter = new ThreadLocal<>();
+        
+        public static void setCounter(int value) {
+            counter.set(value);
+        }
+        
+        public static int getCounter() {
+            return counter.get();
+        }
+        
+        public static void increment() {
+            Integer current = counter.get();
+            if (current == null) {
+                current = 0;
+            }
+            counter.set(current + 1);
     }
     
     public static void remove() {
-        threadLocal.remove();
+            counter.remove();
+        }
+    }
+    
+    /**
+     * 带初始值的ThreadLocal
+     */
+    public static class ThreadLocalWithInitial {
+        private static final ThreadLocal<Integer> counter = 
+            ThreadLocal.withInitial(() -> 0);
+        
+        public static void increment() {
+            counter.set(counter.get() + 1);
+        }
+        
+        public static int getCounter() {
+            return counter.get();
+        }
+    }
+    
+    /**
+     * 用户上下文ThreadLocal
+     */
+    public static class UserContext {
+        private static final ThreadLocal<User> userHolder = new ThreadLocal<>();
+        
+        public static void setUser(User user) {
+            userHolder.set(user);
+        }
+        
+        public static User getUser() {
+            return userHolder.get();
+        }
+        
+        public static void clear() {
+            userHolder.remove();
+        }
+        
+        public static String getUserId() {
+            User user = getUser();
+            return user != null ? user.getId() : null;
+        }
+    }
+    
+    /**
+     * 数据库连接ThreadLocal
+     */
+    public static class DatabaseConnectionHolder {
+        private static final ThreadLocal<Connection> connectionHolder = new ThreadLocal<>();
+        
+        public static void setConnection(Connection connection) {
+            connectionHolder.set(connection);
+        }
+        
+        public static Connection getConnection() {
+            return connectionHolder.get();
+        }
+        
+        public static void removeConnection() {
+            Connection connection = connectionHolder.get();
+            if (connection != null) {
+                try {
+                    connection.close();
+                } catch (SQLException e) {
+                    // 记录日志
+                }
+            }
+            connectionHolder.remove();
+        }
+    }
+    
+    /**
+     * 请求上下文ThreadLocal
+     */
+    public static class RequestContext {
+        private static final ThreadLocal<Map<String, Object>> contextHolder = new ThreadLocal<>();
+        
+        public static void setAttribute(String key, Object value) {
+            Map<String, Object> context = contextHolder.get();
+            if (context == null) {
+                context = new HashMap<>();
+                contextHolder.set(context);
+            }
+            context.put(key, value);
+        }
+        
+        public static Object getAttribute(String key) {
+            Map<String, Object> context = contextHolder.get();
+            return context != null ? context.get(key) : null;
+        }
+        
+        public static void clear() {
+            contextHolder.remove();
+        }
     }
 }
-```
 
-## 常见线程安全问题
+// 辅助类
+class User {
+    private String id;
+    private String name;
+    
+    public User(String id, String name) {
+        this.id = id;
+        this.name = name;
+    }
+    
+    public String getId() { return id; }
+    public String getName() { return name; }
+}
 
-### 1. 竞态条件
-多个线程同时访问和修改共享数据时出现的问题。
+interface Connection {
+    void close() throws SQLException;
+}
 
-```java
-// 不安全的实现
-public class UnsafeCounter {
+class SQLException extends Exception {}
+
+## 3. 常见线程安全问题
+
+### 3.1 竞态条件（Race Condition）
+
+竞态条件是指多个线程同时访问和修改共享数据时出现的问题。
+
+```java title="竞态条件示例"
+public class RaceConditionExamples {
+    
+    /**
+     * 不安全的计数器 - 存在竞态条件
+     */
+    public static class UnsafeCounter {
     private int count = 0;
     
     public void increment() {
-        count++; // 非原子操作
+            // 非原子操作：读取 -> 修改 -> 写入
+            count++;
+        }
+        
+        public void decrement() {
+            count--;
     }
     
     public int getCount() {
@@ -128,25 +729,120 @@ public class UnsafeCounter {
     }
 }
 
-// 安全的实现
-public class SafeCounter {
+    /**
+     * 安全的计数器 - 使用同步解决竞态条件
+     */
+    public static class SafeCounter {
+        private int count = 0;
+        private final Object lock = new Object();
+        
+        public void increment() {
+            synchronized (lock) {
+                count++;
+            }
+        }
+        
+        public void decrement() {
+            synchronized (lock) {
+                count--;
+            }
+        }
+        
+        public int getCount() {
+            synchronized (lock) {
+                return count;
+            }
+        }
+    }
+    
+    /**
+     * 使用原子类解决竞态条件
+     */
+    public static class AtomicCounter {
     private AtomicInteger count = new AtomicInteger(0);
     
     public void increment() {
         count.incrementAndGet();
     }
+        
+        public void decrement() {
+            count.decrementAndGet();
+    }
     
     public int getCount() {
         return count.get();
+        }
+    }
+    
+    /**
+     * 复合操作的竞态条件
+     */
+    public static class UnsafeBankAccount {
+        private double balance = 1000.0;
+        
+        public void withdraw(double amount) {
+            if (balance >= amount) {
+                // 检查和取款之间存在竞态条件
+                try {
+                    Thread.sleep(100); // 模拟处理时间
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
+                balance -= amount;
+                System.out.println("取款成功: " + amount + ", 余额: " + balance);
+            } else {
+                System.out.println("余额不足");
+            }
+        }
+        
+        public double getBalance() {
+            return balance;
+        }
+    }
+    
+    /**
+     * 解决复合操作竞态条件
+     */
+    public static class SafeBankAccount {
+        private double balance = 1000.0;
+        private final Object lock = new Object();
+        
+        public void withdraw(double amount) {
+            synchronized (lock) {
+                if (balance >= amount) {
+                    try {
+                        Thread.sleep(100); // 模拟处理时间
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                    }
+                    balance -= amount;
+                    System.out.println("取款成功: " + amount + ", 余额: " + balance);
+                } else {
+                    System.out.println("余额不足");
+                }
+            }
+        }
+        
+        public double getBalance() {
+            synchronized (lock) {
+                return balance;
+            }
+        }
     }
 }
 ```
 
-### 2. 内存可见性问题
+### 3.2 内存可见性问题
+
 一个线程对共享变量的修改对其他线程不可见。
 
-```java
-public class VisibilityProblem {
+```java title="内存可见性问题示例"
+public class VisibilityProblemExamples {
+    
+    /**
+     * 可见性问题示例
+     */
+    public static class VisibilityProblem {
     private boolean flag = false;
     
     public void setFlag() {
@@ -158,8 +854,10 @@ public class VisibilityProblem {
     }
 }
 
-// 解决方案：使用volatile
-public class VisibilitySolution {
+    /**
+     * 使用volatile解决可见性问题
+     */
+    public static class VisibilitySolution {
     private volatile boolean flag = false;
     
     public void setFlag() {
@@ -168,107 +866,308 @@ public class VisibilitySolution {
     
     public boolean getFlag() {
         return flag;
+        }
+    }
+    
+    /**
+     * 使用synchronized解决可见性问题
+     */
+    public static class SynchronizedVisibility {
+        private boolean flag = false;
+        private final Object lock = new Object();
+        
+        public void setFlag() {
+            synchronized (lock) {
+                flag = true;
+            }
+        }
+        
+        public boolean getFlag() {
+            synchronized (lock) {
+                return flag;
+            }
+        }
+    }
+    
+    /**
+     * 使用原子类解决可见性问题
+     */
+    public static class AtomicVisibility {
+        private AtomicBoolean flag = new AtomicBoolean(false);
+        
+        public void setFlag() {
+            flag.set(true);
+        }
+        
+        public boolean getFlag() {
+            return flag.get();
+        }
+    }
+    
+    /**
+     * 双重检查锁定模式
+     */
+    public static class DoubleCheckedLocking {
+        private volatile static DoubleCheckedLocking instance;
+        
+        private DoubleCheckedLocking() {}
+        
+        public static DoubleCheckedLocking getInstance() {
+            if (instance == null) {
+                synchronized (DoubleCheckedLocking.class) {
+                    if (instance == null) {
+                        instance = new DoubleCheckedLocking();
+                    }
+                }
+            }
+            return instance;
+        }
     }
 }
 ```
 
-### 3. 死锁问题
+### 3.3 死锁问题
+
 多个线程互相等待对方释放资源。
 
-```java
-public class DeadlockExample {
+```java title="死锁问题示例"
+public class DeadlockExamples {
+    
+    /**
+     * 经典死锁示例
+     */
+    public static class DeadlockExample {
     private final Object lock1 = new Object();
     private final Object lock2 = new Object();
     
     public void method1() {
         synchronized (lock1) {
+                System.out.println("线程 " + Thread.currentThread().getName() + " 获得锁1");
             try {
-                Thread.sleep(100);
+                    Thread.sleep(100); // 模拟处理时间
             } catch (InterruptedException e) {
-                e.printStackTrace();
+                    Thread.currentThread().interrupt();
             }
+                
             synchronized (lock2) {
-                System.out.println("Method 1");
+                    System.out.println("线程 " + Thread.currentThread().getName() + " 获得锁2");
             }
         }
     }
     
     public void method2() {
         synchronized (lock2) {
+                System.out.println("线程 " + Thread.currentThread().getName() + " 获得锁2");
+                try {
+                    Thread.sleep(100); // 模拟处理时间
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
+                
+                synchronized (lock1) {
+                    System.out.println("线程 " + Thread.currentThread().getName() + " 获得锁1");
+                }
+            }
+        }
+    }
+    
+    /**
+     * 解决死锁 - 固定锁顺序
+     */
+    public static class SafeLockExample {
+        private final Object lock1 = new Object();
+        private final Object lock2 = new Object();
+        
+        public void method1() {
+            synchronized (lock1) {
+                System.out.println("线程 " + Thread.currentThread().getName() + " 获得锁1");
             try {
                 Thread.sleep(100);
             } catch (InterruptedException e) {
-                e.printStackTrace();
+                    Thread.currentThread().interrupt();
+                }
+                
+                synchronized (lock2) {
+                    System.out.println("线程 " + Thread.currentThread().getName() + " 获得锁2");
+                }
             }
+        }
+        
+        public void method2() {
+            // 使用相同的锁顺序
             synchronized (lock1) {
-                System.out.println("Method 2");
+                System.out.println("线程 " + Thread.currentThread().getName() + " 获得锁1");
+                try {
+                    Thread.sleep(100);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
+                
+                synchronized (lock2) {
+                    System.out.println("线程 " + Thread.currentThread().getName() + " 获得锁2");
+                }
+            }
+        }
+    }
+    
+    /**
+     * 解决死锁 - 使用超时机制
+     */
+    public static class TimeoutLockExample {
+        private final ReentrantLock lock1 = new ReentrantLock();
+        private final ReentrantLock lock2 = new ReentrantLock();
+        
+        public void method1() {
+            if (lock1.tryLock()) {
+                try {
+                    System.out.println("线程 " + Thread.currentThread().getName() + " 获得锁1");
+                    Thread.sleep(100);
+                    
+                    if (lock2.tryLock(5, TimeUnit.SECONDS)) {
+                        try {
+                            System.out.println("线程 " + Thread.currentThread().getName() + " 获得锁2");
+                        } finally {
+                            lock2.unlock();
+                        }
+                    } else {
+                        System.out.println("线程 " + Thread.currentThread().getName() + " 获取锁2超时");
+                    }
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                } finally {
+                    lock1.unlock();
+                }
+            }
+        }
+        
+        public void method2() {
+            if (lock2.tryLock()) {
+                try {
+                    System.out.println("线程 " + Thread.currentThread().getName() + " 获得锁2");
+                    Thread.sleep(100);
+                    
+                    if (lock1.tryLock(5, TimeUnit.SECONDS)) {
+                        try {
+                            System.out.println("线程 " + Thread.currentThread().getName() + " 获得锁1");
+                        } finally {
+                            lock1.unlock();
+                        }
+                    } else {
+                        System.out.println("线程 " + Thread.currentThread().getName() + " 获取锁1超时");
+                    }
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                } finally {
+                    lock2.unlock();
+                }
             }
         }
     }
 }
 ```
 
-## 线程安全最佳实践
+## 4. 线程安全最佳实践
 
-### 1. 优先使用不可变对象
-```java
-// 推荐：使用不可变对象
-public final class Point {
-    private final int x;
-    private final int y;
+### 4.1 设计原则
+
+:::tip 核心原则
+设计线程安全代码时，应遵循以下原则：
+- **优先使用不可变对象**：避免状态变化带来的复杂性
+- **最小化同步范围**：只同步必要的代码块
+- **使用线程安全的集合**：避免手动同步
+- **避免嵌套锁**：防止死锁
+- **正确使用volatile**：理解其局限性
+:::
+
+### 4.2 代码实践
+
+```java title="线程安全最佳实践示例"
+public class ThreadSafetyBestPractices {
     
-    public Point(int x, int y) {
-        this.x = x;
-        this.y = y;
+    /**
+     * 1. 优先使用不可变对象
+     */
+    public static final class ImmutableConfiguration {
+        private final Map<String, String> config;
+        
+        public ImmutableConfiguration(Map<String, String> config) {
+            this.config = Collections.unmodifiableMap(new HashMap<>(config));
+        }
+        
+        public String getValue(String key) {
+            return config.get(key);
+        }
+        
+        public ImmutableConfiguration withValue(String key, String value) {
+            Map<String, String> newConfig = new HashMap<>(config);
+            newConfig.put(key, value);
+            return new ImmutableConfiguration(newConfig);
+        }
     }
     
-    public int getX() { return x; }
-    public int getY() { return y; }
-}
-```
-
-### 2. 使用线程安全的集合
-```java
+    /**
+     * 2. 使用线程安全的集合
+     */
+    public static class ThreadSafeCollections {
 // 推荐：使用线程安全的集合
-List<String> safeList = Collections.synchronizedList(new ArrayList<>());
-Map<String, String> safeMap = new ConcurrentHashMap<>();
-Queue<String> safeQueue = new ConcurrentLinkedQueue<>();
-```
-
-### 3. 避免在同步块中执行耗时操作
-```java
-// 不推荐
+        private final Map<String, String> safeMap = new ConcurrentHashMap<>();
+        private final List<String> safeList = Collections.synchronizedList(new ArrayList<>());
+        private final Queue<String> safeQueue = new ConcurrentLinkedQueue<>();
+        
+        public void addToMap(String key, String value) {
+            safeMap.put(key, value);
+        }
+        
+        public void addToList(String item) {
+            safeList.add(item);
+        }
+        
+        public void addToQueue(String item) {
+            safeQueue.offer(item);
+        }
+    }
+    
+    /**
+     * 3. 最小化同步范围
+     */
+    public static class MinimizedSynchronization {
+        private final Object lock = new Object();
+        private int counter = 0;
+        
+        // 不推荐：同步整个方法
 public synchronized void badMethod() {
     // 耗时操作
     try {
         Thread.sleep(1000);
     } catch (InterruptedException e) {
-        e.printStackTrace();
+                Thread.currentThread().interrupt();
     }
-    // 其他操作
+            // 只有这一行需要同步
+            counter++;
 }
 
 // 推荐：只同步必要的部分
 public void goodMethod() {
-    // 耗时操作
+            // 耗时操作不需要同步
     try {
         Thread.sleep(1000);
     } catch (InterruptedException e) {
-        e.printStackTrace();
+                Thread.currentThread().interrupt();
     }
     
     // 只同步关键部分
-    synchronized (this) {
-        // 关键操作
+            synchronized (lock) {
+                counter++;
+            }
+        }
     }
-}
-```
-
-### 4. 使用原子类
-```java
-public class AtomicExample {
-    private AtomicInteger counter = new AtomicInteger(0);
-    private AtomicReference<String> reference = new AtomicReference<>("initial");
+    
+    /**
+     * 4. 使用原子类
+     */
+    public static class AtomicBestPractices {
+        private final AtomicInteger counter = new AtomicInteger(0);
+        private final AtomicReference<String> reference = new AtomicReference<>("initial");
     
     public void increment() {
         counter.incrementAndGet();
@@ -276,34 +1175,228 @@ public class AtomicExample {
     
     public void updateReference(String newValue) {
         reference.set(newValue);
+        }
+        
+        public boolean compareAndSetReference(String expect, String update) {
+            return reference.compareAndSet(expect, update);
+        }
+    }
+    
+    /**
+     * 5. 正确的异常处理
+     */
+    public static class ExceptionHandling {
+        private final ReentrantLock lock = new ReentrantLock();
+        private int value = 0;
+        
+        public void safeIncrement() {
+            lock.lock();
+            try {
+                value++;
+                // 可能抛出异常的操作
+                if (value > 100) {
+                    throw new RuntimeException("值过大");
+                }
+            } finally {
+                lock.unlock(); // 确保锁被释放
+            }
+        }
     }
 }
 ```
 
-## 面试题
+## 5. 性能优化技巧
 
-### 1. 什么是线程安全？
-**答案：** 线程安全是指多线程环境下，程序能够正确执行，不会出现数据不一致或异常结果。线程安全的代码在多线程并发执行时，能够保证数据的正确性和一致性。
+### 5.1 减少锁竞争
 
-### 2. 如何实现线程安全？
-**答案：** 实现线程安全的方法包括：
-- 使用不可变对象
-- 使用同步机制（synchronized、Lock）
-- 使用原子类（AtomicInteger等）
-- 使用线程安全的集合类
-- 使用ThreadLocal为每个线程提供独立副本
+```java title="减少锁竞争示例"
+public class LockContentionOptimization {
+    
+    /**
+     * 锁分段技术
+     */
+    public static class StripedCounter {
+        private final int segments = 16;
+        private final Object[] locks = new Object[segments];
+        private final int[] counters = new int[segments];
+        
+        public StripedCounter() {
+            for (int i = 0; i < segments; i++) {
+                locks[i] = new Object();
+            }
+        }
+        
+        public void increment(int key) {
+            int segment = Math.abs(key % segments);
+            synchronized (locks[segment]) {
+                counters[segment]++;
+            }
+        }
+        
+        public int getTotal() {
+            int total = 0;
+            for (int i = 0; i < segments; i++) {
+                synchronized (locks[i]) {
+                    total += counters[i];
+                }
+            }
+            return total;
+        }
+    }
+    
+    /**
+     * 读写锁分离
+     */
+    public static class ReadWriteOptimizedCache {
+        private final Map<String, String> cache = new HashMap<>();
+        private final ReadWriteLock lock = new ReentrantReadWriteLock();
+        private final Lock readLock = lock.readLock();
+        private final Lock writeLock = lock.writeLock();
+        
+        public String get(String key) {
+            readLock.lock();
+            try {
+                return cache.get(key);
+            } finally {
+                readLock.unlock();
+            }
+        }
+        
+        public void put(String key, String value) {
+            writeLock.lock();
+            try {
+                cache.put(key, value);
+            } finally {
+                writeLock.unlock();
+            }
+        }
+    }
+}
+```
 
-### 3. synchronized和volatile的区别？
-**答案：**
-- **synchronized**：保证原子性、可见性和有序性，可以修饰方法和代码块
-- **volatile**：只保证可见性和有序性，不能保证原子性，只能修饰变量
+### 5.2 无锁编程
 
-### 4. 什么是死锁？如何避免？
-**答案：** 死锁是指多个线程互相等待对方释放资源，导致程序无法继续执行。避免死锁的方法：
-- 避免嵌套锁
-- 使用锁的顺序
-- 使用超时机制
-- 使用Lock接口的tryLock方法
+```java title="无锁编程示例"
+public class LockFreeProgramming {
+    
+    /**
+     * 无锁栈实现
+     */
+    public static class LockFreeStack<T> {
+        private AtomicReference<Node<T>> top = new AtomicReference<>();
+        
+        public void push(T item) {
+            Node<T> newHead = new Node<>(item);
+            Node<T> oldHead;
+            do {
+                oldHead = top.get();
+                newHead.next = oldHead;
+            } while (!top.compareAndSet(oldHead, newHead));
+        }
+        
+        public T pop() {
+            Node<T> oldHead;
+            Node<T> newHead;
+            do {
+                oldHead = top.get();
+                if (oldHead == null) {
+                    return null;
+                }
+                newHead = oldHead.next;
+            } while (!top.compareAndSet(oldHead, newHead));
+            return oldHead.item;
+        }
+        
+        private static class Node<T> {
+            final T item;
+            Node<T> next;
+            
+            Node(T item) {
+                this.item = item;
+            }
+        }
+    }
+    
+    /**
+     * 无锁队列实现
+     */
+    public static class LockFreeQueue<T> {
+        private AtomicReference<Node<T>> head = new AtomicReference<>();
+        private AtomicReference<Node<T>> tail = new AtomicReference<>();
+        
+        public LockFreeQueue() {
+            Node<T> dummy = new Node<>(null);
+            head.set(dummy);
+            tail.set(dummy);
+        }
+        
+        public void enqueue(T item) {
+            Node<T> newNode = new Node<>(item);
+            while (true) {
+                Node<T> last = tail.get();
+                Node<T> next = last.next.get();
+                if (last == tail.get()) {
+                    if (next == null) {
+                        if (last.next.compareAndSet(null, newNode)) {
+                            tail.compareAndSet(last, newNode);
+                            return;
+                        }
+                    } else {
+                        tail.compareAndSet(last, next);
+                    }
+                }
+            }
+        }
+        
+        public T dequeue() {
+            while (true) {
+                Node<T> first = head.get();
+                Node<T> last = tail.get();
+                Node<T> next = first.next.get();
+                if (first == head.get()) {
+                    if (first == last) {
+                        if (next == null) {
+                            return null;
+                        }
+                        tail.compareAndSet(last, next);
+                    } else {
+                        T item = next.item;
+                        if (head.compareAndSet(first, next)) {
+                            return item;
+                        }
+                    }
+                }
+            }
+        }
+        
+        private static class Node<T> {
+            final T item;
+            final AtomicReference<Node<T>> next = new AtomicReference<>();
+            
+            Node(T item) {
+                this.item = item;
+            }
+        }
+    }
+}
+```
 
-### 5. ThreadLocal的原理是什么？
-**答案：** ThreadLocal为每个线程提供独立的变量副本，每个线程都有自己独立的ThreadLocalMap，存储该线程的ThreadLocal变量。当线程结束时，ThreadLocalMap会被垃圾回收。 
+## 6. 总结
+
+线程安全是Java并发编程的核心概念，掌握线程安全的实现策略和最佳实践对于构建高质量的并发应用至关重要。
+
+### 6.1 关键要点
+
+1. **线程安全策略**：不可变对象、同步机制、原子操作、线程本地存储
+2. **常见问题**：竞态条件、内存可见性、死锁
+3. **最佳实践**：优先使用不可变对象、最小化同步范围、使用线程安全集合
+4. **性能优化**：减少锁竞争、无锁编程、读写锁分离
+
+### 6.2 学习建议
+
+1. **理解原理**：深入理解各种线程安全机制的工作原理
+2. **实践验证**：通过编写代码验证不同策略的效果
+3. **性能测试**：对比不同实现方式的性能差异
+4. **持续学习**：关注新的线程安全技术和最佳实践
+
+通过深入理解和熟练运用这些线程安全技术，我们能够构建出更加高效、健壮和可维护的Java并发应用程序。 

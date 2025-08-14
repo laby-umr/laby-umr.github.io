@@ -1,19 +1,900 @@
 ---
-sidebar_position: 6
-title: "熔断"
-description: "服务熔断机制与实现"
+sidebar_position: 5
+title: "熔断器模式设计"
+description: "深入理解熔断器模式原理、实现策略与最佳实践"
 authors: [Laby]
 last_update:
   date: 2025-08-07
   author: Laby
 ---
 
-# 熔断
+# 熔断器模式设计
 
-## 熔断模式
+熔断器模式是分布式系统中重要的容错机制，通过监控服务调用状态，在服务出现故障时快速失败，防止故障扩散，提高系统稳定性。
 
-## 熔断实现
+:::tip 核心价值
+熔断器 = 故障隔离 + 快速失败 + 自动恢复 + 降级策略 + 系统保护
+:::
 
-## 熔断监控
+## 1. 熔断器基础概念
 
-## 面试题 
+### 1.1 熔断器状态
+
+熔断器有三种状态：
+
+| 状态 | 说明 | 行为 |
+|------|------|------|
+| **关闭 (Closed)** | 正常状态 | 允许请求通过，统计失败次数 |
+| **开启 (Open)** | 熔断状态 | 快速失败，不调用目标服务 |
+| **半开 (Half-Open)** | 恢复状态 | 允许少量请求测试服务恢复情况 |
+
+```java title="熔断器状态定义"
+public enum CircuitBreakerState {
+    CLOSED("关闭", "正常状态，允许请求通过"),
+    OPEN("开启", "熔断状态，快速失败"),
+    HALF_OPEN("半开", "恢复状态，允许少量请求测试");
+    
+    private final String name;
+    private final String description;
+    
+    CircuitBreakerState(String name, String description) {
+        this.name = name;
+        this.description = description;
+    }
+}
+
+@Component
+public class CircuitBreaker {
+    
+    private final String name;
+    private final AtomicReference<CircuitBreakerState> state = new AtomicReference<>(CircuitBreakerState.CLOSED);
+    private final AtomicInteger failureCount = new AtomicInteger(0);
+    private final AtomicLong lastFailureTime = new AtomicLong(0);
+    private final AtomicInteger successCount = new AtomicInteger(0);
+    
+    private final int failureThreshold;
+    private final long timeout;
+    private final int successThreshold;
+    
+    public CircuitBreaker(String name, int failureThreshold, long timeout, int successThreshold) {
+        this.name = name;
+        this.failureThreshold = failureThreshold;
+        this.timeout = timeout;
+        this.successThreshold = successThreshold;
+    }
+    
+    public boolean isClosed() {
+        return state.get() == CircuitBreakerState.CLOSED;
+    }
+    
+    public boolean isOpen() {
+        return state.get() == CircuitBreakerState.OPEN;
+    }
+    
+    public boolean isHalfOpen() {
+        return state.get() == CircuitBreakerState.HALF_OPEN;
+    }
+}
+```
+
+### 1.2 熔断器配置
+
+```java title="熔断器配置"
+@Configuration
+public class CircuitBreakerConfig {
+    
+    @Value("${circuit.breaker.failure.threshold:5}")
+    private int failureThreshold;
+    
+    @Value("${circuit.breaker.timeout:60000}")
+    private long timeout;
+    
+    @Value("${circuit.breaker.success.threshold:3}")
+    private int successThreshold;
+    
+    @Bean
+    public CircuitBreakerProperties circuitBreakerProperties() {
+        CircuitBreakerProperties properties = new CircuitBreakerProperties();
+        properties.setFailureThreshold(failureThreshold);
+        properties.setTimeout(timeout);
+        properties.setSuccessThreshold(successThreshold);
+        return properties;
+    }
+    
+    @Bean
+    public CircuitBreakerRegistry circuitBreakerRegistry() {
+        return new CircuitBreakerRegistry();
+    }
+}
+
+@Component
+public class CircuitBreakerProperties {
+    private int failureThreshold = 5;
+    private long timeout = 60000;
+    private int successThreshold = 3;
+    private boolean enabled = true;
+    private Map<String, Integer> customThresholds = new HashMap<>();
+    
+    // getter和setter方法
+}
+
+@Component
+public class CircuitBreakerRegistry {
+    
+    private final Map<String, CircuitBreaker> circuitBreakers = new ConcurrentHashMap<>();
+    private final CircuitBreakerProperties properties;
+    
+    public CircuitBreakerRegistry(CircuitBreakerProperties properties) {
+        this.properties = properties;
+    }
+    
+    public CircuitBreaker getCircuitBreaker(String name) {
+        return circuitBreakers.computeIfAbsent(name, k -> 
+            new CircuitBreaker(name, properties.getFailureThreshold(), 
+                             properties.getTimeout(), properties.getSuccessThreshold()));
+    }
+    
+    public void removeCircuitBreaker(String name) {
+        circuitBreakers.remove(name);
+    }
+    
+    public Map<String, CircuitBreaker> getAllCircuitBreakers() {
+        return new HashMap<>(circuitBreakers);
+    }
+}
+```
+
+## 2. 熔断器实现
+
+### 2.1 基础熔断器实现
+
+```java title="基础熔断器实现"
+@Component
+public class BasicCircuitBreaker {
+    
+    private final String name;
+    private final AtomicReference<CircuitBreakerState> state = new AtomicReference<>(CircuitBreakerState.CLOSED);
+    private final AtomicInteger failureCount = new AtomicInteger(0);
+    private final AtomicLong lastFailureTime = new AtomicLong(0);
+    private final AtomicInteger successCount = new AtomicInteger(0);
+    
+    private final int failureThreshold;
+    private final long timeout;
+    private final int successThreshold;
+    
+    public BasicCircuitBreaker(String name, int failureThreshold, long timeout, int successThreshold) {
+        this.name = name;
+        this.failureThreshold = failureThreshold;
+        this.timeout = timeout;
+        this.successThreshold = successThreshold;
+    }
+    
+    public <T> T execute(Supplier<T> supplier) throws Exception {
+        if (isOpen()) {
+            throw new CircuitBreakerOpenException("熔断器已打开: " + name);
+        }
+        
+        try {
+            T result = supplier.get();
+            onSuccess();
+            return result;
+        } catch (Exception e) {
+            onFailure();
+            throw e;
+        }
+    }
+    
+    public void execute(Runnable runnable) throws Exception {
+        if (isOpen()) {
+            throw new CircuitBreakerOpenException("熔断器已打开: " + name);
+        }
+        
+        try {
+            runnable.run();
+            onSuccess();
+        } catch (Exception e) {
+            onFailure();
+            throw e;
+        }
+    }
+    
+    private boolean isOpen() {
+        CircuitBreakerState currentState = state.get();
+        
+        if (currentState == CircuitBreakerState.OPEN) {
+            // 检查是否超时，尝试进入半开状态
+            long now = System.currentTimeMillis();
+            if (now - lastFailureTime.get() > timeout) {
+                if (state.compareAndSet(CircuitBreakerState.OPEN, CircuitBreakerState.HALF_OPEN)) {
+                    log.info("熔断器 {} 进入半开状态", name);
+                }
+                return false;
+            }
+            return true;
+        }
+        
+        return false;
+    }
+    
+    private void onSuccess() {
+        CircuitBreakerState currentState = state.get();
+        
+        if (currentState == CircuitBreakerState.HALF_OPEN) {
+            int success = successCount.incrementAndGet();
+            if (success >= successThreshold) {
+                if (state.compareAndSet(CircuitBreakerState.HALF_OPEN, CircuitBreakerState.CLOSED)) {
+                    failureCount.set(0);
+                    successCount.set(0);
+                    log.info("熔断器 {} 恢复正常", name);
+                }
+            }
+        } else {
+            // 关闭状态，重置失败计数
+            failureCount.set(0);
+        }
+    }
+    
+    private void onFailure() {
+        CircuitBreakerState currentState = state.get();
+        
+        if (currentState == CircuitBreakerState.CLOSED) {
+            int failures = failureCount.incrementAndGet();
+            if (failures >= failureThreshold) {
+                if (state.compareAndSet(CircuitBreakerState.CLOSED, CircuitBreakerState.OPEN)) {
+                    lastFailureTime.set(System.currentTimeMillis());
+                    log.warn("熔断器 {} 打开", name);
+                }
+            }
+        } else if (currentState == CircuitBreakerState.HALF_OPEN) {
+            // 半开状态下失败，重新打开熔断器
+            if (state.compareAndSet(CircuitBreakerState.HALF_OPEN, CircuitBreakerState.OPEN)) {
+                lastFailureTime.set(System.currentTimeMillis());
+                log.warn("熔断器 {} 重新打开", name);
+            }
+        }
+    }
+    
+    public CircuitBreakerState getState() {
+        return state.get();
+    }
+    
+    public int getFailureCount() {
+        return failureCount.get();
+    }
+    
+    public int getSuccessCount() {
+        return successCount.get();
+    }
+}
+```
+
+### 2.2 高级熔断器实现
+
+```java title="高级熔断器实现"
+@Component
+public class AdvancedCircuitBreaker {
+    
+    private final String name;
+    private final AtomicReference<CircuitBreakerState> state = new AtomicReference<>(CircuitBreakerState.CLOSED);
+    private final AtomicInteger failureCount = new AtomicInteger(0);
+    private final AtomicLong lastFailureTime = new AtomicLong(0);
+    private final AtomicInteger successCount = new AtomicInteger(0);
+    private final AtomicInteger totalCount = new AtomicInteger(0);
+    
+    private final int failureThreshold;
+    private final long timeout;
+    private final int successThreshold;
+    private final double failureRateThreshold;
+    private final int minimumRequestCount;
+    
+    private final Queue<Boolean> recentResults = new ConcurrentLinkedQueue<>();
+    private final int windowSize;
+    
+    public AdvancedCircuitBreaker(String name, int failureThreshold, long timeout, 
+                                 int successThreshold, double failureRateThreshold, 
+                                 int minimumRequestCount, int windowSize) {
+        this.name = name;
+        this.failureThreshold = failureThreshold;
+        this.timeout = timeout;
+        this.successThreshold = successThreshold;
+        this.failureRateThreshold = failureRateThreshold;
+        this.minimumRequestCount = minimumRequestCount;
+        this.windowSize = windowSize;
+    }
+    
+    public <T> T execute(Supplier<T> supplier) throws Exception {
+        if (isOpen()) {
+            throw new CircuitBreakerOpenException("熔断器已打开: " + name);
+        }
+        
+        totalCount.incrementAndGet();
+        
+        try {
+            T result = supplier.get();
+            onSuccess();
+            return result;
+        } catch (Exception e) {
+            onFailure();
+            throw e;
+        }
+    }
+    
+    private boolean isOpen() {
+        CircuitBreakerState currentState = state.get();
+        
+        if (currentState == CircuitBreakerState.OPEN) {
+            // 检查是否超时，尝试进入半开状态
+            long now = System.currentTimeMillis();
+            if (now - lastFailureTime.get() > timeout) {
+                if (state.compareAndSet(CircuitBreakerState.OPEN, CircuitBreakerState.HALF_OPEN)) {
+                    log.info("熔断器 {} 进入半开状态", name);
+                }
+                return false;
+            }
+            return true;
+        }
+        
+        return false;
+    }
+    
+    private void onSuccess() {
+        CircuitBreakerState currentState = state.get();
+        recordResult(true);
+        
+        if (currentState == CircuitBreakerState.HALF_OPEN) {
+            int success = successCount.incrementAndGet();
+            if (success >= successThreshold) {
+                if (state.compareAndSet(CircuitBreakerState.HALF_OPEN, CircuitBreakerState.CLOSED)) {
+                    resetCounters();
+                    log.info("熔断器 {} 恢复正常", name);
+                }
+            }
+        } else {
+            // 关闭状态，检查是否需要打开熔断器
+            checkFailureRate();
+        }
+    }
+    
+    private void onFailure() {
+        CircuitBreakerState currentState = state.get();
+        recordResult(false);
+        
+        if (currentState == CircuitBreakerState.CLOSED) {
+            int failures = failureCount.incrementAndGet();
+            if (failures >= failureThreshold) {
+                if (state.compareAndSet(CircuitBreakerState.CLOSED, CircuitBreakerState.OPEN)) {
+                    lastFailureTime.set(System.currentTimeMillis());
+                    log.warn("熔断器 {} 打开 (失败次数: {})", name, failures);
+                }
+            }
+        } else if (currentState == CircuitBreakerState.HALF_OPEN) {
+            // 半开状态下失败，重新打开熔断器
+            if (state.compareAndSet(CircuitBreakerState.HALF_OPEN, CircuitBreakerState.OPEN)) {
+                lastFailureTime.set(System.currentTimeMillis());
+                log.warn("熔断器 {} 重新打开", name);
+            }
+        }
+    }
+    
+    private void recordResult(boolean success) {
+        recentResults.offer(success);
+        
+        // 保持窗口大小
+        while (recentResults.size() > windowSize) {
+            recentResults.poll();
+        }
+    }
+    
+    private void checkFailureRate() {
+        if (recentResults.size() < minimumRequestCount) {
+            return;
+        }
+        
+        long failureCount = recentResults.stream().filter(success -> !success).count();
+        double failureRate = (double) failureCount / recentResults.size();
+        
+        if (failureRate >= failureRateThreshold) {
+            if (state.compareAndSet(CircuitBreakerState.CLOSED, CircuitBreakerState.OPEN)) {
+                lastFailureTime.set(System.currentTimeMillis());
+                log.warn("熔断器 {} 打开 (失败率: {:.2f}%)", name, failureRate * 100);
+            }
+        }
+    }
+    
+    private void resetCounters() {
+        failureCount.set(0);
+        successCount.set(0);
+        recentResults.clear();
+    }
+    
+    public CircuitBreakerMetrics getMetrics() {
+        return new CircuitBreakerMetrics(
+            name,
+            state.get(),
+            failureCount.get(),
+            successCount.get(),
+            totalCount.get(),
+            recentResults.size(),
+            calculateFailureRate()
+        );
+    }
+    
+    private double calculateFailureRate() {
+        if (recentResults.isEmpty()) {
+            return 0.0;
+        }
+        
+        long failureCount = recentResults.stream().filter(success -> !success).count();
+        return (double) failureCount / recentResults.size();
+    }
+}
+
+class CircuitBreakerMetrics {
+    private final String name;
+    private final CircuitBreakerState state;
+    private final int failureCount;
+    private final int successCount;
+    private final int totalCount;
+    private final int windowSize;
+    private final double failureRate;
+    
+    // 构造函数和getter方法
+}
+```
+
+## 3. 熔断器集成
+
+### 3.1 Spring Boot集成
+
+```java title="Spring Boot熔断器集成"
+@Configuration
+@EnableCircuitBreaker
+public class CircuitBreakerConfiguration {
+    
+    @Bean
+    public CircuitBreakerFactory circuitBreakerFactory() {
+        return new DefaultCircuitBreakerFactory();
+    }
+    
+    @Bean
+    public CircuitBreakerProperties circuitBreakerProperties() {
+        CircuitBreakerProperties properties = new CircuitBreakerProperties();
+        properties.setFailureThreshold(5);
+        properties.setTimeout(60000);
+        properties.setSuccessThreshold(3);
+        return properties;
+    }
+}
+
+@Service
+public class UserServiceWithCircuitBreaker {
+    
+    @Autowired
+    private CircuitBreakerFactory circuitBreakerFactory;
+    
+    @Autowired
+    private RestTemplate restTemplate;
+    
+    public User getUserById(Long id) {
+        CircuitBreaker circuitBreaker = circuitBreakerFactory.create("user-service");
+        
+        return circuitBreaker.run(
+            () -> restTemplate.getForObject("http://user-service/users/" + id, User.class),
+            throwable -> getFallbackUser(id)
+        );
+    }
+    
+    private User getFallbackUser(Long id) {
+        // 降级逻辑：返回缓存数据或默认数据
+        User fallback = new User();
+        fallback.setId(id);
+        fallback.setName("用户" + id);
+        fallback.setEmail("user" + id + "@example.com");
+        return fallback;
+    }
+    
+    @CircuitBreaker(name = "user-service", fallbackMethod = "getUserFallback")
+    public User getUserWithAnnotation(Long id) {
+        return restTemplate.getForObject("http://user-service/users/" + id, User.class);
+    }
+    
+    public User getUserFallback(Long id, Throwable throwable) {
+        log.warn("用户服务调用失败，使用降级逻辑", throwable);
+        return getFallbackUser(id);
+    }
+}
+```
+
+### 3.2 AOP集成
+
+```java title="AOP熔断器集成"
+@Aspect
+@Component
+public class CircuitBreakerAspect {
+    
+    @Autowired
+    private CircuitBreakerRegistry circuitBreakerRegistry;
+    
+    @Around("@annotation(circuitBreaker)")
+    public Object around(ProceedingJoinPoint point, CircuitBreaker circuitBreaker) throws Throwable {
+        String name = circuitBreaker.name();
+        CircuitBreaker breaker = circuitBreakerRegistry.getCircuitBreaker(name);
+        
+        if (breaker.isOpen()) {
+            return executeFallback(point, circuitBreaker);
+        }
+        
+        try {
+            Object result = point.proceed();
+            breaker.onSuccess();
+            return result;
+        } catch (Exception e) {
+            breaker.onFailure();
+            return executeFallback(point, circuitBreaker);
+        }
+    }
+    
+    private Object executeFallback(ProceedingJoinPoint point, CircuitBreaker circuitBreaker) throws Throwable {
+        if (!circuitBreaker.fallback().isEmpty()) {
+            Method fallbackMethod = findFallbackMethod(point, circuitBreaker.fallback());
+            if (fallbackMethod != null) {
+                return fallbackMethod.invoke(point.getTarget(), point.getArgs());
+            }
+        }
+        
+        throw new CircuitBreakerOpenException("熔断器已打开: " + circuitBreaker.name());
+    }
+    
+    private Method findFallbackMethod(ProceedingJoinPoint point, String fallbackMethodName) {
+        try {
+            return point.getTarget().getClass().getMethod(fallbackMethodName);
+        } catch (NoSuchMethodException e) {
+            return null;
+        }
+    }
+}
+
+@Target(ElementType.METHOD)
+@Retention(RetentionPolicy.RUNTIME)
+public @interface CircuitBreaker {
+    String name();
+    String fallback() default "";
+    int failureThreshold() default 5;
+    long timeout() default 60000;
+    int successThreshold() default 3;
+}
+```
+
+## 4. 降级策略
+
+### 4.1 降级策略实现
+
+```java title="降级策略实现"
+@Component
+public class FallbackStrategy {
+    
+    @Autowired
+    private CacheService cacheService;
+    
+    @Autowired
+    private CircuitBreakerRegistry circuitBreakerRegistry;
+    
+    public <T> T executeWithFallback(String serviceName, Supplier<T> supplier, 
+                                    Function<Exception, T> fallback) {
+        CircuitBreaker circuitBreaker = circuitBreakerRegistry.getCircuitBreaker(serviceName);
+        
+        try {
+            return circuitBreaker.execute(supplier);
+        } catch (Exception e) {
+            log.warn("服务 {} 调用失败，执行降级策略", serviceName, e);
+            return fallback.apply(e);
+        }
+    }
+    
+    // 缓存降级
+    public <T> T cacheFallback(String key, Class<T> type) {
+        try {
+            return cacheService.get(key, type);
+        } catch (Exception e) {
+            log.error("缓存降级失败", e);
+            return null;
+        }
+    }
+    
+    // 默认值降级
+    public <T> T defaultFallback(Class<T> type) {
+        if (type == User.class) {
+            return (T) createDefaultUser();
+        } else if (type == List.class) {
+            return (T) new ArrayList<>();
+        }
+        return null;
+    }
+    
+    // 异步降级
+    public <T> CompletableFuture<T> asyncFallback(Supplier<T> supplier) {
+        return CompletableFuture.supplyAsync(() -> {
+            try {
+                Thread.sleep(1000); // 模拟异步处理
+                return supplier.get();
+            } catch (Exception e) {
+                log.error("异步降级失败", e);
+                return null;
+            }
+        });
+    }
+    
+    private User createDefaultUser() {
+        User user = new User();
+        user.setId(0L);
+        user.setName("默认用户");
+        user.setEmail("default@example.com");
+        return user;
+    }
+}
+
+// 使用示例
+@Service
+public class UserServiceWithFallback {
+    
+    @Autowired
+    private FallbackStrategy fallbackStrategy;
+    
+    @Autowired
+    private RestTemplate restTemplate;
+    
+    public User getUserById(Long id) {
+        return fallbackStrategy.executeWithFallback(
+            "user-service",
+            () -> restTemplate.getForObject("http://user-service/users/" + id, User.class),
+            exception -> {
+                // 缓存降级
+                User cachedUser = fallbackStrategy.cacheFallback("user:" + id, User.class);
+                if (cachedUser != null) {
+                    return cachedUser;
+                }
+                
+                // 默认值降级
+                return fallbackStrategy.defaultFallback(User.class);
+            }
+        );
+    }
+}
+```
+
+### 4.2 多级降级
+
+```java title="多级降级实现"
+@Component
+public class MultiLevelFallback {
+    
+    @Autowired
+    private CacheService cacheService;
+    
+    @Autowired
+    private DatabaseService databaseService;
+    
+    public User getUserWithMultiLevelFallback(Long id) {
+        try {
+            // 第一级：调用远程服务
+            return callRemoteService(id);
+        } catch (Exception e) {
+            log.warn("远程服务调用失败，尝试缓存降级", e);
+            
+            try {
+                // 第二级：缓存降级
+                return cacheService.get("user:" + id, User.class);
+            } catch (Exception cacheException) {
+                log.warn("缓存降级失败，尝试数据库降级", cacheException);
+                
+                try {
+                    // 第三级：数据库降级
+                    return databaseService.getUserById(id);
+                } catch (Exception dbException) {
+                    log.warn("数据库降级失败，使用默认值", dbException);
+                    
+                    // 第四级：默认值降级
+                    return createDefaultUser(id);
+                }
+            }
+        }
+    }
+    
+    private User callRemoteService(Long id) {
+        // 调用远程服务的逻辑
+        return null;
+    }
+    
+    private User createDefaultUser(Long id) {
+        User user = new User();
+        user.setId(id);
+        user.setName("用户" + id);
+        user.setEmail("user" + id + "@example.com");
+        return user;
+    }
+}
+```
+
+## 5. 监控与告警
+
+### 5.1 熔断器监控
+
+```java title="熔断器监控实现"
+@Component
+public class CircuitBreakerMonitor {
+    
+    @Autowired
+    private CircuitBreakerRegistry circuitBreakerRegistry;
+    
+    @Autowired
+    private MeterRegistry meterRegistry;
+    
+    @Scheduled(fixedRate = 10000) // 每10秒监控一次
+    public void monitorCircuitBreakers() {
+        Map<String, CircuitBreaker> circuitBreakers = circuitBreakerRegistry.getAllCircuitBreakers();
+        
+        for (Map.Entry<String, CircuitBreaker> entry : circuitBreakers.entrySet()) {
+            String name = entry.getKey();
+            CircuitBreaker circuitBreaker = entry.getValue();
+            
+            // 记录状态
+            Gauge.builder("circuit.breaker.state")
+                .tag("name", name)
+                .tag("state", circuitBreaker.getState().name())
+                .register(meterRegistry, circuitBreaker, cb -> cb.getState().ordinal());
+            
+            // 记录失败次数
+            Gauge.builder("circuit.breaker.failure.count")
+                .tag("name", name)
+                .register(meterRegistry, circuitBreaker, CircuitBreaker::getFailureCount);
+            
+            // 记录成功次数
+            Gauge.builder("circuit.breaker.success.count")
+                .tag("name", name)
+                .register(meterRegistry, circuitBreaker, CircuitBreaker::getSuccessCount);
+        }
+    }
+    
+    @EventListener
+    public void handleCircuitBreakerEvent(CircuitBreakerEvent event) {
+        log.info("熔断器事件: {} - {}", event.getCircuitBreakerName(), event.getEventType());
+        
+        // 发送告警
+        if (event.getEventType() == CircuitBreakerEvent.Type.OPEN) {
+            sendAlert(event.getCircuitBreakerName(), "熔断器打开");
+        } else if (event.getEventType() == CircuitBreakerEvent.Type.CLOSE) {
+            sendAlert(event.getCircuitBreakerName(), "熔断器关闭");
+        }
+    }
+    
+    private void sendAlert(String circuitBreakerName, String message) {
+        // 发送告警逻辑
+        log.warn("熔断器告警: {} - {}", circuitBreakerName, message);
+    }
+}
+
+class CircuitBreakerEvent {
+    private final String circuitBreakerName;
+    private final Type eventType;
+    private final long timestamp;
+    
+    public enum Type {
+        OPEN, CLOSE, HALF_OPEN
+    }
+    
+    // 构造函数和getter方法
+}
+```
+
+### 5.2 健康检查
+
+```java title="熔断器健康检查"
+@Component
+public class CircuitBreakerHealthIndicator implements HealthIndicator {
+    
+    @Autowired
+    private CircuitBreakerRegistry circuitBreakerRegistry;
+    
+    @Override
+    public Health health() {
+        Map<String, CircuitBreaker> circuitBreakers = circuitBreakerRegistry.getAllCircuitBreakers();
+        
+        Map<String, Object> details = new HashMap<>();
+        int openCount = 0;
+        int totalCount = circuitBreakers.size();
+        
+        for (Map.Entry<String, CircuitBreaker> entry : circuitBreakers.entrySet()) {
+            String name = entry.getKey();
+            CircuitBreaker circuitBreaker = entry.getValue();
+            
+            details.put(name, circuitBreaker.getState().name());
+            
+            if (circuitBreaker.getState() == CircuitBreakerState.OPEN) {
+                openCount++;
+            }
+        }
+        
+        details.put("total", totalCount);
+        details.put("open", openCount);
+        details.put("healthy", totalCount - openCount);
+        
+        if (openCount == 0) {
+            return Health.up()
+                .withDetails(details)
+                .build();
+        } else {
+            return Health.down()
+                .withDetails(details)
+                .build();
+        }
+    }
+}
+```
+
+## 6. 面试题精选
+
+### 6.1 基础概念题
+
+**Q: 什么是熔断器模式？为什么需要熔断器？**
+
+A: 熔断器模式是一种容错机制，用于防止故障扩散。需要熔断器的原因：
+- **故障隔离**：防止单个服务故障影响整个系统
+- **快速失败**：避免长时间等待，提高响应速度
+- **自动恢复**：服务恢复后自动恢复正常调用
+- **降级策略**：提供降级方案保证基本功能可用
+- **系统保护**：防止系统雪崩效应
+
+**Q: 熔断器有哪几种状态？各有什么特点？**
+
+A: 熔断器有三种状态：
+- **关闭状态**：正常状态，允许请求通过，统计失败次数
+- **开启状态**：熔断状态，快速失败，不调用目标服务
+- **半开状态**：恢复状态，允许少量请求测试服务恢复情况
+
+### 6.2 实现细节题
+
+**Q: 如何实现熔断器的状态转换？**
+
+A: 熔断器状态转换实现：
+- **关闭→开启**：失败次数达到阈值或失败率超过阈值
+- **开启→半开**：超时时间到达，尝试恢复
+- **半开→关闭**：成功次数达到阈值，恢复正常
+- **半开→开启**：半开状态下再次失败，重新熔断
+
+**Q: 如何设计熔断器的降级策略？**
+
+A: 降级策略设计方法：
+- **缓存降级**：返回缓存数据
+- **默认值降级**：返回默认值或空值
+- **异步降级**：异步处理，返回临时结果
+- **多级降级**：按优先级依次尝试不同降级方案
+
+### 6.3 实际应用题
+
+**Q: 如何集成熔断器到Spring Boot应用？**
+
+A: Spring Boot熔断器集成方法：
+- **使用Hystrix**：添加Hystrix依赖和注解
+- **使用Resilience4j**：添加Resilience4j依赖和注解
+- **自定义实现**：使用AOP和自定义注解
+- **配置管理**：通过配置文件管理熔断器参数
+
+**Q: 如何监控熔断器的状态？**
+
+A: 熔断器监控方法：
+- **状态监控**：实时监控熔断器状态变化
+- **指标收集**：收集失败次数、成功率等指标
+- **告警机制**：熔断器打开时发送告警
+- **健康检查**：集成到健康检查系统中
+
+:::tip 熔断器学习要点
+1. **理解熔断器概念**：掌握熔断器的作用、状态和转换机制
+2. **掌握实现方式**：学会基础熔断器和高级熔断器的实现
+3. **熟悉集成方法**：了解Spring Boot、AOP等集成方式
+4. **学会降级策略**：掌握多级降级和降级策略设计
+5. **了解监控告警**：掌握熔断器监控和告警机制
+:::
+
+---
+
+通过本章的学习，你应该已经掌握了熔断器模式设计的核心概念、实现方法和最佳实践。熔断器模式是分布式系统中重要的容错机制，掌握这些技术可以帮助你构建出稳定可靠的系统。在实际项目中，合理运用熔断器模式可以有效防止故障扩散，提高系统的可用性和稳定性。 

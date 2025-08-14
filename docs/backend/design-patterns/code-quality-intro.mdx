@@ -1,53 +1,876 @@
 ---
 sidebar_position: 1
-title: 代码质量与设计模式
-description: 设计模式应用与代码质量提升实践
+title: 代码质量与设计模式详解
+description: 深入理解代码质量标准、设计模式应用与最佳实践
 authors: [Laby]
 last_update:
   date: 2025-08-07
   author: Laby
 ---
 
-# 代码质量与设计模式
+# 代码质量与设计模式详解
 
-代码质量是衡量软件代码优劣的标准，而设计模式是提高代码质量的重要工具。高质量的代码不仅可以提高系统的可维护性和扩展性，还能减少缺陷和技术债务。
+代码质量是软件工程中的核心概念，它直接影响着软件的可维护性、可扩展性和系统的长期稳定性。高质量的代码不仅能减少缺陷和技术债务，还能提高开发效率和团队协作效果。设计模式作为提高代码质量的重要工具，为常见的设计问题提供了经过验证的解决方案。
 
-## 代码质量的衡量标准
+:::tip 核心价值
+高质量代码 = 可读性 + 可维护性 + 可测试性 + 性能 + 安全性 + 可重用性
+:::
 
-代码质量通常从以下几个方面进行衡量：
+## 1. 代码质量基础概念
 
-1. **可读性**：代码是否易于理解
-2. **可维护性**：修改或扩展代码的难易程度
-3. **可测试性**：编写和执行测试的便利性
-4. **性能效率**：代码执行的速度和资源利用率
-5. **安全性**：代码是否存在安全漏洞
-6. **可重用性**：代码组件可在不同场景下重复使用的能力
+### 1.1 什么是代码质量？
 
-## 设计模式与代码质量
+代码质量是指代码满足预期需求的程度，以及代码在可读性、可维护性、可测试性等方面的表现。高质量的代码应该易于理解、修改、测试和扩展。
 
-设计模式是解决软件设计中常见问题的可重用解决方案。它们有助于创建更加：
+#### 代码质量的多维度定义
+```java title="高质量代码示例"
+// 高质量代码示例：清晰、简洁、易于理解
+public class UserService {
+    private final UserRepository userRepository;
+    private final EmailService emailService;
+    
+    public UserService(UserRepository userRepository, EmailService emailService) {
+        this.userRepository = userRepository;
+        this.emailService = emailService;
+    }
+    
+    public void registerUser(UserRegistrationRequest request) {
+        validateRegistrationRequest(request);
+        User user = createUserFromRequest(request);
+        userRepository.save(user);
+        emailService.sendWelcomeEmail(user.getEmail());
+    }
+    
+    private void validateRegistrationRequest(UserRegistrationRequest request) {
+        if (request == null || request.getEmail() == null) {
+            throw new IllegalArgumentException("Invalid registration request");
+        }
+    }
+    
+    private User createUserFromRequest(UserRegistrationRequest request) {
+        return User.builder()
+                  .email(request.getEmail())
+                  .name(request.getName())
+                  .createdAt(LocalDateTime.now())
+                  .build();
+    }
+}
+```
 
-- **模块化**的代码结构
-- **低耦合**的组件关系
-- **高内聚**的功能实现
-- **可扩展**的系统架构
+### 1.2 代码质量的重要性
 
-## 常见代码质量问题
+| 维度 | 重要性 | 影响 |
+|------|--------|------|
+| **可读性** | 高 | 影响代码理解和维护成本 |
+| **可维护性** | 高 | 影响修改和扩展的难易程度 |
+| **可测试性** | 高 | 影响测试覆盖率和缺陷发现 |
+| **性能** | 中 | 影响系统响应时间和资源使用 |
+| **安全性** | 高 | 影响系统安全性和数据保护 |
+| **可重用性** | 中 | 影响开发效率和代码复用 |
 
-在软件开发中，常见的代码质量问题包括：
+:::info 代码质量的经济价值
+根据研究，修复生产环境中的缺陷成本是开发阶段修复成本的100倍。高质量的代码能显著降低维护成本，提高开发效率。
+:::
 
-- **代码异味**：表明代码可能存在深层次问题的表面现象
-- **紧耦合**：组件之间过度依赖
-- **重复代码**：违反DRY(Don't Repeat Yourself)原则
-- **过大的类或方法**：违反单一职责原则
-- **不一致的命名和风格**：降低可读性
+## 2. 代码质量衡量标准
 
-## 本节内容
+### 2.1 可读性（Readability）
 
-本节将介绍如何通过设计模式来提高代码质量，包括：
+可读性是代码质量的基础，良好的可读性能让其他开发者快速理解代码意图。
 
-- 创建型设计模式
-- 结构型设计模式
-- 行为型设计模式
+#### 可读性评估标准
+```java title="可读性对比示例"
+// 低可读性代码
+public void p(String s) {
+    if(s!=null&&s.length()>0) {
+        System.out.println(s);
+    }
+}
 
-以及如何在实际开发中应用这些模式，遵循最佳实践，编写高质量的代码。 
+// 高可读性代码
+public void printMessage(String message) {
+    if (isValidMessage(message)) {
+        System.out.println(message);
+    }
+}
+
+private boolean isValidMessage(String message) {
+    return message != null && !message.trim().isEmpty();
+}
+```
+
+#### 提高可读性的最佳实践
+- **有意义的命名**：变量、方法、类名应该清晰表达其用途
+- **适当的注释**：解释复杂的业务逻辑和算法
+- **合理的代码结构**：使用适当的缩进和空行
+- **单一职责**：每个方法只做一件事
+
+### 2.2 可维护性（Maintainability）
+
+可维护性是指修改和扩展代码的难易程度，高可维护性的代码能够快速适应需求变化。
+
+#### 可维护性特征
+```java title="可维护性示例"
+// 低可维护性：硬编码配置
+public class PaymentProcessor {
+    public void processPayment(double amount) {
+        double tax = amount * 0.1; // 硬编码税率
+        double total = amount + tax;
+        // 处理逻辑...
+    }
+}
+
+// 高可维护性：配置化设计
+public class PaymentProcessor {
+    private final TaxCalculator taxCalculator;
+    private final PaymentGateway paymentGateway;
+    
+    public PaymentProcessor(TaxCalculator taxCalculator, PaymentGateway paymentGateway) {
+        this.taxCalculator = taxCalculator;
+        this.paymentGateway = paymentGateway;
+    }
+    
+    public void processPayment(PaymentRequest request) {
+        double tax = taxCalculator.calculateTax(request.getAmount(), request.getCountry());
+        PaymentResult result = paymentGateway.process(request.withTax(tax));
+        handlePaymentResult(result);
+    }
+}
+```
+
+### 2.3 可测试性（Testability）
+
+可测试性是指代码易于编写和执行测试的程度，高可测试性的代码通常具有清晰的依赖关系和明确的接口。
+
+#### 可测试性设计原则
+```java title="可测试性示例"
+// 低可测试性：紧耦合
+public class OrderService {
+    public void processOrder(Order order) {
+        DatabaseConnection db = new DatabaseConnection();
+        EmailService email = new EmailService();
+        
+        db.save(order);
+        email.sendConfirmation(order.getCustomerEmail());
+    }
+}
+
+// 高可测试性：依赖注入
+public class OrderService {
+    private final OrderRepository orderRepository;
+    private final NotificationService notificationService;
+    
+    public OrderService(OrderRepository orderRepository, 
+                       NotificationService notificationService) {
+        this.orderRepository = orderRepository;
+        this.notificationService = notificationService;
+    }
+    
+    public void processOrder(Order order) {
+        orderRepository.save(order);
+        notificationService.sendConfirmation(order.getCustomerEmail());
+    }
+}
+```
+
+### 2.4 性能效率（Performance）
+
+性能效率关注代码执行的速度和资源利用率，在保证功能正确的前提下优化性能。
+
+#### 性能优化示例
+```java title="性能优化对比"
+// 低性能：重复计算
+public class DataProcessor {
+    public List<String> processData(List<Integer> numbers) {
+        List<String> result = new ArrayList<>();
+        for (Integer num : numbers) {
+            if (isPrime(num)) {  // 每次循环都计算
+                result.add("Prime: " + num);
+            }
+        }
+        return result;
+    }
+}
+
+// 高性能：缓存优化
+public class DataProcessor {
+    private final Map<Integer, Boolean> primeCache = new ConcurrentHashMap<>();
+    
+    public List<String> processData(List<Integer> numbers) {
+        return numbers.parallelStream()
+                     .filter(this::isPrime)
+                     .map(num -> "Prime: " + num)
+                     .collect(Collectors.toList());
+    }
+    
+    private boolean isPrime(int num) {
+        return primeCache.computeIfAbsent(num, this::calculatePrime);
+    }
+}
+```
+
+### 2.5 安全性（Security）
+
+安全性是指代码抵抗恶意攻击和保护敏感数据的能力。
+
+#### 安全编码实践
+```java title="安全编码示例"
+// 不安全：SQL注入风险
+public class UserDAO {
+    public User findByUsername(String username) {
+        String sql = "SELECT * FROM users WHERE username = '" + username + "'";
+        // 执行SQL...
+    }
+}
+
+// 安全：参数化查询
+public class UserDAO {
+    public User findByUsername(String username) {
+        String sql = "SELECT * FROM users WHERE username = ?";
+        PreparedStatement stmt = connection.prepareStatement(sql);
+        stmt.setString(1, username);
+        // 执行SQL...
+    }
+}
+```
+
+## 3. 常见代码质量问题
+
+### 3.1 代码异味（Code Smells）
+
+代码异味是表明代码可能存在深层次问题的表面现象，识别和消除代码异味是提高代码质量的重要手段。
+
+#### 常见代码异味类型
+
+| 代码异味 | 描述 | 影响 | 解决方案 |
+|----------|------|------|----------|
+| **长方法** | 方法过长，包含多个职责 | 降低可读性和可维护性 | 提取方法，单一职责 |
+| **大类** | 类过大，包含过多方法 | 增加复杂度，降低内聚性 | 拆分类，提取接口 |
+| **重复代码** | 相同或相似的代码片段 | 违反DRY原则，增加维护成本 | 提取公共方法或类 |
+| **长参数列表** | 方法参数过多 | 降低可读性，增加调用复杂度 | 使用参数对象或Builder模式 |
+| **数据泥团** | 总是同时出现的数据项 | 表明应该封装为对象 | 创建数据类 |
+| **基本类型偏执** | 过度使用基本类型 | 失去面向对象的优势 | 使用值对象 |
+
+#### 代码异味示例
+```java title="代码异味识别"
+// 长方法异味
+public void processOrder(Order order) {
+    // 验证订单
+    if (order == null) {
+        throw new IllegalArgumentException("Order cannot be null");
+    }
+    if (order.getItems() == null || order.getItems().isEmpty()) {
+        throw new IllegalArgumentException("Order must have items");
+    }
+    if (order.getCustomer() == null) {
+        throw new IllegalArgumentException("Order must have customer");
+    }
+    
+    // 计算总价
+    double total = 0;
+    for (OrderItem item : order.getItems()) {
+        total += item.getPrice() * item.getQuantity();
+    }
+    
+    // 应用折扣
+    if (order.getCustomer().isVip()) {
+        total = total * 0.9;
+    }
+    
+    // 计算税费
+    double tax = total * 0.1;
+    total += tax;
+    
+    // 保存订单
+    order.setTotal(total);
+    orderRepository.save(order);
+    
+    // 发送通知
+    emailService.sendOrderConfirmation(order.getCustomer().getEmail(), order);
+    smsService.sendOrderNotification(order.getCustomer().getPhone(), order);
+}
+
+// 重构后的代码
+public void processOrder(Order order) {
+    validateOrder(order);
+    calculateOrderTotal(order);
+    saveOrder(order);
+    sendNotifications(order);
+}
+
+private void validateOrder(Order order) {
+    OrderValidator validator = new OrderValidator();
+    validator.validate(order);
+}
+
+private void calculateOrderTotal(Order order) {
+    OrderCalculator calculator = new OrderCalculator();
+    double total = calculator.calculateTotal(order);
+    order.setTotal(total);
+}
+```
+
+### 3.2 紧耦合问题
+
+紧耦合是指组件之间过度依赖，一个组件的修改会影响其他组件。
+
+#### 耦合度评估
+```java title="耦合度对比"
+// 高耦合：直接依赖具体实现
+public class OrderService {
+    private MySQLOrderRepository orderRepository = new MySQLOrderRepository();
+    private SMTPEmailService emailService = new SMTPEmailService();
+    
+    public void processOrder(Order order) {
+        orderRepository.save(order);
+        emailService.sendConfirmation(order.getCustomerEmail());
+    }
+}
+
+// 低耦合：依赖抽象
+public class OrderService {
+    private final OrderRepository orderRepository;
+    private final EmailService emailService;
+    
+    public OrderService(OrderRepository orderRepository, EmailService emailService) {
+        this.orderRepository = orderRepository;
+        this.emailService = emailService;
+    }
+    
+    public void processOrder(Order order) {
+        orderRepository.save(order);
+        emailService.sendConfirmation(order.getCustomerEmail());
+    }
+}
+```
+
+### 3.3 重复代码问题
+
+重复代码违反了DRY（Don't Repeat Yourself）原则，增加了维护成本。
+
+#### 重复代码识别与重构
+```java title="重复代码重构"
+// 重复代码
+public class UserService {
+    public void createUser(User user) {
+        if (user == null) {
+            throw new IllegalArgumentException("User cannot be null");
+        }
+        if (user.getName() == null || user.getName().trim().isEmpty()) {
+            throw new IllegalArgumentException("User name cannot be empty");
+        }
+        if (user.getEmail() == null || user.getEmail().trim().isEmpty()) {
+            throw new IllegalArgumentException("User email cannot be empty");
+        }
+        // 创建用户逻辑...
+    }
+    
+    public void updateUser(User user) {
+        if (user == null) {
+            throw new IllegalArgumentException("User cannot be null");
+        }
+        if (user.getName() == null || user.getName().trim().isEmpty()) {
+            throw new IllegalArgumentException("User name cannot be empty");
+        }
+        if (user.getEmail() == null || user.getEmail().trim().isEmpty()) {
+            throw new IllegalArgumentException("User email cannot be empty");
+        }
+        // 更新用户逻辑...
+    }
+}
+
+// 重构后：提取公共验证逻辑
+public class UserService {
+    public void createUser(User user) {
+        validateUser(user);
+        // 创建用户逻辑...
+    }
+    
+    public void updateUser(User user) {
+        validateUser(user);
+        // 更新用户逻辑...
+    }
+    
+    private void validateUser(User user) {
+        if (user == null) {
+            throw new IllegalArgumentException("User cannot be null");
+        }
+        if (user.getName() == null || user.getName().trim().isEmpty()) {
+            throw new IllegalArgumentException("User name cannot be empty");
+        }
+        if (user.getEmail() == null || user.getEmail().trim().isEmpty()) {
+            throw new IllegalArgumentException("User email cannot be empty");
+        }
+    }
+}
+```
+
+## 4. 设计模式与代码质量
+
+### 4.1 设计模式的作用
+
+设计模式是解决软件设计中常见问题的可重用解决方案，它们提供了经过验证的设计思路和最佳实践。
+
+#### 设计模式的价值
+```java title="设计模式应用示例"
+// 不使用设计模式：紧耦合
+public class ReportGenerator {
+    public void generateReport(String type) {
+        if ("PDF".equals(type)) {
+            PDFReportGenerator pdfGenerator = new PDFReportGenerator();
+            pdfGenerator.generate();
+        } else if ("HTML".equals(type)) {
+            HTMLReportGenerator htmlGenerator = new HTMLReportGenerator();
+            htmlGenerator.generate();
+        } else if ("EXCEL".equals(type)) {
+            ExcelReportGenerator excelGenerator = new ExcelReportGenerator();
+            excelGenerator.generate();
+        }
+    }
+}
+
+// 使用策略模式：解耦和扩展
+public class ReportGenerator {
+    private final Map<String, ReportStrategy> strategies;
+    
+    public ReportGenerator() {
+        this.strategies = new HashMap<>();
+        strategies.put("PDF", new PDFReportStrategy());
+        strategies.put("HTML", new HTMLReportStrategy());
+        strategies.put("EXCEL", new ExcelReportStrategy());
+    }
+    
+    public void generateReport(String type) {
+        ReportStrategy strategy = strategies.get(type);
+        if (strategy != null) {
+            strategy.generate();
+        } else {
+            throw new IllegalArgumentException("Unsupported report type: " + type);
+        }
+    }
+}
+```
+
+### 4.2 设计模式分类
+
+设计模式按照其用途可以分为三大类：
+
+#### 创建型模式
+- **单例模式**：确保一个类只有一个实例
+- **工厂模式**：封装对象创建逻辑
+- **建造者模式**：分步骤构建复杂对象
+- **原型模式**：通过克隆创建对象
+
+#### 结构型模式
+- **适配器模式**：使不兼容接口能够协作
+- **装饰器模式**：动态扩展对象功能
+- **代理模式**：控制对象访问
+- **外观模式**：简化复杂子系统接口
+
+#### 行为型模式
+- **观察者模式**：定义对象间一对多依赖关系
+- **策略模式**：封装算法族，使它们可以互换
+- **命令模式**：将请求封装为对象
+- **状态模式**：允许对象在内部状态改变时改变行为
+
+### 4.3 设计模式选择原则
+
+选择合适的设计模式需要考虑以下因素：
+
+| 因素 | 考虑点 | 示例 |
+|------|--------|------|
+| **问题类型** | 创建、结构还是行为问题 | 对象创建复杂 → 工厂模式 |
+| **系统约束** | 性能、内存、扩展性要求 | 内存敏感 → 享元模式 |
+| **团队能力** | 开发团队对模式的熟悉程度 | 简单易懂 → 策略模式 |
+| **维护成本** | 长期维护和扩展的复杂度 | 频繁变化 → 装饰器模式 |
+
+## 5. 代码质量提升实践
+
+### 5.1 代码审查（Code Review）
+
+代码审查是提高代码质量的重要手段，通过同行评审发现潜在问题。
+
+#### 代码审查检查清单
+```java title="代码审查要点"
+// 代码审查检查项
+public class CodeReviewChecklist {
+    /*
+     * 1. 功能正确性
+     *    - 代码是否实现了预期功能？
+     *    - 边界条件是否处理？
+     *    - 异常情况是否考虑？
+     * 
+     * 2. 代码可读性
+     *    - 变量和方法命名是否清晰？
+     *    - 代码结构是否合理？
+     *    - 注释是否充分？
+     * 
+     * 3. 性能考虑
+     *    - 是否有性能瓶颈？
+     *    - 资源使用是否合理？
+     *    - 算法复杂度是否合适？
+     * 
+     * 4. 安全性
+     *    - 是否有安全漏洞？
+     *    - 输入验证是否充分？
+     *    - 敏感数据是否保护？
+     * 
+     * 5. 可维护性
+     *    - 代码是否模块化？
+     *    - 依赖关系是否清晰？
+     *    - 是否遵循设计原则？
+     */
+}
+```
+
+### 5.2 自动化质量检查
+
+使用自动化工具进行代码质量检查，确保代码符合质量标准。
+
+#### 常用代码质量工具
+```xml title="Maven配置示例"
+<plugin>
+    <groupId>org.apache.maven.plugins</groupId>
+    <artifactId>maven-checkstyle-plugin</artifactId>
+    <version>3.2.0</version>
+    <configuration>
+        <configLocation>google_checks.xml</configLocation>
+    </configuration>
+</plugin>
+
+<plugin>
+    <groupId>org.sonarsource.scanner.maven</groupId>
+    <artifactId>sonar-maven-plugin</artifactId>
+    <version>3.9.1.2184</version>
+</plugin>
+
+<plugin>
+    <groupId>org.jacoco</groupId>
+    <artifactId>jacoco-maven-plugin</artifactId>
+    <version>0.8.7</version>
+</plugin>
+```
+
+### 5.3 持续集成与质量门禁
+
+在持续集成流程中设置质量门禁，确保代码质量。
+
+#### 质量门禁配置
+```yaml title="GitHub Actions配置"
+name: Code Quality Check
+on: [push, pull_request]
+
+jobs:
+  quality-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      
+      - name: Set up JDK
+        uses: actions/setup-java@v2
+        with:
+          java-version: '11'
+          
+      - name: Run tests
+        run: mvn test
+        
+      - name: Check code coverage
+        run: mvn jacoco:report
+        
+      - name: SonarQube analysis
+        run: mvn sonar:sonar
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          
+      - name: Quality gate check
+        run: |
+          if [ "${{ steps.sonar.outputs.qualityGateStatus }}" != "OK" ]; then
+            echo "Quality gate failed"
+            exit 1
+          fi
+```
+
+## 6. 最佳实践总结
+
+### 6.1 编码规范
+
+遵循统一的编码规范，提高代码一致性。
+
+#### Java编码规范要点
+```java title="编码规范示例"
+public class CodingStandardsExample {
+    // 1. 命名规范
+    private static final int MAX_RETRY_COUNT = 3;  // 常量使用大写
+    private String userName;                       // 变量使用驼峰命名
+    
+    // 2. 方法长度控制
+    public void processUserData(User user) {
+        validateUser(user);
+        enrichUserData(user);
+        saveUser(user);
+    }
+    
+    // 3. 异常处理
+    public User findUserById(String userId) {
+        try {
+            return userRepository.findById(userId);
+        } catch (UserNotFoundException e) {
+            logger.warn("User not found: {}", userId);
+            return null;
+        } catch (DatabaseException e) {
+            logger.error("Database error while finding user: {}", userId, e);
+            throw new ServiceException("Failed to find user", e);
+        }
+    }
+    
+    // 4. 注释规范
+    /**
+     * 计算用户订单总金额
+     * 
+     * @param userId 用户ID
+     * @return 订单总金额，如果没有订单返回0
+     * @throws IllegalArgumentException 当userId为null时
+     */
+    public BigDecimal calculateTotalOrderAmount(String userId) {
+        if (userId == null) {
+            throw new IllegalArgumentException("User ID cannot be null");
+        }
+        
+        return orderService.findByUserId(userId)
+                          .stream()
+                          .map(Order::getAmount)
+                          .reduce(BigDecimal.ZERO, BigDecimal::add);
+    }
+}
+```
+
+### 6.2 设计原则应用
+
+应用SOLID等设计原则，提高代码质量。
+
+#### SOLID原则实践
+```java title="SOLID原则示例"
+// 单一职责原则 (SRP)
+public class UserService {
+    // 只负责用户业务逻辑
+    public void createUser(User user) { /* ... */ }
+    public void updateUser(User user) { /* ... */ }
+    public void deleteUser(String userId) { /* ... */ }
+}
+
+public class UserRepository {
+    // 只负责数据访问
+    public User save(User user) { /* ... */ }
+    public User findById(String id) { /* ... */ }
+    public void delete(String id) { /* ... */ }
+}
+
+// 开闭原则 (OCP)
+public interface PaymentProcessor {
+    void processPayment(PaymentRequest request);
+}
+
+public class CreditCardProcessor implements PaymentProcessor {
+    @Override
+    public void processPayment(PaymentRequest request) { /* ... */ }
+}
+
+public class PayPalProcessor implements PaymentProcessor {
+    @Override
+    public void processPayment(PaymentRequest request) { /* ... */ }
+}
+
+// 里氏替换原则 (LSP)
+public class Rectangle {
+    protected int width;
+    protected int height;
+    
+    public void setWidth(int width) { this.width = width; }
+    public void setHeight(int height) { this.height = height; }
+    public int getArea() { return width * height; }
+}
+
+public class Square extends Rectangle {
+    @Override
+    public void setWidth(int width) {
+        this.width = width;
+        this.height = width;  // 保持正方形特性
+    }
+    
+    @Override
+    public void setHeight(int height) {
+        this.width = height;  // 保持正方形特性
+        this.height = height;
+    }
+}
+```
+
+### 6.3 测试驱动开发（TDD）
+
+通过测试驱动开发提高代码质量和可测试性。
+
+#### TDD实践示例
+```java title="TDD示例"
+// 第一步：编写失败的测试
+public class CalculatorTest {
+    @Test
+    public void shouldReturnZeroWhenEmptyString() {
+        Calculator calculator = new Calculator();
+        assertEquals(0, calculator.add(""));
+    }
+    
+    @Test
+    public void shouldReturnNumberWhenSingleNumber() {
+        Calculator calculator = new Calculator();
+        assertEquals(1, calculator.add("1"));
+    }
+    
+    @Test
+    public void shouldReturnSumWhenTwoNumbers() {
+        Calculator calculator = new Calculator();
+        assertEquals(3, calculator.add("1,2"));
+    }
+}
+
+// 第二步：编写最小实现
+public class Calculator {
+    public int add(String numbers) {
+        if (numbers.isEmpty()) {
+            return 0;
+        }
+        
+        String[] parts = numbers.split(",");
+        if (parts.length == 1) {
+            return Integer.parseInt(parts[0]);
+        }
+        
+        return Integer.parseInt(parts[0]) + Integer.parseInt(parts[1]);
+    }
+}
+
+// 第三步：重构
+public class Calculator {
+    public int add(String numbers) {
+        if (numbers.isEmpty()) {
+            return 0;
+        }
+        
+        return Arrays.stream(numbers.split(","))
+                     .mapToInt(Integer::parseInt)
+                     .sum();
+    }
+}
+```
+
+## 7. 面试题精选
+
+### 7.1 基础概念题
+
+**Q: 什么是代码质量？如何衡量代码质量？**
+
+A: 代码质量是指代码满足预期需求的程度，以及代码在可读性、可维护性、可测试性等方面的表现。
+
+衡量标准包括：
+- **可读性**：代码是否易于理解
+- **可维护性**：修改或扩展代码的难易程度
+- **可测试性**：编写和执行测试的便利性
+- **性能效率**：代码执行的速度和资源利用率
+- **安全性**：代码是否存在安全漏洞
+- **可重用性**：代码组件可在不同场景下重复使用的能力
+
+**Q: 什么是代码异味？常见的代码异味有哪些？**
+
+A: 代码异味是表明代码可能存在深层次问题的表面现象。
+
+常见代码异味包括：
+- **长方法**：方法过长，包含多个职责
+- **大类**：类过大，包含过多方法
+- **重复代码**：相同或相似的代码片段
+- **长参数列表**：方法参数过多
+- **数据泥团**：总是同时出现的数据项
+- **基本类型偏执**：过度使用基本类型
+
+### 7.2 设计模式题
+
+**Q: 设计模式如何提高代码质量？**
+
+A: 设计模式通过以下方式提高代码质量：
+- **提供可重用解决方案**：解决常见设计问题
+- **降低耦合度**：通过抽象和接口减少组件间依赖
+- **提高可维护性**：标准化的设计结构便于理解和修改
+- **增强可扩展性**：支持系统功能的扩展和变化
+- **改善可测试性**：清晰的依赖关系便于单元测试
+
+**Q: 如何选择合适的设计模式？**
+
+A: 选择设计模式需要考虑：
+- **问题类型**：创建、结构还是行为问题
+- **系统约束**：性能、内存、扩展性要求
+- **团队能力**：开发团队对模式的熟悉程度
+- **维护成本**：长期维护和扩展的复杂度
+
+### 7.3 实践题
+
+**Q: 如何重构一个存在代码异味的方法？**
+
+A: 重构步骤：
+1. **识别异味**：分析代码中的问题
+2. **编写测试**：确保重构不破坏功能
+3. **小步重构**：每次只做一个小改动
+4. **运行测试**：验证重构正确性
+5. **重复过程**：直到异味消除
+
+示例：
+```java
+// 重构前：长方法
+public void processOrder(Order order) {
+    // 100行代码...
+}
+
+// 重构后：提取方法
+public void processOrder(Order order) {
+    validateOrder(order);
+    calculateTotal(order);
+    saveOrder(order);
+    sendNotification(order);
+}
+```
+
+**Q: 如何设计一个高可测试性的类？**
+
+A: 设计原则：
+- **依赖注入**：通过构造函数注入依赖
+- **接口隔离**：依赖抽象而非具体实现
+- **单一职责**：每个类只负责一个功能
+- **避免静态方法**：静态方法难以模拟
+- **减少副作用**：方法行为可预测
+
+示例：
+```java
+public class OrderService {
+    private final OrderRepository orderRepository;
+    private final PaymentService paymentService;
+    
+    public OrderService(OrderRepository orderRepository, 
+                       PaymentService paymentService) {
+        this.orderRepository = orderRepository;
+        this.paymentService = paymentService;
+    }
+    
+    public OrderResult processOrder(Order order) {
+        // 业务逻辑
+    }
+}
+```
+
+:::tip 代码质量提升要点
+1. **持续学习**：关注代码质量最佳实践
+2. **工具辅助**：使用自动化工具进行质量检查
+3. **团队协作**：通过代码审查提高质量
+4. **测试驱动**：编写充分的测试用例
+5. **重构实践**：定期重构改进代码结构
+:::
+
+---
+
+通过本章的学习，你应该已经深入理解了代码质量的概念、衡量标准和提升方法。高质量的代码是软件项目成功的基础，通过应用设计模式、遵循最佳实践和持续改进，可以显著提高代码质量和系统可维护性。在实际开发中，要将这些原则和方法融入到日常编程实践中，形成良好的编程习惯。 

@@ -1,298 +1,677 @@
 ---
-sidebar_position: 1
-title: "数据库与ORM总结"
-description: "数据库设计与ORM框架核心概念与面试重点总结"
+sidebar_position: 5
+title: 数据库与ORM技术总结
+description: 数据库设计原则、ORM框架核心概念与面试重点全面总结
 authors: [Laby]
 last_update:
   date: 2025-08-07
   author: Laby
 ---
 
-# 数据库与ORM总结
+# 数据库与ORM技术总结
 
-数据库是后端系统的核心组件，ORM框架简化了数据库操作。本文档总结了数据库设计和ORM框架的核心概念和面试重点。
+数据库是后端系统的核心组件，负责数据的存储、管理和检索。ORM（对象关系映射）框架则简化了应用代码与数据库的交互，提高了开发效率。本文档全面总结了数据库设计和ORM框架的核心概念、最佳实践和面试重点。
 
-## 数据库设计体系
+:::tip 核心要点
+数据库设计 = 规范化 + 性能优化 + 数据一致性 + 可扩展性
+ORM框架 = 简化开发 + 类型安全 + 数据库无关 + 性能平衡
+:::
 
-### 关系型数据库
-```
-关系型数据库
-├── 数据库设计
-│   ├── 概念设计 (ER图)
-│   ├── 逻辑设计 (关系模式)
-│   └── 物理设计 (索引、分区)
-├── 数据模型
-│   ├── 实体关系模型 (ERM)
-│   ├── 关系模型
-│   └── 规范化理论
-├── 事务管理
-│   ├── ACID特性
-│   ├── 事务隔离级别
-│   └── 锁机制
-└── 性能优化
-    ├── 索引优化
-    ├── SQL优化
-    ├── 查询优化
-    └── 存储优化
-```
+## 1. 数据库设计体系
 
-### 非关系型数据库
-```
-NoSQL数据库
-├── 键值存储
-│   ├── Redis
-│   ├── Memcached
-│   └── DynamoDB
-├── 文档存储
-│   ├── MongoDB
-│   ├── CouchDB
-│   └── Elasticsearch
-├── 列族存储
-│   ├── Cassandra
-│   ├── HBase
-│   └── ScyllaDB
-└── 图数据库
-    ├── Neo4j
-    ├── ArangoDB
-    └── Amazon Neptune
+### 1.1 关系型数据库设计
+
+关系型数据库是最传统和广泛使用的数据库类型，基于关系模型组织数据。
+
+#### 设计层次
+```sql title="数据库设计层次"
+-- 1. 概念设计层：实体关系模型（ER图）
+-- 识别实体、属性和关系
+-- 绘制ER图，确定实体间的联系
+
+-- 2. 逻辑设计层：关系模式设计
+-- 将ER图转换为关系模式
+-- 应用规范化理论优化设计
+
+-- 3. 物理设计层：存储和索引设计
+-- 选择存储引擎和文件组织
+-- 设计索引策略和分区方案
 ```
 
-## ORM框架体系
+#### 规范化理论
+```sql title="规范化理论"
+-- 第一范式（1NF）：原子性
+-- 每个字段都是不可分割的原子值
+CREATE TABLE users (
+    id INT PRIMARY KEY,
+    name VARCHAR(100),  -- 原子值
+    email VARCHAR(100)  -- 原子值
+);
 
-### JPA规范
-```
-JPA (Java Persistence API)
-├── 实体映射
-│   ├── @Entity
-│   ├── @Table
-│   ├── @Column
-│   └── @Id
-├── 关系映射
-│   ├── @OneToOne
-│   ├── @OneToMany
-│   ├── @ManyToOne
-│   └── @ManyToMany
-├── 查询
-│   ├── JPQL
-│   ├── Criteria API
-│   ├── Native Query
-│   └── Named Query
-└── 事务管理
-    ├── @Transactional
-    ├── 事务传播
-    └── 事务隔离
-```
+-- 第二范式（2NF）：消除部分依赖
+-- 非主键字段完全依赖于主键
+CREATE TABLE orders (
+    id INT PRIMARY KEY,
+    user_id INT,
+    order_date DATE,
+    total_amount DECIMAL(10,2)
+);
 
-### 主流ORM框架
-```
-ORM框架
-├── Hibernate
-│   ├── 全功能ORM
-│   ├── JPA实现
-│   ├── 缓存机制
-│   └── 查询优化
-├── MyBatis
-│   ├── 半自动ORM
-│   ├── SQL映射
-│   ├── 动态SQL
-│   └── 插件机制
-├── JPA实现
-│   ├── Hibernate
-│   ├── EclipseLink
-│   ├── OpenJPA
-│   └── DataNucleus
-└── 轻量级框架
-    ├── JdbcTemplate
-    ├── QueryDSL
-    └── JOOQ
+CREATE TABLE order_items (
+    id INT PRIMARY KEY,
+    order_id INT,
+    product_id INT,
+    quantity INT,
+    price DECIMAL(10,2),
+    FOREIGN KEY (order_id) REFERENCES orders(id)
+);
+
+-- 第三范式（3NF）：消除传递依赖
+-- 非主键字段不依赖于其他非主键字段
+CREATE TABLE users (
+    id INT PRIMARY KEY,
+    name VARCHAR(100),
+    department_id INT,
+    FOREIGN KEY (department_id) REFERENCES departments(id)
+);
+
+CREATE TABLE departments (
+    id INT PRIMARY KEY,
+    name VARCHAR(100),
+    location VARCHAR(100)
+);
 ```
 
-## 核心面试重点
+#### 索引设计原则
+```sql title="索引设计原则"
+-- 1. 主键索引（自动创建）
+CREATE TABLE users (
+    id INT PRIMARY KEY AUTO_INCREMENT,  -- 自动创建主键索引
+    username VARCHAR(50) UNIQUE,
+    email VARCHAR(100)
+);
 
-### 1. 数据库设计
-- **规范化**：1NF、2NF、3NF、BCNF，避免数据冗余和异常
-- **反规范化**：为了提高查询性能，适当冗余数据
-- **索引设计**：选择合适的索引类型和列
-- **分区策略**：水平分区、垂直分区、按时间分区
+-- 2. 唯一索引（业务唯一性约束）
+CREATE UNIQUE INDEX idx_users_email ON users(email);
+CREATE UNIQUE INDEX idx_users_username ON users(username);
 
-### 2. 事务管理
-- **ACID特性**：原子性、一致性、隔离性、持久性
-- **隔离级别**：READ UNCOMMITTED、READ COMMITTED、REPEATABLE READ、SERIALIZABLE
-- **锁机制**：共享锁、排他锁、意向锁、间隙锁
-- **死锁处理**：死锁检测、死锁预防、超时机制
+-- 3. 普通索引（查询优化）
+CREATE INDEX idx_users_department_id ON users(department_id);
+CREATE INDEX idx_users_created_at ON users(created_at);
 
-### 3. SQL优化
-- **查询优化**：使用索引、避免全表扫描、优化JOIN
-- **索引优化**：选择合适的索引、避免索引失效
-- **执行计划**：分析SQL执行计划，找出性能瓶颈
-- **分页优化**：使用LIMIT、游标分页、基于索引分页
+-- 4. 复合索引（多字段查询优化）
+CREATE INDEX idx_users_department_status ON users(department_id, status);
+CREATE INDEX idx_users_name_email ON users(last_name, first_name, email);
 
-### 4. ORM框架
-- **实体映射**：对象关系映射、关系配置
-- **查询优化**：N+1问题、懒加载、预加载
-- **缓存机制**：一级缓存、二级缓存、查询缓存
-- **事务管理**：声明式事务、编程式事务
-
-## 详细知识点
-
-### 数据库设计原则
-```
-设计原则
-├── 规范化理论
-│   ├── 第一范式 (1NF)
-│   │   ├── 原子性
-│   │   └── 不可分割
-│   ├── 第二范式 (2NF)
-│   │   ├── 1NF基础上
-│   │   └── 消除部分依赖
-│   ├── 第三范式 (3NF)
-│   │   ├── 2NF基础上
-│   │   └── 消除传递依赖
-│   └── BCNF范式
-│       ├── 3NF基础上
-│       └── 消除主属性对码的部分依赖
-├── 反规范化
-│   ├── 增加冗余字段
-│   ├── 合并表
-│   ├── 拆分表
-│   └── 预计算字段
-└── 索引设计
-    ├── 主键索引
-    ├── 唯一索引
-    ├── 普通索引
-    ├── 复合索引
-    └── 覆盖索引
+-- 5. 部分索引（条件索引）
+CREATE INDEX idx_active_users ON users(email) WHERE status = 'active';
 ```
 
-### 事务隔离级别
-```
-隔离级别
-├── READ UNCOMMITTED (读未提交)
-│   ├── 最低隔离级别
-│   ├── 脏读、不可重复读、幻读
-│   └── 性能最高
-├── READ COMMITTED (读已提交)
-│   ├── 防止脏读
-│   ├── 不可重复读、幻读
-│   └── Oracle默认级别
-├── REPEATABLE READ (可重复读)
-│   ├── 防止脏读、不可重复读
-│   ├── 幻读
-│   └── MySQL默认级别
-└── SERIALIZABLE (串行化)
-    ├── 最高隔离级别
-    ├── 防止所有并发问题
-    └── 性能最低
-```
+### 1.2 非关系型数据库设计
 
-### ORM查询优化
-```
-查询优化
-├── N+1问题
-│   ├── 问题描述
-│   │   ├── 1次查询获取N个对象
-│   │   └── N次查询获取关联对象
-│   ├── 解决方案
-│   │   ├── 预加载 (EAGER)
-│   │   ├── 批量查询
-│   │   └── 使用JOIN
-│   └── 性能影响
-│       ├── 数据库连接数
-│       ├── 网络传输
-│       └── 内存使用
-├── 懒加载
-│   ├── 延迟加载
-│   ├── 按需加载
-│   ├── 性能优化
-│   └── 会话管理
-├── 缓存机制
-│   ├── 一级缓存
-│   │   ├── Session级别
-│   │   ├── 自动管理
-│   │   └── 生命周期短
-│   ├── 二级缓存
-│   │   ├── SessionFactory级别
-│   │   ├── 可配置
-│   │   └── 生命周期长
-│   └── 查询缓存
-│       ├── 查询结果缓存
-│       ├── 提高查询性能
-│       └── 缓存失效策略
-└── 批量操作
-    ├── 批量插入
-    ├── 批量更新
-    ├── 批量删除
-    └── 性能优化
+NoSQL数据库提供了更灵活的数据模型和更好的可扩展性。
+
+#### 数据模型分类
+```javascript title="NoSQL数据模型"
+// 1. 键值存储（Key-Value）
+// Redis、Memcached、DynamoDB
+{
+  "user:1001": "John Doe",
+  "user:1002": "Jane Smith",
+  "session:abc123": "{userId: 1001, loginTime: '2023-08-07'}"
+}
+
+// 2. 文档存储（Document）
+// MongoDB、CouchDB、Elasticsearch
+{
+  "_id": "1001",
+  "name": "John Doe",
+  "email": "john@example.com",
+  "profile": {
+    "age": 30,
+    "address": {
+      "street": "123 Main St",
+      "city": "New York"
+    }
+  },
+  "orders": [
+    {"orderId": "ORD001", "amount": 150.00},
+    {"orderId": "ORD002", "amount": 200.00}
+  ]
+}
+
+// 3. 列族存储（Column Family）
+// Cassandra、HBase、ScyllaDB
+// 按列族组织数据，支持宽行和窄行
+
+// 4. 图数据库（Graph）
+// Neo4j、ArangoDB、Amazon Neptune
+// 以节点和边表示实体和关系
 ```
 
-## 性能优化策略
+#### 设计原则
+```javascript title="NoSQL设计原则"
+// 1. 数据模型设计
+// 根据查询模式设计数据模型
+// 避免复杂的关联查询
 
-### 1. 数据库优化
-- **索引优化**：选择合适的索引列、避免索引失效
-- **SQL优化**：使用EXPLAIN分析、避免SELECT *、使用LIMIT
-- **表结构优化**：合理的数据类型、适当的字段长度
-- **分区优化**：按时间、按范围、按哈希分区
+// 2. 分片策略
+// 水平分片：按数据范围或哈希值分片
+// 垂直分片：按功能模块分片
 
-### 2. ORM优化
-- **查询优化**：使用预加载、避免N+1问题
-- **缓存优化**：合理使用缓存、缓存失效策略
-- **批量操作**：批量插入、批量更新、减少数据库交互
-- **连接池优化**：合理配置连接池参数
+// 3. 一致性模型
+// 强一致性：ACID事务
+// 最终一致性：BASE理论
+// 因果一致性：部分顺序保证
 
-### 3. 应用层优化
-- **分页优化**：使用游标分页、基于索引分页
-- **异步处理**：异步写入、消息队列
-- **读写分离**：主从复制、读写分离
-- **分库分表**：水平分片、垂直分片
+// 4. 可用性设计
+// 多副本：主从复制、多主复制
+// 故障转移：自动检测和切换
+// 负载均衡：读写分离、分片路由
+```
 
-## 常见面试问题
+## 2. ORM框架体系
 
-### 基础概念
-1. **数据库三大范式**
-2. **事务的ACID特性**
-3. **数据库索引原理**
-4. **ORM的优缺点**
+### 2.1 JPA规范
 
-### 深入原理
-1. **MySQL的存储引擎**
-2. **数据库锁机制**
-3. **SQL执行计划分析**
-4. **ORM的N+1问题**
+JPA（Java Persistence API）是Java EE的持久化规范，定义了对象关系映射的标准。
 
-### 性能优化
-1. **如何优化慢查询**
-2. **如何设计数据库索引**
-3. **如何解决数据库连接池问题**
-4. **如何实现读写分离**
+#### 核心注解
+```java title="JPA核心注解"
+// 1. 实体映射
+@Entity
+@Table(name = "users")
+public class User {
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+    
+    @Column(name = "username", nullable = false, length = 50)
+    private String username;
+    
+    @Column(name = "email", nullable = false, unique = true)
+    private String email;
+    
+    @Column(name = "created_at")
+    @Temporal(TemporalType.TIMESTAMP)
+    private Date createdAt;
+}
 
-### 实际应用
-1. **分库分表策略**
-2. **数据库备份恢复**
-3. **数据库监控告警**
-4. **ORM框架选择**
+// 2. 关系映射
+@Entity
+public class User {
+    @Id
+    private Long id;
+    
+    // 一对一关系
+    @OneToOne(cascade = CascadeType.ALL)
+    @JoinColumn(name = "profile_id")
+    private UserProfile profile;
+    
+    // 一对多关系
+    @OneToMany(mappedBy = "user", cascade = CascadeType.ALL)
+    private List<Order> orders;
+    
+    // 多对一关系
+    @ManyToOne
+    @JoinColumn(name = "department_id")
+    private Department department;
+    
+    // 多对多关系
+    @ManyToMany
+    @JoinTable(
+        name = "user_roles",
+        joinColumns = @JoinColumn(name = "user_id"),
+        inverseJoinColumns = @JoinColumn(name = "role_id")
+    )
+    private Set<Role> roles;
+}
+```
 
-## 学习建议
+#### 查询方式
+```java title="JPA查询方式"
+// 1. JPQL查询
+@Query("SELECT u FROM User u WHERE u.email = :email")
+User findByEmail(@Param("email") String email);
 
-### 理论基础
-1. **理解数据库设计原则**
-2. **掌握SQL语言和优化技巧**
-3. **学习事务和锁机制**
-4. **了解ORM框架原理**
+@Query("SELECT u FROM User u WHERE u.department.name = :deptName")
+List<User> findByDepartmentName(@Param("deptName") String deptName);
 
-### 实践能力
-1. **设计数据库表结构**
-2. **编写和优化SQL语句**
-3. **使用ORM框架进行开发**
-4. **进行数据库性能调优**
+// 2. 原生SQL查询
+@Query(value = "SELECT * FROM users WHERE created_at >= :startDate", nativeQuery = true)
+List<User> findUsersCreatedAfter(@Param("startDate") Date startDate);
 
-### 扩展知识
-1. **分布式数据库**
-2. **NoSQL数据库**
-3. **数据库中间件**
-4. **云数据库服务**
+// 3. 命名查询
+@NamedQuery(name = "User.findByStatus", query = "SELECT u FROM User u WHERE u.status = :status")
+List<User> findByStatus(@Param("status") String status);
 
-通过系统学习数据库与ORM，你将能够：
-- 设计高效的数据库结构
-- 编写优化的SQL语句
-- 使用ORM框架提高开发效率
-- 解决数据库性能问题 
+// 4. Criteria API
+public List<User> findUsersByCriteria(String username, String email) {
+    CriteriaBuilder cb = entityManager.getCriteriaBuilder();
+    CriteriaQuery<User> query = cb.createQuery(User.class);
+    Root<User> user = query.from(User.class);
+    
+    List<Predicate> predicates = new ArrayList<>();
+    if (username != null) {
+        predicates.add(cb.like(user.get("username"), "%" + username + "%"));
+    }
+    if (email != null) {
+        predicates.add(cb.equal(user.get("email"), email));
+    }
+    
+    query.where(predicates.toArray(new Predicate[0]));
+    return entityManager.createQuery(query).getResultList();
+}
+```
+
+### 2.2 主流ORM框架对比
+
+#### 框架特性对比
+| 特性 | Hibernate | MyBatis | JPA | Spring Data JPA |
+|------|-----------|---------|-----|-----------------|
+| **类型** | 全功能ORM | 半自动ORM | 规范 | 数据访问抽象 |
+| **SQL控制** | 自动生成 | 手动编写 | 自动生成 | 自动生成 |
+| **学习成本** | 高 | 低 | 中 | 低 |
+| **性能** | 中等 | 高 | 中等 | 中等 |
+| **灵活性** | 中等 | 高 | 中等 | 中等 |
+| **适用场景** | 复杂业务 | 复杂查询 | 标准CRUD | 快速开发 |
+
+#### Hibernate特性
+```java title="Hibernate特性"
+// 1. 自动SQL生成
+@Entity
+public class User {
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+    
+    private String name;
+    private String email;
+    
+    // Hibernate自动生成SQL
+    // INSERT INTO users (name, email) VALUES (?, ?)
+}
+
+// 2. 缓存机制
+@Entity
+@Cache(usage = CacheConcurrencyStrategy.READ_WRITE)
+public class User {
+    // 二级缓存配置
+}
+
+// 3. 延迟加载
+@Entity
+public class User {
+    @OneToMany(fetch = FetchType.LAZY)
+    private List<Order> orders;  // 延迟加载
+}
+
+// 4. 批量操作
+Session session = sessionFactory.openSession();
+session.beginTransaction();
+
+for (int i = 0; i < 1000; i++) {
+    User user = new User("User" + i, "user" + i + "@example.com");
+    session.save(user);
+    
+    if (i % 50 == 0) {
+        session.flush();
+        session.clear();
+    }
+}
+
+session.getTransaction().commit();
+session.close();
+```
+
+#### MyBatis特性
+```xml title="MyBatis特性"
+<!-- 1. 动态SQL -->
+<select id="findByCondition" parameterType="UserQuery" resultType="User">
+    SELECT * FROM users
+    <where>
+        <if test="username != null and username != ''">
+            AND username LIKE CONCAT('%', #{username}, '%')
+        </if>
+        <if test="email != null and email != ''">
+            AND email = #{email}
+        </if>
+        <if test="status != null">
+            AND status = #{status}
+        </if>
+    </where>
+    ORDER BY created_at DESC
+</select>
+
+<!-- 2. 结果映射 -->
+<resultMap id="UserResultMap" type="User">
+    <id column="id" property="id"/>
+    <result column="username" property="username"/>
+    <result column="email" property="email"/>
+    <association property="profile" javaType="UserProfile">
+        <id column="profile_id" property="id"/>
+        <result column="real_name" property="realName"/>
+    </association>
+    <collection property="orders" ofType="Order">
+        <id column="order_id" property="id"/>
+        <result column="order_amount" property="amount"/>
+    </collection>
+</resultMap>
+
+<!-- 3. 插件机制 -->
+<plugins>
+    <plugin interceptor="com.example.interceptor.PerformanceInterceptor"/>
+    <plugin interceptor="com.github.pagehelper.PageInterceptor">
+        <property name="helperDialect" value="mysql"/>
+    </plugin>
+</plugins>
+```
+
+## 3. 数据库性能优化
+
+### 3.1 索引优化
+
+#### 索引策略
+```sql title="索引优化策略"
+-- 1. 索引选择策略
+-- 高选择性列优先
+CREATE INDEX idx_users_email ON users(email);  -- 高选择性
+CREATE INDEX idx_users_gender ON users(gender);  -- 低选择性
+
+-- 查询频率高的列
+CREATE INDEX idx_users_status ON users(status);  -- 经常按状态查询
+
+-- 外键列
+CREATE INDEX idx_orders_user_id ON orders(user_id);  -- 加速JOIN
+
+-- 排序和分组列
+CREATE INDEX idx_users_created_at ON users(created_at);  -- 加速ORDER BY
+
+-- 2. 复合索引设计
+CREATE INDEX idx_users_department_status_created ON users(department_id, status, created_at);
+
+-- 可以使用索引的查询
+SELECT * FROM users WHERE department_id = 1;
+SELECT * FROM users WHERE department_id = 1 AND status = 'active';
+SELECT * FROM users WHERE department_id = 1 AND status = 'active' AND created_at > '2023-01-01';
+
+-- 不能使用索引的查询
+SELECT * FROM users WHERE status = 'active';  -- 缺少department_id
+SELECT * FROM users WHERE department_id = 1 AND created_at > '2023-01-01';  -- 缺少status
+
+-- 3. 索引优化技巧
+-- 避免在索引列上使用函数
+SELECT * FROM users WHERE YEAR(created_at) = 2023;  -- 无法使用索引
+SELECT * FROM users WHERE created_at >= '2023-01-01' AND created_at < '2024-01-01';  -- 可以使用索引
+
+-- 避免使用!=或<>操作符
+SELECT * FROM users WHERE status != 'inactive';  -- 无法使用索引
+SELECT * FROM users WHERE status IN ('active', 'pending', 'suspended');  -- 可以使用索引
+```
+
+### 3.2 SQL优化
+
+#### 查询优化技巧
+```sql title="SQL优化技巧"
+-- 1. 避免SELECT *
+SELECT id, name, email FROM users WHERE department_id = 1;  -- 推荐
+SELECT * FROM users WHERE department_id = 1;  -- 不推荐
+
+-- 2. 使用LIMIT限制结果集
+SELECT * FROM orders ORDER BY created_at DESC LIMIT 10;
+
+-- 3. 优化JOIN查询
+-- 使用INNER JOIN而不是逗号连接
+SELECT u.name, o.order_number 
+FROM users u INNER JOIN orders o ON u.id = o.user_id 
+WHERE u.status = 'active';  -- 推荐
+
+SELECT u.name, o.order_number 
+FROM users u, orders o 
+WHERE u.id = o.user_id AND u.status = 'active';  -- 不推荐
+
+-- 4. 子查询优化
+-- 将子查询转换为JOIN
+SELECT u.* FROM users u
+JOIN departments d ON u.department_id = d.id
+WHERE d.name = 'IT';  -- 推荐
+
+SELECT * FROM users 
+WHERE department_id IN (SELECT id FROM departments WHERE name = 'IT');  -- 不推荐
+
+-- 5. 使用EXISTS代替IN（大数据量时）
+SELECT * FROM customers c
+WHERE EXISTS (SELECT 1 FROM orders o WHERE o.customer_id = c.id);  -- 推荐
+
+SELECT * FROM customers 
+WHERE id IN (SELECT DISTINCT customer_id FROM orders);  -- 不推荐
+```
+
+### 3.3 缓存策略
+
+#### 缓存模式
+```java title="缓存策略"
+// 1. Cache-Aside模式
+public User getUser(Long userId) {
+    // 先从缓存获取
+    String key = "user:" + userId;
+    User user = redisTemplate.opsForValue().get(key);
+    
+    if (user != null) {
+        return user;
+    }
+    
+    // 缓存未命中，从数据库获取
+    user = userRepository.findById(userId);
+    
+    if (user != null) {
+        // 写入缓存
+        redisTemplate.opsForValue().set(key, user, 1, TimeUnit.HOURS);
+    }
+    
+    return user;
+}
+
+// 2. Write-Through模式
+public void updateUser(User user) {
+    // 先更新数据库
+    userRepository.save(user);
+    
+    // 再更新缓存
+    String key = "user:" + user.getId();
+    redisTemplate.opsForValue().set(key, user, 1, TimeUnit.HOURS);
+}
+
+// 3. Write-Behind模式
+public void updateUserAsync(User user) {
+    // 先更新缓存
+    String key = "user:" + user.getId();
+    redisTemplate.opsForValue().set(key, user, 1, TimeUnit.HOURS);
+    
+    // 异步更新数据库
+    CompletableFuture.runAsync(() -> {
+        userRepository.save(user);
+    });
+}
+```
+
+## 4. 事务管理
+
+### 4.1 ACID特性
+
+#### 事务特性详解
+```java title="ACID特性"
+// 1. 原子性（Atomicity）
+@Transactional
+public void transferMoney(Long fromAccountId, Long toAccountId, BigDecimal amount) {
+    // 所有操作要么全部成功，要么全部失败
+    Account fromAccount = accountRepository.findById(fromAccountId);
+    Account toAccount = accountRepository.findById(toAccountId);
+    
+    fromAccount.setBalance(fromAccount.getBalance().subtract(amount));
+    toAccount.setBalance(toAccount.getBalance().add(amount));
+    
+    accountRepository.save(fromAccount);
+    accountRepository.save(toAccount);
+    
+    // 如果任何一步失败，整个事务回滚
+}
+
+// 2. 一致性（Consistency）
+// 事务执行前后数据库状态一致
+// 转账前后总金额保持不变
+
+// 3. 隔离性（Isolation）
+@Transactional(isolation = Isolation.READ_COMMITTED)
+public User getUser(Long userId) {
+    // 事务之间相互隔离
+    return userRepository.findById(userId);
+}
+
+// 4. 持久性（Durability）
+// 事务提交后永久保存
+// 即使系统崩溃，已提交的事务不会丢失
+```
+
+### 4.2 事务隔离级别
+
+#### 隔离级别详解
+```java title="事务隔离级别"
+// 1. READ UNCOMMITTED（读未提交）
+@Transactional(isolation = Isolation.READ_UNCOMMITTED)
+public User getUser(Long userId) {
+    // 可能读取到未提交的数据（脏读）
+    return userRepository.findById(userId);
+}
+
+// 2. READ COMMITTED（读已提交）
+@Transactional(isolation = Isolation.READ_COMMITTED)
+public User getUser(Long userId) {
+    // 避免脏读，可能出现不可重复读
+    return userRepository.findById(userId);
+}
+
+// 3. REPEATABLE READ（可重复读）
+@Transactional(isolation = Isolation.REPEATABLE_READ)
+public User getUser(Long userId) {
+    // 避免不可重复读，可能出现幻读
+    return userRepository.findById(userId);
+}
+
+// 4. SERIALIZABLE（串行化）
+@Transactional(isolation = Isolation.SERIALIZABLE)
+public User getUser(Long userId) {
+    // 完全避免并发问题，性能最低
+    return userRepository.findById(userId);
+}
+```
+
+## 5. 面试题精选
+
+### 5.1 数据库设计题
+
+**Q: 数据库设计的三个范式是什么？如何应用？**
+
+A: 三个范式分别是：
+- **第一范式（1NF）**：每个字段都是不可分割的原子值
+- **第二范式（2NF）**：在1NF基础上，非主键字段完全依赖于主键
+- **第三范式（3NF）**：在2NF基础上，非主键字段不依赖于其他非主键字段
+
+应用原则：根据业务需求适度规范化，避免过度规范化影响性能。
+
+**Q: 如何设计数据库索引？有哪些注意事项？**
+
+A: 索引设计原则：
+1. **高选择性列优先**：不同值数量多，重复值少
+2. **查询频率高的列**：为频繁查询的列创建索引
+3. **外键列**：外键列通常需要索引以加速JOIN操作
+4. **排序和分组列**：为ORDER BY和GROUP BY的列创建索引
+5. **避免过多索引**：索引会占用存储空间，影响写入性能
+
+### 5.2 ORM框架题
+
+**Q: Hibernate和MyBatis的区别是什么？如何选择？**
+
+A: 主要区别：
+- **Hibernate**：全功能ORM，自动生成SQL，学习成本高，适合复杂业务
+- **MyBatis**：半自动ORM，手动编写SQL，学习成本低，适合复杂查询
+
+选择原则：根据项目需求选择，复杂查询选择MyBatis，标准CRUD选择Hibernate。
+
+**Q: JPA的实体关系映射有哪些？如何使用？**
+
+A: JPA关系映射包括：
+- **@OneToOne**：一对一关系
+- **@OneToMany**：一对多关系
+- **@ManyToOne**：多对一关系
+- **@ManyToMany**：多对多关系
+
+使用要点：合理设置级联操作、延迟加载和关联查询策略。
+
+### 5.3 性能优化题
+
+**Q: 如何优化数据库查询性能？**
+
+A: 优化策略包括：
+1. **索引优化**：创建合适的索引，避免在索引列上使用函数
+2. **SQL优化**：避免SELECT *，使用LIMIT，合理使用JOIN
+3. **查询重写**：将子查询转换为JOIN，使用EXISTS代替IN
+4. **缓存策略**：合理使用缓存，避免缓存穿透、击穿、雪崩
+5. **分页查询**：避免大结果集查询，使用分页
+
+**Q: 什么是缓存穿透、击穿、雪崩？如何解决？**
+
+A: 缓存问题及解决方案：
+- **缓存穿透**：查询不存在的数据，解决方案：布隆过滤器、缓存空值
+- **缓存击穿**：热点数据过期，解决方案：互斥锁、热点数据永不过期
+- **缓存雪崩**：大量缓存同时过期，解决方案：随机过期时间、多级缓存
+
+### 5.4 事务管理题
+
+**Q: 数据库事务的ACID特性是什么？**
+
+A: ACID特性：
+- **原子性（Atomicity）**：事务是不可分割的工作单位
+- **一致性（Consistency）**：事务执行前后数据库状态一致
+- **隔离性（Isolation）**：事务之间相互隔离
+- **持久性（Durability）**：事务提交后永久保存
+
+**Q: 事务隔离级别有哪些？各有什么特点？**
+
+A: 事务隔离级别：
+- **READ UNCOMMITTED**：读未提交，可能出现脏读
+- **READ COMMITTED**：读已提交，可能出现不可重复读
+- **REPEATABLE READ**：可重复读，可能出现幻读
+- **SERIALIZABLE**：串行化，完全避免并发问题
+
+### 5.5 高可用题
+
+**Q: 如何实现数据库的高可用？**
+
+A: 高可用方案包括：
+1. **主从复制**：一主多从，读写分离
+2. **集群模式**：数据分片，自动故障转移
+3. **负载均衡**：使用代理或中间件分发请求
+4. **数据备份**：定期备份，支持快速恢复
+5. **监控告警**：实时监控，及时发现问题
+
+**Q: 分库分表的策略有哪些？**
+
+A: 分库分表策略：
+- **水平分表**：按行分割，如按时间、ID范围分表
+- **垂直分表**：按列分割，将大表拆分为多个小表
+- **水平分库**：按数据库分割
+- **垂直分库**：按业务模块分割
+- **分片策略**：取模、范围、哈希等
+
+:::tip 学习要点总结
+1. **掌握数据库设计原则**：理解规范化理论，合理设计表结构
+2. **熟悉ORM框架特性**：掌握JPA、Hibernate、MyBatis的使用
+3. **学会性能优化技巧**：掌握索引优化、SQL优化、缓存策略
+4. **理解事务管理机制**：掌握ACID特性、隔离级别、锁机制
+5. **了解高可用架构**：掌握主从复制、集群模式、分库分表
+:::
+
+---
+
+通过本章的学习，你应该已经全面掌握了数据库设计和ORM框架的核心概念、最佳实践和面试重点。数据库是后端系统的核心，合理的设计和优化能够显著提升系统性能和用户体验。在实际项目中，需要根据业务需求选择合适的数据库类型和ORM框架，并持续优化数据库性能。 

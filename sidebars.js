@@ -134,6 +134,7 @@ const sidebars = {
             'backend/database-orm/mysql',
             'backend/database-orm/mybatis',
             'backend/database-orm/redis',
+            'backend/database-orm/mybatis-plus',
           ]
         },
         {

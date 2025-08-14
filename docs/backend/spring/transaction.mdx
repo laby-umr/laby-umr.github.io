@@ -1,21 +1,577 @@
 ---
 sidebar_position: 3
-title: "事务管理"
-description: "Spring事务管理机制与原理"
+title: "Spring事务管理详解"
+description: "深入理解Spring事务管理机制、传播行为与最佳实践"
 authors: [Laby]
 last_update:
   date: 2025-08-07
   author: Laby
 ---
 
-# 事务管理
+# Spring 事务管理详解
 
-## 事务特性
+Spring事务管理是Spring框架的重要特性，它提供了声明式和编程式两种事务管理方式，简化了数据库事务的处理，确保数据的一致性和完整性。
 
-## 事务传播机制
+:::tip 核心价值
+Spring事务 = 声明式事务 + 编程式事务 + 传播行为 + 隔离级别 + 回滚机制
+:::
 
-## 事务隔离级别
+## 1. 事务基础概念
 
-## 事务失效场景
+### 1.1 什么是事务？
 
-## 面试题 
+事务是数据库操作的一个逻辑单元，它要么全部成功执行，要么全部回滚。事务确保数据的一致性和完整性。
+
+#### ACID特性
+| 特性 | 说明 | 示例 |
+|------|------|------|
+| **原子性（Atomicity）** | 事务是不可分割的工作单位 | 转账操作要么成功要么失败 |
+| **一致性（Consistency）** | 事务执行前后数据状态一致 | 转账前后总金额不变 |
+| **隔离性（Isolation）** | 并发事务之间相互隔离 | 事务A看不到事务B的未提交数据 |
+| **持久性（Durability）** | 事务提交后数据永久保存 | 提交后数据不会丢失 |
+
+### 1.2 Spring事务管理方式
+
+```java title="声明式事务"
+@Service
+@Transactional
+public class UserService {
+    
+    @Autowired
+    private UserRepository userRepository;
+    
+    @Autowired
+    private AccountRepository accountRepository;
+    
+    @Transactional
+    public void transferMoney(Long fromUserId, Long toUserId, BigDecimal amount) {
+        // 扣款
+        Account fromAccount = accountRepository.findByUserId(fromUserId);
+        fromAccount.setBalance(fromAccount.getBalance().subtract(amount));
+        accountRepository.save(fromAccount);
+        
+        // 加款
+        Account toAccount = accountRepository.findByUserId(toUserId);
+        toAccount.setBalance(toAccount.getBalance().add(amount));
+        accountRepository.save(toAccount);
+    }
+}
+```
+
+```java title="编程式事务"
+@Service
+public class UserService {
+    
+    @Autowired
+    private TransactionTemplate transactionTemplate;
+    
+    @Autowired
+    private UserRepository userRepository;
+    
+    public void createUser(User user) {
+        transactionTemplate.execute(new TransactionCallbackWithoutResult() {
+            @Override
+            protected void doInTransactionWithoutResult(TransactionStatus status) {
+                try {
+                    userRepository.save(user);
+                    // 其他业务逻辑
+                } catch (Exception e) {
+                    status.setRollbackOnly();
+                    throw e;
+                }
+            }
+        });
+    }
+}
+```
+
+## 2. 事务传播行为
+
+### 2.1 传播行为类型
+
+Spring定义了7种事务传播行为：
+
+```java title="事务传播行为示例"
+@Service
+public class UserService {
+    
+    @Autowired
+    private OrderService orderService;
+    
+    // 1. REQUIRED（默认）- 如果当前存在事务，则加入该事务；否则创建新事务
+    @Transactional(propagation = Propagation.REQUIRED)
+    public void createUserWithOrder(User user, Order order) {
+        userRepository.save(user);
+        orderService.createOrder(order); // 加入当前事务
+    }
+    
+    // 2. REQUIRES_NEW - 创建新事务，如果当前存在事务，则挂起当前事务
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void createUserWithNewTransaction(User user) {
+        userRepository.save(user);
+        // 这个操作在独立事务中执行
+    }
+    
+    // 3. SUPPORTS - 如果当前存在事务，则加入该事务；否则以非事务方式执行
+    @Transactional(propagation = Propagation.SUPPORTS)
+    public User getUserById(Long id) {
+        return userRepository.findById(id).orElse(null);
+    }
+    
+    // 4. NOT_SUPPORTED - 以非事务方式执行，如果当前存在事务，则挂起当前事务
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    public void sendEmail(String email) {
+        // 发送邮件，不参与事务
+    }
+    
+    // 5. MANDATORY - 如果当前存在事务，则加入该事务；否则抛出异常
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void updateUserBalance(User user) {
+        // 必须在事务中执行
+        userRepository.save(user);
+    }
+    
+    // 6. NEVER - 以非事务方式执行，如果当前存在事务，则抛出异常
+    @Transactional(propagation = Propagation.NEVER)
+    public void logUserAction(String action) {
+        // 记录日志，不能在事务中执行
+    }
+    
+    // 7. NESTED - 如果当前存在事务，则创建嵌套事务；否则创建新事务
+    @Transactional(propagation = Propagation.NESTED)
+    public void createUserWithNestedTransaction(User user) {
+        userRepository.save(user);
+        // 嵌套事务，可以独立回滚
+    }
+}
+```
+
+### 2.2 传播行为详解
+
+| 传播行为 | 说明 | 使用场景 |
+|----------|------|----------|
+| **REQUIRED** | 默认行为，支持当前事务，不存在则创建新事务 | 大多数业务方法 |
+| **REQUIRES_NEW** | 创建新事务，挂起当前事务 | 日志记录、消息发送 |
+| **SUPPORTS** | 支持当前事务，不存在则以非事务执行 | 查询方法 |
+| **NOT_SUPPORTED** | 以非事务执行，挂起当前事务 | 耗时操作 |
+| **MANDATORY** | 必须在事务中执行，否则抛出异常 | 关键业务方法 |
+| **NEVER** | 不能在事务中执行，否则抛出异常 | 日志记录 |
+| **NESTED** | 嵌套事务，可以独立回滚 | 复杂业务逻辑 |
+
+## 3. 事务隔离级别
+
+### 3.1 隔离级别类型
+
+```java title="事务隔离级别示例"
+@Service
+public class UserService {
+    
+    // 1. READ_UNCOMMITTED - 读未提交
+    @Transactional(isolation = Isolation.READ_UNCOMMITTED)
+    public User getUserWithDirtyRead(Long id) {
+        return userRepository.findById(id).orElse(null);
+    }
+    
+    // 2. READ_COMMITTED - 读已提交（默认）
+    @Transactional(isolation = Isolation.READ_COMMITTED)
+    public User getUserWithReadCommitted(Long id) {
+        return userRepository.findById(id).orElse(null);
+    }
+    
+    // 3. REPEATABLE_READ - 可重复读
+    @Transactional(isolation = Isolation.REPEATABLE_READ)
+    public User getUserWithRepeatableRead(Long id) {
+        return userRepository.findById(id).orElse(null);
+    }
+    
+    // 4. SERIALIZABLE - 串行化
+    @Transactional(isolation = Isolation.SERIALIZABLE)
+    public User getUserWithSerializable(Long id) {
+        return userRepository.findById(id).orElse(null);
+    }
+}
+```
+
+### 3.2 隔离级别详解
+
+| 隔离级别 | 说明 | 问题 | 性能 |
+|----------|------|------|------|
+| **READ_UNCOMMITTED** | 读未提交 | 脏读、不可重复读、幻读 | 最高 |
+| **READ_COMMITTED** | 读已提交 | 不可重复读、幻读 | 高 |
+| **REPEATABLE_READ** | 可重复读 | 幻读 | 中等 |
+| **SERIALIZABLE** | 串行化 | 无 | 最低 |
+
+#### 并发问题示例
+
+```java title="并发问题示例"
+// 1. 脏读问题
+@Service
+public class DirtyReadExample {
+    
+    @Transactional(isolation = Isolation.READ_UNCOMMITTED)
+    public void updateUserBalance(Long userId, BigDecimal amount) {
+        // 事务A：更新余额但未提交
+        Account account = accountRepository.findByUserId(userId);
+        account.setBalance(account.getBalance().add(amount));
+        accountRepository.save(account);
+        // 此时事务B可以读到未提交的数据
+    }
+    
+    @Transactional(isolation = Isolation.READ_UNCOMMITTED)
+    public BigDecimal getUserBalance(Long userId) {
+        // 事务B：可能读到事务A未提交的数据
+        Account account = accountRepository.findByUserId(userId);
+        return account.getBalance();
+    }
+}
+
+// 2. 不可重复读问题
+@Service
+public class NonRepeatableReadExample {
+    
+    @Transactional(isolation = Isolation.READ_COMMITTED)
+    public void updateUser(Long userId, String name) {
+        // 事务A：更新用户名
+        User user = userRepository.findById(userId).orElse(null);
+        user.setName(name);
+        userRepository.save(user);
+    }
+    
+    @Transactional(isolation = Isolation.READ_COMMITTED)
+    public void readUserTwice(Long userId) {
+        // 事务B：两次读取可能得到不同结果
+        User user1 = userRepository.findById(userId).orElse(null);
+        // 事务A提交
+        User user2 = userRepository.findById(userId).orElse(null);
+        // user1.getName() != user2.getName()
+    }
+}
+```
+
+## 4. 事务回滚机制
+
+### 4.1 自动回滚
+
+```java title="自动回滚示例"
+@Service
+public class UserService {
+    
+    @Transactional
+    public void createUser(User user) {
+        try {
+            userRepository.save(user);
+            // 如果这里抛出异常，事务会自动回滚
+            if (user.getAge() < 0) {
+                throw new IllegalArgumentException("年龄不能为负数");
+            }
+        } catch (Exception e) {
+            // 异常会被重新抛出，触发事务回滚
+            throw e;
+        }
+    }
+    
+    // 指定回滚异常
+    @Transactional(rollbackFor = {IllegalArgumentException.class, SQLException.class})
+    public void createUserWithCustomRollback(User user) {
+        userRepository.save(user);
+        if (user.getAge() < 0) {
+            throw new IllegalArgumentException("年龄不能为负数");
+        }
+    }
+    
+    // 指定不回滚异常
+    @Transactional(noRollbackFor = {BusinessException.class})
+    public void createUserWithNoRollback(User user) {
+        userRepository.save(user);
+        if (user.getName().isEmpty()) {
+            throw new BusinessException("用户名不能为空");
+        }
+    }
+}
+```
+
+### 4.2 手动回滚
+
+```java title="手动回滚示例"
+@Service
+public class UserService {
+    
+    @Autowired
+    private TransactionTemplate transactionTemplate;
+    
+    public void createUserWithManualRollback(User user) {
+        transactionTemplate.execute(new TransactionCallbackWithoutResult() {
+            @Override
+            protected void doInTransactionWithoutResult(TransactionStatus status) {
+                try {
+                    userRepository.save(user);
+                    
+                    // 业务逻辑检查
+                    if (user.getAge() < 0) {
+                        // 手动设置回滚
+                        status.setRollbackOnly();
+                        return;
+                    }
+                    
+                    // 其他业务逻辑
+                } catch (Exception e) {
+                    // 异常时自动回滚
+                    status.setRollbackOnly();
+                    throw e;
+                }
+            }
+        });
+    }
+}
+```
+
+## 5. 事务失效场景
+
+### 5.1 常见失效场景
+
+```java title="事务失效场景示例"
+@Service
+public class TransactionFailureExample {
+    
+    @Autowired
+    private UserService userService;
+    
+    // 1. 非public方法
+    @Transactional
+    private void privateMethod() {
+        // 事务不会生效
+    }
+    
+    // 2. 自调用问题
+    @Transactional
+    public void methodA() {
+        // 事务生效
+        userRepository.save(new User());
+        
+        // 自调用，事务不会生效
+        this.methodB();
+    }
+    
+    @Transactional
+    public void methodB() {
+        // 这个方法的事务不会生效
+        userRepository.save(new User());
+    }
+    
+    // 3. 异常被捕获
+    @Transactional
+    public void methodWithCaughtException() {
+        try {
+            userRepository.save(new User());
+            throw new RuntimeException("测试异常");
+        } catch (Exception e) {
+            // 异常被捕获，事务不会回滚
+            log.error("异常被捕获", e);
+        }
+    }
+    
+    // 4. 异常类型不匹配
+    @Transactional(rollbackFor = SQLException.class)
+    public void methodWithWrongException() {
+        userRepository.save(new User());
+        throw new RuntimeException("运行时异常"); // 不会回滚
+    }
+}
+```
+
+### 5.2 解决方案
+
+```java title="事务失效解决方案"
+@Service
+public class TransactionSolutionExample {
+    
+    @Autowired
+    private ApplicationContext applicationContext;
+    
+    // 1. 解决自调用问题 - 使用AopContext
+    @Transactional
+    public void methodA() {
+        userRepository.save(new User());
+        
+        // 获取代理对象
+        UserService proxy = (UserService) AopContext.currentProxy();
+        proxy.methodB(); // 事务生效
+    }
+    
+    // 2. 解决自调用问题 - 注入自身
+    @Autowired
+    private UserService self;
+    
+    @Transactional
+    public void methodAWithSelf() {
+        userRepository.save(new User());
+        self.methodB(); // 事务生效
+    }
+    
+    // 3. 解决异常捕获问题
+    @Transactional
+    public void methodWithProperException() {
+        try {
+            userRepository.save(new User());
+            throw new RuntimeException("测试异常");
+        } catch (Exception e) {
+            log.error("异常被捕获", e);
+            // 重新抛出异常，触发回滚
+            throw new RuntimeException("重新抛出异常", e);
+        }
+    }
+}
+```
+
+## 6. 事务最佳实践
+
+### 6.1 事务设计原则
+
+```java title="事务设计最佳实践"
+@Service
+public class TransactionBestPractice {
+    
+    // 1. 事务方法要尽可能小
+    @Transactional
+    public void createUser(User user) {
+        // 只包含必要的数据库操作
+        validateUser(user);
+        userRepository.save(user);
+    }
+    
+    // 2. 避免在事务中进行耗时操作
+    @Transactional
+    public void createUserWithAsyncOperation(User user) {
+        userRepository.save(user);
+        
+        // 异步处理耗时操作
+        CompletableFuture.runAsync(() -> {
+            sendWelcomeEmail(user.getEmail());
+            updateUserStatistics();
+        });
+    }
+    
+    // 3. 合理使用事务传播行为
+    @Transactional(propagation = Propagation.REQUIRED)
+    public void createUserWithOrder(User user, Order order) {
+        userRepository.save(user);
+        
+        // 订单创建使用独立事务
+        orderService.createOrderWithNewTransaction(order);
+    }
+    
+    // 4. 使用@Transactional注解的完整配置
+    @Transactional(
+        propagation = Propagation.REQUIRED,
+        isolation = Isolation.READ_COMMITTED,
+        timeout = 30,
+        rollbackFor = {Exception.class},
+        readOnly = false
+    )
+    public void complexTransaction(User user) {
+        // 复杂事务逻辑
+    }
+}
+```
+
+### 6.2 事务监控
+
+```java title="事务监控示例"
+@Aspect
+@Component
+public class TransactionMonitorAspect {
+    
+    private static final Logger logger = LoggerFactory.getLogger(TransactionMonitorAspect.class);
+    
+    @Around("@annotation(org.springframework.transaction.annotation.Transactional)")
+    public Object monitorTransaction(ProceedingJoinPoint joinPoint) throws Throwable {
+        String methodName = joinPoint.getSignature().getName();
+        long startTime = System.currentTimeMillis();
+        
+        try {
+            Object result = joinPoint.proceed();
+            long endTime = System.currentTimeMillis();
+            
+            logger.info("事务方法 {} 执行成功，耗时: {}ms", methodName, endTime - startTime);
+            return result;
+        } catch (Exception e) {
+            logger.error("事务方法 {} 执行失败，耗时: {}ms", methodName, System.currentTimeMillis() - startTime, e);
+            throw e;
+        }
+    }
+}
+```
+
+## 7. 面试题精选
+
+### 7.1 基础概念题
+
+**Q: 什么是事务？Spring事务管理的优势是什么？**
+
+A: 事务是数据库操作的一个逻辑单元，具有ACID特性。Spring事务管理的优势包括：
+- **声明式事务**：通过注解简化事务配置
+- **编程式事务**：提供灵活的事务控制
+- **传播行为**：支持复杂的事务嵌套
+- **隔离级别**：提供不同的事务隔离级别
+- **自动回滚**：异常时自动回滚事务
+
+**Q: Spring事务的传播行为有哪些？**
+
+A: Spring定义了7种事务传播行为：
+- **REQUIRED**：支持当前事务，不存在则创建新事务
+- **REQUIRES_NEW**：创建新事务，挂起当前事务
+- **SUPPORTS**：支持当前事务，不存在则以非事务执行
+- **NOT_SUPPORTED**：以非事务执行，挂起当前事务
+- **MANDATORY**：必须在事务中执行，否则抛出异常
+- **NEVER**：不能在事务中执行，否则抛出异常
+- **NESTED**：嵌套事务，可以独立回滚
+
+### 7.2 实践题
+
+**Q: 事务的隔离级别有哪些？各有什么特点？**
+
+A: 事务隔离级别包括：
+- **READ_UNCOMMITTED**：读未提交，性能最高但存在脏读问题
+- **READ_COMMITTED**：读已提交，避免脏读但存在不可重复读
+- **REPEATABLE_READ**：可重复读，避免不可重复读但存在幻读
+- **SERIALIZABLE**：串行化，避免所有并发问题但性能最低
+
+**Q: 什么情况下Spring事务会失效？**
+
+A: Spring事务失效的常见情况：
+- **非public方法**：@Transactional注解在非public方法上不生效
+- **自调用问题**：同一个类中的方法调用不会经过代理
+- **异常被捕获**：异常被catch捕获后不会触发回滚
+- **异常类型不匹配**：抛出的异常类型不在rollbackFor中
+- **数据库不支持**：使用的数据库不支持事务
+
+### 7.3 高级题
+
+**Q: 如何解决Spring事务的自调用问题？**
+
+A: 解决自调用问题的方法：
+- **使用AopContext**：通过AopContext.currentProxy()获取代理对象
+- **注入自身**：使用@Autowired注入自身的代理对象
+- **提取方法**：将需要事务的方法提取到另一个类中
+- **使用AspectJ**：使用AspectJ编译时织入
+
+**Q: 如何设计一个分布式事务？**
+
+A: 分布式事务设计考虑：
+- **2PC/3PC协议**：两阶段/三阶段提交协议
+- **TCC模式**：Try-Confirm-Cancel模式
+- **Saga模式**：长事务的补偿模式
+- **消息事务**：基于消息的最终一致性
+- **本地消息表**：结合本地事务和消息队列
+
+:::tip 事务管理学习要点
+1. **理解ACID特性**：掌握事务的原子性、一致性、隔离性、持久性
+2. **熟悉传播行为**：了解7种事务传播行为的使用场景
+3. **掌握隔离级别**：理解不同隔离级别的特点和适用场景
+4. **学会异常处理**：掌握事务回滚和异常处理机制
+5. **避免失效场景**：了解事务失效的原因和解决方案
+:::
+
+---
+
+通过本章的学习，你应该已经掌握了Spring事务管理的核心概念、传播行为、隔离级别和最佳实践。事务管理是保证数据一致性的重要技术，在实际项目中合理使用Spring事务可以确保业务数据的完整性和可靠性。 

@@ -1,81 +1,863 @@
 ---
 sidebar_position: 1
-title: "服务注册与发现"
-description: "微服务服务注册与发现机制"
+title: 服务注册与发现详解
+description: 深入理解微服务服务注册与发现机制、实现方案与最佳实践
 authors: [Laby]
 last_update:
   date: 2025-08-07
   author: Laby
 ---
 
-# 服务注册与发现
+# 服务注册与发现详解
 
-服务注册与发现用于在动态环境中自动找到服务提供者并负载均衡调用。
+在微服务架构中，服务实例的数量和位置是动态变化的。服务注册与发现机制解决了服务间如何相互找到并通信的核心问题，它是微服务架构的基础设施之一。
 
-## 模式
+:::tip 核心价值
+服务发现 = 动态注册 + 自动发现 + 负载均衡 + 健康检查 + 故障转移
+:::
 
-- **客户端发现**：客户端从注册中心拉取实例列表并负载均衡（Eureka、Consul、Nacos）
-- **服务端发现**：反向代理/网关侧做发现并转发（K8s Service、NGINX+Consul）
+## 1. 服务发现基础概念
 
-## Eureka
+### 1.1 什么是服务发现？
 
-### Server端
+服务发现是微服务架构中的一个重要组件，它负责管理服务实例的注册、发现和健康检查。当服务启动时，它会向注册中心注册自己的信息；当服务需要调用其他服务时，它会从注册中心获取目标服务的实例列表。
 
-```yaml
-# application.yml（Eureka Server）
+#### 服务发现的核心组件
+```java title="服务发现核心组件示例"
+public class ServiceDiscoveryComponents {
+    /*
+     * 服务发现的核心组件
+     * 1. 服务注册中心：存储服务实例信息的中心化存储
+     * 2. 服务提供者：向注册中心注册自己的服务实例
+     * 3. 服务消费者：从注册中心获取服务实例列表
+     * 4. 负载均衡器：在多个服务实例间分发请求
+     * 5. 健康检查器：监控服务实例的健康状态
+     */
+    
+    // 服务实例信息
+    public class ServiceInstance {
+        private String instanceId;        // 实例ID
+        private String serviceId;         // 服务ID
+        private String host;              // 主机地址
+        private int port;                 // 端口
+        private boolean secure;           // 是否使用HTTPS
+        private String uri;               // 服务URI
+        private Map<String, String> metadata; // 元数据
+        private String zone;              // 可用区
+        private boolean enabled;          // 是否启用
+        private long registrationTime;    // 注册时间
+        private long lastUpdatedTime;     // 最后更新时间
+        
+        // 构造函数、getter、setter方法
+    }
+    
+    // 服务注册接口
+    public interface ServiceRegistry {
+        // 注册服务实例
+        void register(ServiceInstance serviceInstance);
+        
+        // 注销服务实例
+        void deregister(ServiceInstance serviceInstance);
+        
+        // 更新服务实例
+        void update(ServiceInstance serviceInstance);
+        
+        // 设置服务实例状态
+        void setStatus(ServiceInstance serviceInstance, String status);
+    }
+    
+    // 服务发现接口
+    public interface ServiceDiscovery {
+        // 获取服务实例列表
+        List<ServiceInstance> getInstances(String serviceId);
+        
+        // 获取所有服务ID
+        List<String> getServiceIds();
+        
+        // 获取服务实例
+        ServiceInstance getInstance(String serviceId, String instanceId);
+        
+        // 添加服务实例监听器
+        void addInstanceChangeListener(String serviceId, InstanceChangeListener listener);
+    }
+    
+    // 负载均衡器接口
+    public interface LoadBalancer {
+        // 选择服务实例
+        ServiceInstance choose(String serviceId, List<ServiceInstance> instances);
+        
+        // 获取负载均衡策略
+        String getLoadBalancerStrategy();
+    }
+    
+    // 健康检查器接口
+    public interface HealthChecker {
+        // 检查服务实例健康状态
+        boolean isHealthy(ServiceInstance instance);
+        
+        // 执行健康检查
+        HealthCheckResult check(ServiceInstance instance);
+        
+        // 获取健康检查配置
+        HealthCheckConfig getConfig();
+    }
+}
+```
+
+### 1.2 服务发现模式
+
+#### 客户端发现模式
+```java title="客户端发现模式示例"
+public class ClientSideDiscovery {
+    /*
+     * 客户端发现模式
+     * 客户端负责从服务注册中心获取服务实例列表，并实现负载均衡
+     * 
+     * 优点：
+     * 1. 客户端可以灵活选择负载均衡策略
+     * 2. 减少网络跳数，提高性能
+     * 3. 客户端可以缓存服务实例列表
+     * 
+     * 缺点：
+     * 1. 客户端需要实现服务发现逻辑
+     * 2. 客户端需要处理服务注册中心的故障
+     * 3. 不同语言的客户端需要重复实现
+     */
+    
+    // 客户端发现实现
+    public class ClientSideDiscoveryImpl {
+        private final ServiceDiscovery serviceDiscovery;
+        private final LoadBalancer loadBalancer;
+        private final Map<String, List<ServiceInstance>> instanceCache = new ConcurrentHashMap<>();
+        
+        public ClientSideDiscoveryImpl(ServiceDiscovery serviceDiscovery, LoadBalancer loadBalancer) {
+            this.serviceDiscovery = serviceDiscovery;
+            this.loadBalancer = loadBalancer;
+        }
+        
+        // 获取服务实例
+        public ServiceInstance getInstance(String serviceId) {
+            List<ServiceInstance> instances = getInstances(serviceId);
+            if (instances.isEmpty()) {
+                throw new ServiceNotFoundException("No instances found for service: " + serviceId);
+            }
+            return loadBalancer.choose(serviceId, instances);
+        }
+        
+        // 获取服务实例列表
+        public List<ServiceInstance> getInstances(String serviceId) {
+            // 先从缓存获取
+            List<ServiceInstance> instances = instanceCache.get(serviceId);
+            if (instances == null) {
+                // 从注册中心获取
+                instances = serviceDiscovery.getInstances(serviceId);
+                // 更新缓存
+                instanceCache.put(serviceId, instances);
+            }
+            return instances;
+        }
+        
+        // 刷新服务实例列表
+        public void refreshInstances(String serviceId) {
+            List<ServiceInstance> instances = serviceDiscovery.getInstances(serviceId);
+            instanceCache.put(serviceId, instances);
+        }
+        
+        // 添加服务实例变化监听器
+        public void addInstanceChangeListener(String serviceId) {
+            serviceDiscovery.addInstanceChangeListener(serviceId, event -> {
+                // 服务实例发生变化时，刷新缓存
+                refreshInstances(serviceId);
+            });
+        }
+    }
+    
+    // 负载均衡策略实现
+    public class LoadBalancerStrategies {
+        
+        // 轮询负载均衡
+        public class RoundRobinLoadBalancer implements LoadBalancer {
+            private final AtomicInteger counter = new AtomicInteger(0);
+            
+            @Override
+            public ServiceInstance choose(String serviceId, List<ServiceInstance> instances) {
+                if (instances.isEmpty()) {
+                    return null;
+                }
+                int index = counter.incrementAndGet() % instances.size();
+                return instances.get(index);
+            }
+            
+            @Override
+            public String getLoadBalancerStrategy() {
+                return "RoundRobin";
+            }
+        }
+        
+        // 随机负载均衡
+        public class RandomLoadBalancer implements LoadBalancer {
+            private final Random random = new Random();
+            
+            @Override
+            public ServiceInstance choose(String serviceId, List<ServiceInstance> instances) {
+                if (instances.isEmpty()) {
+                    return null;
+                }
+                int index = random.nextInt(instances.size());
+                return instances.get(index);
+            }
+            
+            @Override
+            public String getLoadBalancerStrategy() {
+                return "Random";
+            }
+        }
+        
+        // 权重负载均衡
+        public class WeightedLoadBalancer implements LoadBalancer {
+            
+            @Override
+            public ServiceInstance choose(String serviceId, List<ServiceInstance> instances) {
+                if (instances.isEmpty()) {
+                    return null;
+                }
+                
+                // 计算总权重
+                int totalWeight = instances.stream()
+                    .mapToInt(instance -> getWeight(instance))
+                    .sum();
+                
+                // 随机选择
+                int randomWeight = new Random().nextInt(totalWeight);
+                int currentWeight = 0;
+                
+                for (ServiceInstance instance : instances) {
+                    currentWeight += getWeight(instance);
+                    if (randomWeight < currentWeight) {
+                        return instance;
+                    }
+                }
+                
+                return instances.get(0);
+            }
+            
+            private int getWeight(ServiceInstance instance) {
+                String weightStr = instance.getMetadata().get("weight");
+                return weightStr != null ? Integer.parseInt(weightStr) : 1;
+            }
+            
+            @Override
+            public String getLoadBalancerStrategy() {
+                return "Weighted";
+            }
+        }
+        
+        // 最小连接数负载均衡
+        public class LeastConnectionLoadBalancer implements LoadBalancer {
+            private final Map<String, AtomicInteger> connectionCounts = new ConcurrentHashMap<>();
+            
+            @Override
+            public ServiceInstance choose(String serviceId, List<ServiceInstance> instances) {
+                if (instances.isEmpty()) {
+                    return null;
+                }
+                
+                return instances.stream()
+                    .min(Comparator.comparingInt(instance -> 
+                        connectionCounts.getOrDefault(instance.getInstanceId(), new AtomicInteger(0)).get()))
+                    .orElse(instances.get(0));
+            }
+            
+            public void incrementConnection(String instanceId) {
+                connectionCounts.computeIfAbsent(instanceId, k -> new AtomicInteger(0)).incrementAndGet();
+            }
+            
+            public void decrementConnection(String instanceId) {
+                AtomicInteger count = connectionCounts.get(instanceId);
+                if (count != null) {
+                    count.decrementAndGet();
+                }
+            }
+            
+            @Override
+            public String getLoadBalancerStrategy() {
+                return "LeastConnection";
+            }
+        }
+    }
+}
+```
+
+#### 服务端发现模式
+```java title="服务端发现模式示例"
+public class ServerSideDiscovery {
+    /*
+     * 服务端发现模式
+     * 客户端通过负载均衡器（如API网关）访问服务，负载均衡器负责服务发现
+     * 
+     * 优点：
+     * 1. 客户端不需要实现服务发现逻辑
+     * 2. 服务发现逻辑集中管理
+     * 3. 支持多种协议和语言
+     * 
+     * 缺点：
+     * 1. 增加网络跳数
+     * 2. 负载均衡器可能成为瓶颈
+     * 3. 需要额外的基础设施
+     */
+    
+    // API网关实现
+    public class ApiGateway {
+        private final ServiceDiscovery serviceDiscovery;
+        private final LoadBalancer loadBalancer;
+        private final HttpClient httpClient;
+        
+        public ApiGateway(ServiceDiscovery serviceDiscovery, LoadBalancer loadBalancer) {
+            this.serviceDiscovery = serviceDiscovery;
+            this.loadBalancer = loadBalancer;
+            this.httpClient = HttpClient.create();
+        }
+        
+        // 路由请求到目标服务
+        public Mono<HttpResponse> route(HttpRequest request) {
+            String serviceId = extractServiceId(request);
+            ServiceInstance instance = getInstance(serviceId);
+            
+            if (instance == null) {
+                return Mono.error(new ServiceNotFoundException("Service not found: " + serviceId));
+            }
+            
+            String targetUrl = buildTargetUrl(instance, request);
+            return forwardRequest(targetUrl, request);
+        }
+        
+        // 获取服务实例
+        private ServiceInstance getInstance(String serviceId) {
+            List<ServiceInstance> instances = serviceDiscovery.getInstances(serviceId);
+            if (instances.isEmpty()) {
+                return null;
+            }
+            return loadBalancer.choose(serviceId, instances);
+        }
+        
+        // 提取服务ID
+        private String extractServiceId(HttpRequest request) {
+            String path = request.getPath();
+            // 从路径中提取服务ID，例如 /api/users/123 -> users
+            String[] parts = path.split("/");
+            if (parts.length >= 3 && "api".equals(parts[1])) {
+                return parts[2];
+            }
+            throw new IllegalArgumentException("Invalid service path: " + path);
+        }
+        
+        // 构建目标URL
+        private String buildTargetUrl(ServiceInstance instance, HttpRequest request) {
+            String protocol = instance.isSecure() ? "https" : "http";
+            String baseUrl = protocol + "://" + instance.getHost() + ":" + instance.getPort();
+            
+            // 移除服务前缀，例如 /api/users/123 -> /users/123
+            String path = request.getPath().replaceFirst("/api/" + extractServiceId(request), "");
+            return baseUrl + path;
+        }
+        
+        // 转发请求
+        private Mono<HttpResponse> forwardRequest(String targetUrl, HttpRequest request) {
+            return httpClient.request(request.getMethod())
+                .uri(targetUrl)
+                .send(request.getBody())
+                .response();
+        }
+    }
+    
+    // 负载均衡器实现
+    public class GatewayLoadBalancer {
+        
+        // 健康检查过滤器
+        public class HealthCheckFilter {
+            private final HealthChecker healthChecker;
+            
+            public HealthCheckFilter(HealthChecker healthChecker) {
+                this.healthChecker = healthChecker;
+            }
+            
+            public List<ServiceInstance> filterHealthyInstances(List<ServiceInstance> instances) {
+                return instances.stream()
+                    .filter(instance -> healthChecker.isHealthy(instance))
+                    .collect(Collectors.toList());
+            }
+        }
+        
+        // 区域感知负载均衡
+        public class ZoneAwareLoadBalancer implements LoadBalancer {
+            private final String currentZone;
+            
+            public ZoneAwareLoadBalancer(String currentZone) {
+                this.currentZone = currentZone;
+            }
+            
+            @Override
+            public ServiceInstance choose(String serviceId, List<ServiceInstance> instances) {
+                if (instances.isEmpty()) {
+                    return null;
+                }
+                
+                // 优先选择同区域的实例
+                List<ServiceInstance> sameZoneInstances = instances.stream()
+                    .filter(instance -> currentZone.equals(instance.getZone()))
+                    .collect(Collectors.toList());
+                
+                if (!sameZoneInstances.isEmpty()) {
+                    return new RoundRobinLoadBalancer().choose(serviceId, sameZoneInstances);
+                }
+                
+                // 如果没有同区域实例，选择其他区域的实例
+                return new RoundRobinLoadBalancer().choose(serviceId, instances);
+            }
+            
+            @Override
+            public String getLoadBalancerStrategy() {
+                return "ZoneAware";
+            }
+        }
+    }
+}
+```
+
+### 1.3 服务发现架构对比
+
+#### 架构模式对比表
+| 特性 | 客户端发现 | 服务端发现 |
+|------|------------|------------|
+| **实现复杂度** | 客户端需要实现发现逻辑 | 客户端简单，服务端复杂 |
+| **性能** | 直接调用，性能好 | 多一次网络跳转 |
+| **可用性** | 客户端需要处理注册中心故障 | 负载均衡器可能成为单点 |
+| **语言支持** | 每种语言都需要实现 | 支持所有语言 |
+| **负载均衡** | 客户端实现，策略灵活 | 服务端实现，策略统一 |
+| **缓存** | 客户端可以缓存实例列表 | 服务端缓存，客户端无感知 |
+
+#### 架构图
+```
+客户端发现模式:
+Client → Service Discovery → Service Registry
+   ↓
+Client → Service Instance (直接调用)
+
+服务端发现模式:
+Client → Load Balancer → Service Discovery → Service Registry
+   ↓
+Load Balancer → Service Instance (代理调用)
+```
+
+:::info 服务发现选择原则
+1. **客户端发现**：适合对性能要求高、客户端可控的场景
+2. **服务端发现**：适合多语言、客户端不可控的场景
+3. **混合模式**：可以结合两种模式的优点
+:::
+
+## 2. Eureka 详解
+
+### 2.1 Eureka 架构原理
+
+Eureka是Netflix开源的服务发现组件，采用客户端发现模式。它由Eureka Server（服务端）和Eureka Client（客户端）组成。
+
+#### Eureka 核心架构
+```java title="Eureka架构示例"
+public class EurekaArchitecture {
+    /*
+     * Eureka核心架构
+     * 1. Eureka Server：服务注册中心，存储服务实例信息
+     * 2. Eureka Client：服务客户端，负责注册和发现服务
+     * 3. Application Service：应用服务，向Eureka注册自己
+     * 4. Application Client：应用客户端，从Eureka发现服务
+     */
+    
+    // Eureka Server配置
+    public class EurekaServerConfig {
+        private final int port = 8761;                    // 默认端口
+        private final boolean enableSelfPreservation = true; // 启用自我保护
+        private final int evictionIntervalTimerInMs = 60000; // 清理间隔
+        private final int renewalThresholdUpdateIntervalMs = 900000; // 更新阈值间隔
+        private final int peerEurekaNodesUpdateIntervalMs = 600000; // 节点更新间隔
+        
+        // 集群配置
+        private final List<String> peerEurekaNodes = Arrays.asList(
+            "http://eureka-server-1:8761/eureka/",
+            "http://eureka-server-2:8761/eureka/",
+            "http://eureka-server-3:8761/eureka/"
+        );
+    }
+    
+    // Eureka Client配置
+    public class EurekaClientConfig {
+        private final String serviceUrl = "http://localhost:8761/eureka/"; // 服务地址
+        private final int registryFetchIntervalSeconds = 30; // 获取注册表间隔
+        private final int instanceInfoReplicationIntervalSeconds = 30; // 实例信息复制间隔
+        private final int initialInstanceInfoReplicationIntervalSeconds = 40; // 初始复制间隔
+        private final int eurekaServiceUrlPollIntervalSeconds = 300; // 服务地址轮询间隔
+        private final int eurekaServerConnectTimeoutSeconds = 5; // 连接超时
+        private final int eurekaServerReadTimeoutSeconds = 8; // 读取超时
+        private final int eurekaServerTotalConnections = 200; // 总连接数
+        private final int eurekaServerTotalConnectionsPerHost = 50; // 每主机连接数
+    }
+    
+    // 服务实例信息
+    public class EurekaInstanceInfo {
+        private String instanceId;        // 实例ID
+        private String appName;           // 应用名称
+        private String appGroupName;      // 应用组名称
+        private String ipAddr;            // IP地址
+        private String sid;               // 安全ID
+        private int port;                 // 端口
+        private int securePort;           // 安全端口
+        private String homePageUrl;       // 首页URL
+        private String statusPageUrl;     // 状态页URL
+        private String healthCheckUrl;    // 健康检查URL
+        private String secureHealthCheckUrl; // 安全健康检查URL
+        private String vipAddress;        // VIP地址
+        private String secureVipAddress;  // 安全VIP地址
+        private String countryId;         // 国家ID
+        private String dataCenterInfo;    // 数据中心信息
+        private String hostName;          // 主机名
+        private String status;            // 状态
+        private String overriddenStatus;  // 覆盖状态
+        private boolean isCoordinatingDiscoveryServer; // 是否协调发现服务器
+        private long lastUpdatedTimestamp; // 最后更新时间戳
+        private long lastDirtyTimestamp;  // 最后脏时间戳
+        private String actionType;        // 操作类型
+        private String asgName;           // ASG名称
+        private Map<String, String> metadata; // 元数据
+    }
+}
+```
+
+### 2.2 Eureka Server 配置与部署
+
+#### 基础配置
+```yaml title="application.yml"
 spring:
   application:
     name: eureka-server
 server:
   port: 8761
+
 eureka:
+  instance:
+    hostname: localhost
+  client:
+    # 是否向Eureka注册自己
+    register-with-eureka: false
+    # 是否从Eureka获取注册信息
+    fetch-registry: false
+    # 服务地址
+    service-url:
+      defaultZone: http://localhost:8761/eureka/
+  server:
+    # 关闭自我保护模式
+    enable-self-preservation: false
+    # 清理间隔（毫秒）
+    eviction-interval-timer-in-ms: 60000
+    # 响应缓存更新间隔
+    response-cache-update-interval-ms: 3000
+    # 响应缓存自动过期时间
+    response-cache-auto-expiration-in-seconds: 180
+    # 启用压缩
+    enable-compression: true
+    # 最大压缩大小
+    max-compression-size: 8192
+```
+
+#### 集群配置
+```yaml title="集群配置示例"
+# eureka-server-1.yml
+spring:
+  application:
+    name: eureka-server
+server:
+  port: 8761
+
+eureka:
+  instance:
+    hostname: eureka-server-1
   client:
     register-with-eureka: false
     fetch-registry: false
+    service-url:
+      defaultZone: http://eureka-server-2:8762/eureka/,http://eureka-server-3:8763/eureka/
+  server:
+    enable-self-preservation: true
+    eviction-interval-timer-in-ms: 60000
+
+---
+# eureka-server-2.yml
+spring:
+  application:
+    name: eureka-server
+server:
+  port: 8762
+
+eureka:
+  instance:
+    hostname: eureka-server-2
+  client:
+    register-with-eureka: false
+    fetch-registry: false
+    service-url:
+      defaultZone: http://eureka-server-1:8761/eureka/,http://eureka-server-3:8763/eureka/
+  server:
+    enable-self-preservation: true
+    eviction-interval-timer-in-ms: 60000
+
+---
+# eureka-server-3.yml
+spring:
+  application:
+    name: eureka-server
+server:
+  port: 8763
+
+eureka:
+  instance:
+    hostname: eureka-server-3
+  client:
+    register-with-eureka: false
+    fetch-registry: false
+    service-url:
+      defaultZone: http://eureka-server-1:8761/eureka/,http://eureka-server-2:8762/eureka/
+  server:
+    enable-self-preservation: true
+    eviction-interval-timer-in-ms: 60000
 ```
 
-```java
-// 启动类
-@org.springframework.cloud.netflix.eureka.server.EnableEurekaServer
-@org.springframework.boot.autoconfigure.SpringBootApplication
+#### 启动类
+```java title="Eureka Server启动类"
+@EnableEurekaServer
+@SpringBootApplication
 public class EurekaServerApplication {
+    
     public static void main(String[] args) {
-        org.springframework.boot.SpringApplication.run(EurekaServerApplication.class, args);
+        SpringApplication.run(EurekaServerApplication.class, args);
+    }
+    
+    @Bean
+    @Primary
+    public EurekaClientConfigBean eurekaClientConfigBean() {
+        EurekaClientConfigBean config = new EurekaClientConfigBean();
+        config.setServiceUrl(new HashMap<String, String>() {{
+            put("defaultZone", "http://localhost:8761/eureka/");
+        }});
+        config.setRegisterWithEureka(false);
+        config.setFetchRegistry(false);
+        return config;
+    }
+    
+    @Bean
+    public EurekaServerConfigBean eurekaServerConfigBean() {
+        EurekaServerConfigBean config = new EurekaServerConfigBean();
+        config.setEnableSelfPreservation(false);
+        config.setEvictionIntervalTimerInMs(60000);
+        return config;
     }
 }
 ```
 
-### Client端
+### 2.3 Eureka Client 配置与使用
 
-```yaml
-# application.yml（Service）
+#### 客户端配置
+```yaml title="客户端配置"
 spring:
   application:
     name: user-service
 server:
   port: 8081
+
 eureka:
+  instance:
+    # 实例ID
+    instance-id: ${spring.application.name}:${server.port}
+    # 主机名
+    hostname: localhost
+    # 端口
+    port: ${server.port}
+    # 是否使用IP地址
+    prefer-ip-address: true
+    # IP地址
+    ip-address: ${spring.cloud.client.ip-address}
+    # 健康检查路径
+    health-check-url-path: /actuator/health
+    # 状态页路径
+    status-page-url-path: /actuator/info
+    # 首页路径
+    home-page-url-path: /
+    # 元数据
+    metadata-map:
+      zone: zone1
+      weight: 1
+      version: v1.0.0
+    # 租约续约间隔
+    lease-renewal-interval-in-seconds: 30
+    # 租约过期时间
+    lease-expiration-duration-in-seconds: 90
+    # 应用名称
+    appname: ${spring.application.name}
+    # 应用组名称
+    app-group-name: ${spring.application.name}
   client:
+    # 服务地址
     service-url:
       defaultZone: http://localhost:8761/eureka/
+    # 是否注册到Eureka
+    register-with-eureka: true
+    # 是否从Eureka获取注册信息
+    fetch-registry: true
+    # 获取注册表间隔
+    registry-fetch-interval-seconds: 30
+    # 实例信息复制间隔
+    instance-info-replication-interval-seconds: 30
+    # 初始实例信息复制间隔
+    initial-instance-info-replication-interval-seconds: 40
+    # 服务地址轮询间隔
+    eureka-service-url-poll-interval-seconds: 300
+    # 连接超时
+    eureka-server-connect-timeout-seconds: 5
+    # 读取超时
+    eureka-server-read-timeout-seconds: 8
+    # 总连接数
+    eureka-server-total-connections: 200
+    # 每主机连接数
+    eureka-server-total-connections-per-host: 50
+    # 是否启用压缩
+    g-zip-content: true
+    # 压缩大小
+    g-zip-content-size: 8192
 ```
 
-```java
-// 启动类
-@org.springframework.cloud.client.discovery.EnableDiscoveryClient
-@org.springframework.boot.autoconfigure.SpringBootApplication
+#### 客户端启动类
+```java title="Eureka Client启动类"
+@EnableDiscoveryClient
+@SpringBootApplication
 public class UserServiceApplication {
+    
     public static void main(String[] args) {
-        org.springframework.boot.SpringApplication.run(UserServiceApplication.class, args);
+        SpringApplication.run(UserServiceApplication.class, args);
+    }
+    
+    @Bean
+    @LoadBalanced
+    public RestTemplate restTemplate() {
+        return new RestTemplate();
+    }
+    
+    @Bean
+    public EurekaClientConfigBean eurekaClientConfigBean() {
+        EurekaClientConfigBean config = new EurekaClientConfigBean();
+        config.setServiceUrl(new HashMap<String, String>() {{
+            put("defaultZone", "http://localhost:8761/eureka/");
+        }});
+        config.setRegisterWithEureka(true);
+        config.setFetchRegistry(true);
+        config.setRegistryFetchIntervalSeconds(30);
+        return config;
+    }
+    
+    @Bean
+    public EurekaInstanceConfigBean eurekaInstanceConfigBean() {
+        EurekaInstanceConfigBean config = new EurekaInstanceConfigBean();
+        config.setInstanceId(applicationName + ":" + serverPort);
+        config.setPreferIpAddress(true);
+        config.setLeaseRenewalIntervalInSeconds(30);
+        config.setLeaseExpirationDurationInSeconds(90);
+        return config;
     }
 }
 ```
 
-## Consul
+#### 服务调用示例
+```java title="服务调用示例"
+@Service
+public class UserService {
+    
+    @Autowired
+    private RestTemplate restTemplate;
+    
+    @Autowired
+    private DiscoveryClient discoveryClient;
+    
+    // 使用RestTemplate调用服务
+    public User getUserById(String id) {
+        // 通过服务名调用，自动负载均衡
+        String url = "http://user-service/api/users/" + id;
+        ResponseEntity<User> response = restTemplate.getForEntity(url, User.class);
+        return response.getBody();
+    }
+    
+    // 使用DiscoveryClient获取服务实例
+    public List<ServiceInstance> getServiceInstances(String serviceId) {
+        return discoveryClient.getInstances(serviceId);
+    }
+    
+    // 手动选择服务实例
+    public User getUserByIdWithManualSelection(String id) {
+        List<ServiceInstance> instances = discoveryClient.getInstances("user-service");
+        if (instances.isEmpty()) {
+            throw new ServiceNotFoundException("No instances found for user-service");
+        }
+        
+        // 选择第一个实例
+        ServiceInstance instance = instances.get(0);
+        String url = "http://" + instance.getHost() + ":" + instance.getPort() + "/api/users/" + id;
+        ResponseEntity<User> response = restTemplate.getForEntity(url, User.class);
+        return response.getBody();
+    }
+    
+    // 使用负载均衡器
+    @Autowired
+    private LoadBalancerClient loadBalancerClient;
+    
+    public User getUserByIdWithLoadBalancer(String id) {
+        ServiceInstance instance = loadBalancerClient.choose("user-service");
+        if (instance == null) {
+            throw new ServiceNotFoundException("No instances found for user-service");
+        }
+        
+        String url = "http://" + instance.getHost() + ":" + instance.getPort() + "/api/users/" + id;
+        ResponseEntity<User> response = restTemplate.getForEntity(url, User.class);
+        return response.getBody();
+    }
+}
+```
 
-特点：支持KV、健康检查、ACL，多数据中心。
+:::tip Eureka最佳实践
+1. **集群部署**：生产环境建议至少3个Eureka Server实例
+2. **自我保护**：根据网络环境决定是否启用自我保护
+3. **健康检查**：配置合适的健康检查路径和间隔
+4. **负载均衡**：使用Spring Cloud LoadBalancer实现客户端负载均衡
+5. **监控告警**：监控Eureka Server和Client的状态
+:::
 
-```yaml
+## 3. 其他服务发现方案
+
+### 3.1 Consul 服务发现
+
+Consul是HashiCorp开发的服务发现和配置管理工具，支持多数据中心、KV存储、健康检查等功能。
+
+#### Consul 特点
+```java title="Consul特点"
+public class ConsulFeatures {
+    /*
+     * Consul核心特点
+     * 1. 服务发现：支持服务注册和发现
+     * 2. 健康检查：支持多种健康检查方式
+     * 3. KV存储：提供键值对存储功能
+     * 4. 多数据中心：支持跨数据中心部署
+     * 5. ACL：访问控制列表
+     * 6. DNS：支持DNS查询
+     */
+}
+```
+
+#### Consul 配置
+```yaml title="Consul配置"
 spring:
   application:
     name: order-service
@@ -84,42 +866,399 @@ spring:
       host: localhost
       port: 8500
       discovery:
+        # 是否注册
         register: true
+        # 注册的服务ID
+        instance-id: ${spring.application.name}:${server.port}
+        # 服务名称
+        service-name: ${spring.application.name}
+        # 服务端口
+        port: ${server.port}
+        # 健康检查路径
+        health-check-path: /actuator/health
+        # 健康检查间隔
+        health-check-interval: 15s
+        # 健康检查超时
+        health-check-timeout: 5s
+        # 心跳检查
         heartbeat:
           enabled: true
+          interval: 15s
+          ttl: 30s
+        # 元数据
+        metadata:
+          version: v1.0.0
+          zone: zone1
+          weight: 1
+        # 标签
+        tags:
+          - version=v1.0.0
+          - zone=zone1
+        # 数据中心
+        datacenter: dc1
+        # 命名空间
+        namespace: default
 ```
 
-## Nacos
+### 3.2 Nacos 服务发现
 
-特点：注册中心 + 配置中心，提供命名空间、分组、权重路由。
+Nacos是阿里巴巴开源的服务发现和配置管理平台，支持服务注册、配置管理、动态DNS等功能。
 
-```yaml
+#### Nacos 特点
+```java title="Nacos特点"
+public class NacosFeatures {
+    /*
+     * Nacos核心特点
+     * 1. 服务注册发现：支持服务注册和发现
+     * 2. 配置管理：支持配置的动态更新
+     * 3. 命名空间：支持多租户隔离
+     * 4. 分组管理：支持服务分组
+     * 5. 权重路由：支持基于权重的负载均衡
+     * 6. 集群管理：支持集群部署
+     */
+}
+```
+
+#### Nacos 配置
+```yaml title="Nacos配置"
 spring:
   application:
     name: inventory-service
   cloud:
     nacos:
       discovery:
+        # 服务器地址
         server-addr: localhost:8848
+        # 命名空间
         namespace: public
+        # 分组
         group: DEFAULT_GROUP
+        # 集群名称
+        cluster-name: DEFAULT
+        # 实例ID
+        instance-id: ${spring.application.name}:${server.port}
+        # 服务名称
+        service: ${spring.application.name}
+        # 端口
+        port: ${server.port}
+        # 权重
+        weight: 1
+        # 是否启用
+        enabled: true
+        # 是否临时实例
+        ephemeral: true
+        # 元数据
+        metadata:
+          version: v1.0.0
+          zone: zone1
+        # 健康检查
+        heart-beat-interval: 5000
+        heart-beat-timeout: 15000
+        ip-delete-timeout: 30000
 ```
 
-## 健康检查
+:::info 服务发现方案选择
+1. **Eureka**：适合Spring Cloud生态，简单易用
+2. **Consul**：功能丰富，支持多数据中心
+3. **Nacos**：阿里生态，功能全面，中文文档丰富
+:::
 
-- HTTP检查：`/actuator/health`
-- 心跳与自我保护（Eureka）
-- 主动摘除与隔离（故障实例剔除）
+## 4. 健康检查与监控
 
-## 负载均衡
+### 4.1 健康检查机制
 
-- 客户端侧：RoundRobin、Weighted、Zone等
-- 与网关集成实现灰度发布、就近访问
+#### 健康检查类型
+```java title="健康检查类型"
+public class HealthCheckTypes {
+    /*
+     * 健康检查类型
+     * 1. HTTP检查：通过HTTP请求检查服务状态
+     * 2. TCP检查：通过TCP连接检查服务状态
+     * 3. 脚本检查：通过执行脚本检查服务状态
+     * 4. 心跳检查：通过心跳机制检查服务状态
+     */
+    
+    // HTTP健康检查
+    public class HttpHealthCheck {
+        private final String healthCheckUrl;
+        private final int timeout;
+        private final int interval;
+        private final int unhealthyThreshold;
+        private final int healthyThreshold;
+        
+        public boolean check(String serviceUrl) {
+            try {
+                RestTemplate restTemplate = new RestTemplate();
+                restTemplate.setRequestFactory(new HttpComponentsClientHttpRequestFactory());
+                ((HttpComponentsClientHttpRequestFactory) restTemplate.getRequestFactory())
+                    .setConnectTimeout(timeout);
+                ((HttpComponentsClientHttpRequestFactory) restTemplate.getRequestFactory())
+                    .setReadTimeout(timeout);
+                
+                ResponseEntity<String> response = restTemplate.getForEntity(
+                    serviceUrl + healthCheckUrl, String.class);
+                return response.getStatusCode().is2xxSuccessful();
+            } catch (Exception e) {
+                return false;
+            }
+        }
+    }
+    
+    // TCP健康检查
+    public class TcpHealthCheck {
+        private final int port;
+        private final int timeout;
+        
+        public boolean check(String host) {
+            try (Socket socket = new Socket()) {
+                socket.connect(new InetSocketAddress(host, port), timeout);
+                return socket.isConnected();
+            } catch (Exception e) {
+                return false;
+            }
+        }
+    }
+    
+    // 心跳健康检查
+    public class HeartbeatHealthCheck {
+        private final Map<String, Long> lastHeartbeat = new ConcurrentHashMap<>();
+        private final long heartbeatTimeout;
+        
+        public void recordHeartbeat(String instanceId) {
+            lastHeartbeat.put(instanceId, System.currentTimeMillis());
+        }
+        
+        public boolean isHealthy(String instanceId) {
+            Long lastBeat = lastHeartbeat.get(instanceId);
+            if (lastBeat == null) {
+                return false;
+            }
+            return System.currentTimeMillis() - lastBeat < heartbeatTimeout;
+        }
+    }
+}
+```
 
-## 面试题
+### 4.2 监控指标
 
-1. 客户端发现与服务端发现的区别
-2. Eureka自我保护机制是什么，利弊如何
-3. Consul如何做健康检查与KV配置
-4. Nacos的命名空间/Group/权重路由
-5. 如何实现多注册中心容灾与双活
+#### 关键监控指标
+```java title="监控指标"
+public class MonitoringMetrics {
+    
+    @Component
+    public class ServiceDiscoveryMetrics {
+        
+        private final MeterRegistry meterRegistry;
+        private final Counter registeredServices;
+        private final Counter deregisteredServices;
+        private final Gauge activeServices;
+        private final Timer discoveryLatency;
+        
+        public ServiceDiscoveryMetrics(MeterRegistry meterRegistry) {
+            this.meterRegistry = meterRegistry;
+            this.registeredServices = Counter.builder("service_discovery_registered_total")
+                .description("Total number of registered services")
+                .register(meterRegistry);
+            this.deregisteredServices = Counter.builder("service_discovery_deregistered_total")
+                .description("Total number of deregistered services")
+                .register(meterRegistry);
+            this.activeServices = Gauge.builder("service_discovery_active_services")
+                .description("Number of active services")
+                .register(meterRegistry, this, ServiceDiscoveryMetrics::getActiveServicesCount);
+            this.discoveryLatency = Timer.builder("service_discovery_latency")
+                .description("Service discovery latency")
+                .register(meterRegistry);
+        }
+        
+        public void recordServiceRegistration(String serviceId) {
+            registeredServices.increment(Tags.of("service", serviceId));
+        }
+        
+        public void recordServiceDeregistration(String serviceId) {
+            deregisteredServices.increment(Tags.of("service", serviceId));
+        }
+        
+        public void recordDiscoveryLatency(long duration) {
+            discoveryLatency.record(duration, TimeUnit.MILLISECONDS);
+        }
+        
+        private double getActiveServicesCount() {
+            // 获取活跃服务数量
+            return 0.0; // 实际实现中需要计算
+        }
+    }
+}
+```
+
+## 5. 面试题精选
+
+### 5.1 基础概念题
+
+#### Q1: 什么是服务发现？它的作用是什么？
+
+**答**: 服务发现是微服务架构中的一个重要组件，它解决了服务间如何相互找到并通信的问题。
+
+**主要作用**：
+1. **动态注册**：服务启动时自动向注册中心注册
+2. **自动发现**：服务调用时自动从注册中心获取目标服务实例
+3. **负载均衡**：在多个服务实例间分发请求
+4. **健康检查**：监控服务实例的健康状态
+5. **故障转移**：自动剔除故障实例
+
+#### Q2: 客户端发现和服务端发现的区别是什么？
+
+**答**: 主要区别如下：
+
+**客户端发现**：
+- 客户端负责从注册中心获取服务实例列表
+- 客户端实现负载均衡逻辑
+- 性能好，减少网络跳数
+- 客户端需要处理注册中心故障
+
+**服务端发现**：
+- 负载均衡器负责服务发现
+- 客户端通过负载均衡器访问服务
+- 支持多种语言和协议
+- 增加网络跳数，负载均衡器可能成为瓶颈
+
+### 5.2 实践题
+
+#### Q3: 如何配置Eureka集群？
+
+**答**: Eureka集群配置步骤如下：
+
+1. **配置多个Eureka Server**：
+```yaml
+# eureka-server-1.yml
+eureka:
+  client:
+    service-url:
+      defaultZone: http://eureka-server-2:8762/eureka/,http://eureka-server-3:8763/eureka/
+
+# eureka-server-2.yml
+eureka:
+  client:
+    service-url:
+      defaultZone: http://eureka-server-1:8761/eureka/,http://eureka-server-3:8763/eureka/
+
+# eureka-server-3.yml
+eureka:
+  client:
+    service-url:
+      defaultZone: http://eureka-server-1:8761/eureka/,http://eureka-server-2:8762/eureka/
+```
+
+2. **客户端配置**：
+```yaml
+eureka:
+  client:
+    service-url:
+      defaultZone: http://eureka-server-1:8761/eureka/,http://eureka-server-2:8762/eureka/,http://eureka-server-3:8763/eureka/
+```
+
+#### Q4: Eureka的自我保护机制是什么？
+
+**答**: Eureka自我保护机制是为了防止网络分区故障时服务被错误剔除。
+
+**工作原理**：
+- 当Eureka Server在短时间内丢失过多客户端时，会进入自我保护模式
+- 在自我保护模式下，Eureka Server不会删除任何服务实例
+- 当网络恢复后，Eureka Server会自动退出自我保护模式
+
+**配置**：
+```yaml
+eureka:
+  server:
+    enable-self-preservation: true  # 启用自我保护
+    renewal-percent-threshold: 0.85 # 续约百分比阈值
+```
+
+### 5.3 架构设计题
+
+#### Q5: 如何设计一个高可用的服务发现系统？
+
+**答**: 高可用服务发现系统设计包括以下几个方面：
+
+1. **多注册中心**：
+```java
+@Configuration
+public class MultiRegistryConfig {
+    
+    @Bean
+    @Primary
+    public ServiceRegistry primaryRegistry() {
+        return new EurekaServiceRegistry();
+    }
+    
+    @Bean
+    public ServiceRegistry backupRegistry() {
+        return new ConsulServiceRegistry();
+    }
+    
+    @Bean
+    public ServiceDiscovery multiRegistryDiscovery() {
+        return new MultiRegistryServiceDiscovery(
+            Arrays.asList(primaryRegistry(), backupRegistry())
+        );
+    }
+}
+```
+
+2. **客户端缓存**：
+```java
+@Component
+public class CachedServiceDiscovery {
+    
+    private final Map<String, List<ServiceInstance>> instanceCache = new ConcurrentHashMap<>();
+    private final ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1);
+    
+    public CachedServiceDiscovery() {
+        // 定期刷新缓存
+        scheduler.scheduleAtFixedRate(this::refreshCache, 30, 30, TimeUnit.SECONDS);
+    }
+    
+    public List<ServiceInstance> getInstances(String serviceId) {
+        return instanceCache.computeIfAbsent(serviceId, this::fetchInstances);
+    }
+    
+    private List<ServiceInstance> fetchInstances(String serviceId) {
+        // 从注册中心获取实例列表
+        return serviceDiscovery.getInstances(serviceId);
+    }
+}
+```
+
+3. **健康检查**：
+```java
+@Component
+public class HealthCheckService {
+    
+    private final Map<String, HealthStatus> healthStatus = new ConcurrentHashMap<>();
+    
+    public boolean isHealthy(String instanceId) {
+        HealthStatus status = healthStatus.get(instanceId);
+        return status != null && status.isHealthy();
+    }
+    
+    @Scheduled(fixedRate = 30000)
+    public void performHealthCheck() {
+        // 执行健康检查
+        for (ServiceInstance instance : getAllInstances()) {
+            boolean healthy = checkHealth(instance);
+            healthStatus.put(instance.getInstanceId(), new HealthStatus(healthy));
+        }
+    }
+}
+```
+
+:::info 服务发现学习要点
+1. **理解原理**：掌握服务发现的核心概念和工作原理
+2. **掌握配置**：熟悉各种服务发现工具的配置方法
+3. **实践应用**：通过实际项目练习服务发现的使用
+4. **监控运维**：学会服务发现的监控和运维管理
+5. **高可用设计**：了解服务发现的高可用设计方法
+:::
+
+---
+
+通过本章的学习，你应该已经深入理解了服务发现的核心概念、实现方案和最佳实践。服务发现是微服务架构的基础设施，合理使用服务发现可以显著提高系统的可用性和可维护性。在实际项目中，要根据业务需求选择合适的服务发现方案，并注重高可用设计和监控运维。

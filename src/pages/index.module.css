@@ -133,20 +133,98 @@
   padding: 0 15px;
 }
 
+/* 增强的卡片样式 */
 .card {
   height: 100%;
-  transition: transform 0.3s ease, box-shadow 0.3s ease;
+  transition: all 0.5s cubic-bezier(0.215, 0.61, 0.355, 1);
   padding: 30px;
   border-radius: 12px;
   margin-bottom: 20px;
   display: flex;
   flex-direction: column;
-  border: 1px solid var(--custom-border-color);
-  box-shadow: var(--custom-shadow-lw);
+  position: relative;
+  z-index: 1;
+  overflow: hidden;
+  border: 1px solid rgba(var(--ifm-color-primary-rgb), 0.15);
+  box-shadow: 
+    0 5px 15px rgba(0, 0, 0, 0.08),
+    0 15px 35px rgba(var(--ifm-color-primary-rgb), 0.1);
+  background: 
+    linear-gradient(135deg, 
+      rgba(255, 255, 255, 0.9) 0%, 
+      rgba(255, 255, 255, 0.7) 100%);
 }
 
+/* 暗黑模式下的卡片样式 */
+[data-theme='dark'] .card {
+  background: 
+    linear-gradient(135deg, 
+      rgba(30, 41, 59, 0.8) 0%, 
+      rgba(15, 23, 42, 0.95) 100%);
+  border: 1px solid rgba(var(--ifm-color-primary-rgb), 0.2);
+  box-shadow: 
+    0 5px 15px rgba(0, 0, 0, 0.2),
+    0 15px 35px rgba(var(--ifm-color-primary-rgb), 0.15);
+}
+
+/* 添加卡片发光效果 */
+.card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: 
+    radial-gradient(
+      circle at 50% 0%, 
+      rgba(var(--ifm-color-primary-rgb), 0.1) 0%, 
+      transparent 70%
+    );
+  opacity: 0;
+  transition: opacity 0.5s ease;
+  z-index: -1;
+}
+
+/* 添加闪光效果 */
+.card::after {
+  content: '';
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background: linear-gradient(
+    45deg,
+    transparent 40%,
+    rgba(var(--ifm-color-primary-rgb), 0.1) 50%,
+    transparent 60%
+  );
+  opacity: 0;
+  transform: rotate(30deg);
+  transition: all 0.75s ease;
+  z-index: -2;
+}
+
+/* 悬停效果 */
 .card:hover {
-  transform: translateY(-5px);
+  transform: translateY(-8px) scale(1.02);
+  box-shadow: 
+    0 10px 25px rgba(0, 0, 0, 0.12),
+    0 20px 40px rgba(var(--ifm-color-primary-rgb), 0.18);
+  border-color: rgba(var(--ifm-color-primary-rgb), 0.5);
+}
+
+/* 悬停时激活发光效果 */
+.card:hover::before {
+  opacity: 1;
+}
+
+/* 悬停时激活闪光效果 */
+.card:hover::after {
+  opacity: 1;
+  transform: translateX(100%) translateY(-100%) rotate(30deg);
+  transition: transform 1s ease;
 }
 
 .cardIcon {
@@ -160,7 +238,26 @@
   margin-bottom: 1.5rem;
   color: var(--ifm-color-primary-darkest);
   box-shadow: 0 10px 15px -3px rgba(var(--ifm-color-primary-rgb), 0.2);
-  transition: all 0.3s ease;
+  transition: all 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  position: relative;
+  overflow: hidden;
+}
+
+/* 图标动画效果 */
+.cardIcon::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: radial-gradient(
+    circle at center,
+    rgba(255, 255, 255, 0.8) 0%,
+    transparent 80%
+  );
+  opacity: 0;
+  transition: opacity 0.5s ease;
 }
 
 [data-theme='dark'] .cardIcon {
@@ -170,14 +267,46 @@
 }
 
 .card:hover .cardIcon {
-  transform: scale(1.1) translateY(-5px);
-  box-shadow: 0 15px 20px -3px rgba(var(--ifm-color-primary-rgb), 0.3);
+  transform: scale(1.15) rotate(10deg);
+  box-shadow: 
+    0 15px 20px -3px rgba(var(--ifm-color-primary-rgb), 0.3),
+    0 0 15px rgba(var(--ifm-color-primary-rgb), 0.5);
 }
 
-.featureIcon {
-  width: 32px;
-  height: 32px;
+.card:hover .cardIcon::before {
+  opacity: 1;
+}
+
+/* 卡片内文字动画 */
+.card h3 {
+  transition: all 0.3s ease;
+  position: relative;
+}
+
+.card p {
+  transition: all 0.3s ease;
+  position: relative;
+}
+
+.card:hover h3 {
+  transform: translateY(-3px);
   color: var(--ifm-color-primary);
+}
+
+.card:hover p {
+  transform: translateY(-2px);
+}
+
+/* 添加卡片入场动画 */
+@keyframes cardFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .cardLink {
@@ -185,7 +314,16 @@
   text-decoration: none;
   color: inherit;
   height: 100%;
+  animation: cardFadeIn 0.8s ease-out forwards;
+  animation-fill-mode: both;
 }
+
+.cardLink:nth-child(1) { animation-delay: 0.1s; }
+.cardLink:nth-child(2) { animation-delay: 0.2s; }
+.cardLink:nth-child(3) { animation-delay: 0.3s; }
+.cardLink:nth-child(4) { animation-delay: 0.4s; }
+.cardLink:nth-child(5) { animation-delay: 0.5s; }
+.cardLink:nth-child(6) { animation-delay: 0.6s; }
 
 .cardLink:hover {
   text-decoration: none;

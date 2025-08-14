@@ -1,21 +1,1844 @@
 ---
 sidebar_position: 3
-title: "行为型模式"
-description: "行为型设计模式详解"
+title: 行为型设计模式详解
+description: 深入理解观察者、策略、命令、状态等行为型设计模式
 authors: [Laby]
 last_update:
   date: 2025-08-07
   author: Laby
 ---
 
-# 行为型模式
+# 行为型设计模式详解
 
-## 观察者模式
+行为型设计模式关注对象之间的通信机制，解决对象间责任分配和算法封装的问题。这些模式描述对象如何协作完成单个对象无法完成的任务，以及如何分配职责使对象间的耦合度最小。
 
-## 策略模式
+:::tip 核心价值
+行为型模式 = 对象通信 + 责任分配 + 算法封装 + 松耦合设计
+:::
 
-## 命令模式
+## 1. 行为型模式基础概念
 
-## 状态模式
+### 1.1 什么是行为型模式？
 
-## 面试题
+行为型模式是对在不同对象之间划分责任和算法的抽象化，它不仅关注类和对象的结构，而且重点关注它们之间的通信模式。这些模式特别关注对象之间的通信机制，以及如何分配职责使对象间的耦合度最小。
+
+#### 行为型模式的特点
+```java title="行为型模式特征示例"
+// 行为型模式关注对象间的交互
+public interface Observer {
+    void update(String message);
+}
+
+public interface Subject {
+    void attach(Observer observer);
+    void detach(Observer observer);
+    void notifyObservers(String message);
+}
+
+// 对象间通过接口进行松耦合通信
+public class NewsAgency implements Subject {
+    private List<Observer> observers = new ArrayList<>();
+    
+    @Override
+    public void attach(Observer observer) {
+        observers.add(observer);
+    }
+    
+    @Override
+    public void detach(Observer observer) {
+        observers.remove(observer);
+    }
+    
+    @Override
+    public void notifyObservers(String message) {
+        for (Observer observer : observers) {
+            observer.update(message);
+        }
+    }
+}
+```
+
+### 1.2 行为型模式的分类
+
+行为型模式可以分为以下几类：
+
+| 模式类型 | 主要模式 | 解决的问题 |
+|----------|----------|------------|
+| **对象行为模式** | 观察者、策略、命令 | 对象间的通信和协作 |
+| **类行为模式** | 模板方法、解释器 | 类之间的算法复用 |
+| **状态管理** | 状态、备忘录 | 对象状态变化管理 |
+| **访问控制** | 访问者、责任链 | 对象访问和请求处理 |
+
+:::info 行为型模式的价值
+行为型模式通过定义对象间的通信方式，使得系统更加灵活和可扩展。它们帮助开发者创建松耦合的系统，其中对象可以独立变化而不影响其他对象。
+:::
+
+## 2. 观察者模式（Observer Pattern）
+
+### 2.1 观察者模式概述
+
+观察者模式定义了一种一对多的依赖关系，让多个观察者对象同时监听某一个主题对象。当主题对象发生变化时，它的所有依赖者（观察者）都会收到通知并自动更新。
+
+#### 模式结构
+```
+Subject (主题)
+├── attach(Observer)     // 添加观察者
+├── detach(Observer)     // 移除观察者
+├── notify()            // 通知观察者
+└── observers: List     // 观察者列表
+
+Observer (观察者)
+└── update()           // 更新方法
+
+ConcreteSubject (具体主题)
+└── state             // 主题状态
+
+ConcreteObserver (具体观察者)
+└── update()          // 具体更新逻辑
+```
+
+### 2.2 观察者模式实现
+
+#### 基础实现
+```java title="观察者模式基础实现"
+// 抽象观察者接口
+public interface Observer {
+    void update(String message);
+}
+
+// 抽象主题接口
+public interface Subject {
+    void attach(Observer observer);
+    void detach(Observer observer);
+    void notifyObservers(String message);
+}
+
+// 具体主题实现
+public class NewsAgency implements Subject {
+    private List<Observer> observers = new ArrayList<>();
+    private String news;
+    
+    @Override
+    public void attach(Observer observer) {
+        if (!observers.contains(observer)) {
+            observers.add(observer);
+        }
+    }
+    
+    @Override
+    public void detach(Observer observer) {
+        observers.remove(observer);
+    }
+    
+    @Override
+    public void notifyObservers(String message) {
+        for (Observer observer : observers) {
+            observer.update(message);
+        }
+    }
+    
+    public void setNews(String news) {
+        this.news = news;
+        notifyObservers(news);
+    }
+    
+    public String getNews() {
+        return news;
+    }
+}
+
+// 具体观察者实现
+public class NewsChannel implements Observer {
+    private String name;
+    
+    public NewsChannel(String name) {
+        this.name = name;
+    }
+    
+    @Override
+    public void update(String message) {
+        System.out.println(name + " received news: " + message);
+    }
+}
+```
+
+#### 使用示例
+```java title="观察者模式使用示例"
+public class ObserverPatternDemo {
+    public static void main(String[] args) {
+        // 创建主题
+        NewsAgency newsAgency = new NewsAgency();
+        
+        // 创建观察者
+        NewsChannel channel1 = new NewsChannel("CNN");
+        NewsChannel channel2 = new NewsChannel("BBC");
+        NewsChannel channel3 = new NewsChannel("Reuters");
+        
+        // 注册观察者
+        newsAgency.attach(channel1);
+        newsAgency.attach(channel2);
+        newsAgency.attach(channel3);
+        
+        // 发布新闻，所有观察者都会收到通知
+        newsAgency.setNews("Breaking: New technology breakthrough!");
+        
+        // 移除一个观察者
+        newsAgency.detach(channel2);
+        
+        // 再次发布新闻，只有剩余的观察者收到通知
+        newsAgency.setNews("Update: Technology details released.");
+    }
+}
+```
+
+### 2.3 观察者模式的高级实现
+
+#### 使用Java内置观察者
+```java title="Java内置观察者模式"
+import java.util.Observable;
+import java.util.Observer;
+
+// 使用Java内置的Observable类
+public class StockMarket extends Observable {
+    private String stockSymbol;
+    private double price;
+    
+    public StockMarket(String stockSymbol) {
+        this.stockSymbol = stockSymbol;
+    }
+    
+    public void setPrice(double price) {
+        this.price = price;
+        setChanged(); // 标记状态已改变
+        notifyObservers(price); // 通知观察者
+    }
+    
+    public String getStockSymbol() {
+        return stockSymbol;
+    }
+    
+    public double getPrice() {
+        return price;
+    }
+}
+
+// 使用Java内置的Observer接口
+public class StockTrader implements Observer {
+    private String name;
+    private double buyThreshold;
+    private double sellThreshold;
+    
+    public StockTrader(String name, double buyThreshold, double sellThreshold) {
+        this.name = name;
+        this.buyThreshold = buyThreshold;
+        this.sellThreshold = sellThreshold;
+    }
+    
+    @Override
+    public void update(Observable observable, Object arg) {
+        if (observable instanceof StockMarket) {
+            StockMarket market = (StockMarket) observable;
+            double price = (Double) arg;
+            
+            System.out.println(name + " received price update for " + 
+                             market.getStockSymbol() + ": $" + price);
+            
+            if (price <= buyThreshold) {
+                System.out.println(name + " decides to BUY at $" + price);
+            } else if (price >= sellThreshold) {
+                System.out.println(name + " decides to SELL at $" + price);
+            }
+        }
+    }
+}
+```
+
+#### 使用示例
+```java title="股票市场观察者示例"
+public class StockMarketDemo {
+    public static void main(String[] args) {
+        // 创建股票市场
+        StockMarket appleStock = new StockMarket("AAPL");
+        
+        // 创建交易者
+        StockTrader trader1 = new StockTrader("John", 150.0, 200.0);
+        StockTrader trader2 = new StockTrader("Alice", 160.0, 180.0);
+        
+        // 注册观察者
+        appleStock.addObserver(trader1);
+        appleStock.addObserver(trader2);
+        
+        // 模拟价格变化
+        appleStock.setPrice(170.0);
+        appleStock.setPrice(145.0); // 触发买入信号
+        appleStock.setPrice(185.0); // 触发卖出信号
+    }
+}
+```
+
+### 2.4 观察者模式的优缺点
+
+#### 优点
+- **松耦合**：主题和观察者之间松耦合，可以独立变化
+- **支持广播通信**：一个主题可以通知多个观察者
+- **易于扩展**：添加新的观察者不需要修改主题代码
+- **符合开闭原则**：对扩展开放，对修改关闭
+
+#### 缺点
+- **通知顺序不确定**：观察者被通知的顺序可能不确定
+- **可能引起循环调用**：如果观察者和主题相互引用可能导致循环
+- **内存泄漏风险**：如果观察者忘记取消注册可能导致内存泄漏
+- **性能问题**：大量观察者时通知开销较大
+
+### 2.5 观察者模式的应用场景
+
+#### 实际应用场景
+```java title="GUI事件处理示例"
+// GUI框架中的事件处理
+public class Button {
+    private List<ActionListener> listeners = new ArrayList<>();
+    
+    public void addActionListener(ActionListener listener) {
+        listeners.add(listener);
+    }
+    
+    public void removeActionListener(ActionListener listener) {
+        listeners.remove(listener);
+    }
+    
+    public void click() {
+        ActionEvent event = new ActionEvent(this, ActionEvent.ACTION_PERFORMED, "click");
+        for (ActionListener listener : listeners) {
+            listener.actionPerformed(event);
+        }
+    }
+}
+
+// 使用示例
+Button button = new Button();
+button.addActionListener(e -> System.out.println("Button clicked!"));
+button.addActionListener(e -> saveData());
+button.click();
+```
+
+#### 其他应用场景
+- **事件处理系统**：GUI框架、Web框架
+- **消息推送系统**：实时通知、聊天应用
+- **数据绑定**：MVVM架构中的数据绑定
+- **日志系统**：多个日志处理器监听日志事件
+- **股票价格监控**：实时价格变化通知
+
+## 3. 策略模式（Strategy Pattern）
+
+### 3.1 策略模式概述
+
+策略模式定义了一系列算法，并将每一个算法封装起来，使它们可以互相替换。策略模式让算法独立于使用它的客户而变化，客户端可以根据需要选择不同的算法。
+
+#### 模式结构
+```
+Context (上下文)
+├── strategy: Strategy    // 策略接口
+├── setStrategy()        // 设置策略
+└── executeStrategy()    // 执行策略
+
+Strategy (策略接口)
+└── algorithm()         // 算法方法
+
+ConcreteStrategyA (具体策略A)
+└── algorithm()         // 具体算法实现
+
+ConcreteStrategyB (具体策略B)
+└── algorithm()         // 具体算法实现
+```
+
+### 3.2 策略模式实现
+
+#### 基础实现
+```java title="策略模式基础实现"
+// 策略接口
+public interface PaymentStrategy {
+    void pay(double amount);
+}
+
+// 具体策略实现
+public class CreditCardPayment implements PaymentStrategy {
+    private String cardNumber;
+    private String cvv;
+    
+    public CreditCardPayment(String cardNumber, String cvv) {
+        this.cardNumber = cardNumber;
+        this.cvv = cvv;
+    }
+    
+    @Override
+    public void pay(double amount) {
+        System.out.println("Paid $" + amount + " using Credit Card: " + 
+                          cardNumber.substring(cardNumber.length() - 4));
+    }
+}
+
+public class PayPalPayment implements PaymentStrategy {
+    private String email;
+    
+    public PayPalPayment(String email) {
+        this.email = email;
+    }
+    
+    @Override
+    public void pay(double amount) {
+        System.out.println("Paid $" + amount + " using PayPal account: " + email);
+    }
+}
+
+public class CashPayment implements PaymentStrategy {
+    @Override
+    public void pay(double amount) {
+        System.out.println("Paid $" + amount + " in cash");
+    }
+}
+
+// 上下文类
+public class ShoppingCart {
+    private PaymentStrategy paymentStrategy;
+    
+    public void setPaymentStrategy(PaymentStrategy paymentStrategy) {
+        this.paymentStrategy = paymentStrategy;
+    }
+    
+    public void checkout(double amount) {
+        if (paymentStrategy == null) {
+            throw new IllegalStateException("Payment strategy not set");
+        }
+        paymentStrategy.pay(amount);
+    }
+}
+```
+
+#### 使用示例
+```java title="策略模式使用示例"
+public class StrategyPatternDemo {
+    public static void main(String[] args) {
+        ShoppingCart cart = new ShoppingCart();
+        
+        // 使用信用卡支付
+        PaymentStrategy creditCard = new CreditCardPayment("1234567890123456", "123");
+        cart.setPaymentStrategy(creditCard);
+        cart.checkout(100.0);
+        
+        // 切换到PayPal支付
+        PaymentStrategy paypal = new PayPalPayment("user@example.com");
+        cart.setPaymentStrategy(paypal);
+        cart.checkout(50.0);
+        
+        // 切换到现金支付
+        PaymentStrategy cash = new CashPayment();
+        cart.setPaymentStrategy(cash);
+        cart.checkout(25.0);
+    }
+}
+```
+
+### 3.3 策略模式的高级应用
+
+#### 使用函数式接口
+```java title="函数式策略模式"
+import java.util.function.Function;
+
+// 使用函数式接口定义策略
+public class FunctionalStrategy {
+    
+    // 定义不同的计算策略
+    public static Function<Double, Double> regularDiscount = amount -> amount * 0.9;
+    public static Function<Double, Double> vipDiscount = amount -> amount * 0.8;
+    public static Function<Double, Double> holidayDiscount = amount -> amount * 0.85;
+    
+    // 上下文类
+    public static class PriceCalculator {
+        private Function<Double, Double> discountStrategy;
+        
+        public void setDiscountStrategy(Function<Double, Double> strategy) {
+            this.discountStrategy = strategy;
+        }
+        
+        public double calculatePrice(double originalPrice) {
+            return discountStrategy.apply(originalPrice);
+        }
+    }
+}
+
+// 使用示例
+public class FunctionalStrategyDemo {
+    public static void main(String[] args) {
+        FunctionalStrategy.PriceCalculator calculator = new FunctionalStrategy.PriceCalculator();
+        
+        double originalPrice = 100.0;
+        
+        // 使用不同策略
+        calculator.setDiscountStrategy(FunctionalStrategy.regularDiscount);
+        System.out.println("Regular price: $" + calculator.calculatePrice(originalPrice));
+        
+        calculator.setDiscountStrategy(FunctionalStrategy.vipDiscount);
+        System.out.println("VIP price: $" + calculator.calculatePrice(originalPrice));
+        
+        calculator.setDiscountStrategy(FunctionalStrategy.holidayDiscount);
+        System.out.println("Holiday price: $" + calculator.calculatePrice(originalPrice));
+    }
+}
+```
+
+#### 策略工厂模式
+```java title="策略工厂模式"
+// 策略枚举
+public enum PaymentType {
+    CREDIT_CARD, PAYPAL, CASH, BITCOIN
+}
+
+// 策略工厂
+public class PaymentStrategyFactory {
+    public static PaymentStrategy createStrategy(PaymentType type, Map<String, String> params) {
+        switch (type) {
+            case CREDIT_CARD:
+                return new CreditCardPayment(params.get("cardNumber"), params.get("cvv"));
+            case PAYPAL:
+                return new PayPalPayment(params.get("email"));
+            case CASH:
+                return new CashPayment();
+            case BITCOIN:
+                return new BitcoinPayment(params.get("walletAddress"));
+            default:
+                throw new IllegalArgumentException("Unknown payment type: " + type);
+        }
+    }
+}
+
+// 比特币支付策略
+public class BitcoinPayment implements PaymentStrategy {
+    private String walletAddress;
+    
+    public BitcoinPayment(String walletAddress) {
+        this.walletAddress = walletAddress;
+    }
+    
+    @Override
+    public void pay(double amount) {
+        System.out.println("Paid $" + amount + " using Bitcoin to wallet: " + walletAddress);
+    }
+}
+
+// 使用工厂模式
+public class StrategyFactoryDemo {
+    public static void main(String[] args) {
+        Map<String, String> params = new HashMap<>();
+        params.put("cardNumber", "1234567890123456");
+        params.put("cvv", "123");
+        
+        PaymentStrategy strategy = PaymentStrategyFactory.createStrategy(PaymentType.CREDIT_CARD, params);
+        
+        ShoppingCart cart = new ShoppingCart();
+        cart.setPaymentStrategy(strategy);
+        cart.checkout(100.0);
+    }
+}
+```
+
+### 3.4 策略模式的优缺点
+
+#### 优点
+- **算法封装**：每个算法都被封装在独立的类中
+- **易于扩展**：添加新策略不需要修改现有代码
+- **消除条件语句**：避免了大量的if-else或switch语句
+- **符合开闭原则**：对扩展开放，对修改关闭
+- **提高可维护性**：每个策略类职责单一，易于维护
+
+#### 缺点
+- **增加对象数量**：每个策略都是一个类，可能增加系统复杂度
+- **客户端必须了解策略**：客户端需要知道所有策略的区别
+- **策略切换开销**：频繁切换策略可能影响性能
+
+### 3.5 策略模式的应用场景
+
+#### 实际应用场景
+```java title="排序算法策略示例"
+// 排序策略接口
+public interface SortStrategy {
+    void sort(int[] array);
+}
+
+// 具体排序策略
+public class BubbleSortStrategy implements SortStrategy {
+    @Override
+    public void sort(int[] array) {
+        System.out.println("Using Bubble Sort");
+        // 冒泡排序实现
+        for (int i = 0; i < array.length - 1; i++) {
+            for (int j = 0; j < array.length - 1 - i; j++) {
+                if (array[j] > array[j + 1]) {
+                    int temp = array[j];
+                    array[j] = array[j + 1];
+                    array[j + 1] = temp;
+                }
+            }
+        }
+    }
+}
+
+public class QuickSortStrategy implements SortStrategy {
+    @Override
+    public void sort(int[] array) {
+        System.out.println("Using Quick Sort");
+        quickSort(array, 0, array.length - 1);
+    }
+    
+    private void quickSort(int[] array, int low, int high) {
+        if (low < high) {
+            int pi = partition(array, low, high);
+            quickSort(array, low, pi - 1);
+            quickSort(array, pi + 1, high);
+        }
+    }
+    
+    private int partition(int[] array, int low, int high) {
+        int pivot = array[high];
+        int i = low - 1;
+        
+        for (int j = low; j < high; j++) {
+            if (array[j] < pivot) {
+                i++;
+                int temp = array[i];
+                array[i] = array[j];
+                array[j] = temp;
+            }
+        }
+        
+        int temp = array[i + 1];
+        array[i + 1] = array[high];
+        array[high] = temp;
+        
+        return i + 1;
+    }
+}
+
+// 排序上下文
+public class Sorter {
+    private SortStrategy strategy;
+    
+    public void setStrategy(SortStrategy strategy) {
+        this.strategy = strategy;
+    }
+    
+    public void sortArray(int[] array) {
+        if (strategy == null) {
+            throw new IllegalStateException("Sort strategy not set");
+        }
+        strategy.sort(array);
+    }
+}
+```
+
+#### 其他应用场景
+- **支付系统**：不同的支付方式
+- **排序算法**：根据数据特点选择不同排序算法
+- **压缩算法**：根据文件类型选择压缩策略
+- **缓存策略**：LRU、LFU、FIFO等缓存策略
+- **验证策略**：不同的数据验证规则
+- **定价策略**：不同的折扣和定价算法
+
+## 4. 命令模式（Command Pattern）
+
+### 4.1 命令模式概述
+
+命令模式将请求封装成对象，从而可以用不同的请求对客户进行参数化，对请求排队或记录请求日志，以及支持可撤销的操作。命令模式将调用者和接收者解耦，调用者不需要知道接收者的具体实现。
+
+#### 模式结构
+```
+Client (客户端)
+├── 创建具体命令对象
+└── 设置接收者
+
+Invoker (调用者)
+├── command: Command    // 命令对象
+├── setCommand()        // 设置命令
+└── executeCommand()    // 执行命令
+
+Command (命令接口)
+├── execute()          // 执行命令
+└── undo()            // 撤销命令
+
+ConcreteCommand (具体命令)
+├── receiver: Receiver // 接收者
+├── execute()         // 调用接收者方法
+└── undo()           // 撤销操作
+
+Receiver (接收者)
+└── action()         // 具体操作
+```
+
+### 4.2 命令模式实现
+
+#### 基础实现
+```java title="命令模式基础实现"
+// 命令接口
+public interface Command {
+    void execute();
+    void undo();
+}
+
+// 接收者
+public class Light {
+    private String location;
+    
+    public Light(String location) {
+        this.location = location;
+    }
+    
+    public void turnOn() {
+        System.out.println(location + " light is ON");
+    }
+    
+    public void turnOff() {
+        System.out.println(location + " light is OFF");
+    }
+}
+
+// 具体命令
+public class LightOnCommand implements Command {
+    private Light light;
+    
+    public LightOnCommand(Light light) {
+        this.light = light;
+    }
+    
+    @Override
+    public void execute() {
+        light.turnOn();
+    }
+    
+    @Override
+    public void undo() {
+        light.turnOff();
+    }
+}
+
+public class LightOffCommand implements Command {
+    private Light light;
+    
+    public LightOffCommand(Light light) {
+        this.light = light;
+    }
+    
+    @Override
+    public void execute() {
+        light.turnOff();
+    }
+    
+    @Override
+    public void undo() {
+        light.turnOn();
+    }
+}
+
+// 调用者
+public class RemoteControl {
+    private Command[] onCommands;
+    private Command[] offCommands;
+    private Command undoCommand;
+    
+    public RemoteControl() {
+        onCommands = new Command[7];
+        offCommands = new Command[7];
+        
+        Command noCommand = new NoCommand();
+        for (int i = 0; i < 7; i++) {
+            onCommands[i] = noCommand;
+            offCommands[i] = noCommand;
+        }
+        undoCommand = noCommand;
+    }
+    
+    public void setCommand(int slot, Command onCommand, Command offCommand) {
+        onCommands[slot] = onCommand;
+        offCommands[slot] = offCommand;
+    }
+    
+    public void onButtonWasPushed(int slot) {
+        onCommands[slot].execute();
+        undoCommand = onCommands[slot];
+    }
+    
+    public void offButtonWasPushed(int slot) {
+        offCommands[slot].execute();
+        undoCommand = offCommands[slot];
+    }
+    
+    public void undoButtonWasPushed() {
+        undoCommand.undo();
+    }
+}
+
+// 空命令（空对象模式）
+public class NoCommand implements Command {
+    @Override
+    public void execute() {
+        // 什么都不做
+    }
+    
+    @Override
+    public void undo() {
+        // 什么都不做
+    }
+}
+```
+
+#### 使用示例
+```java title="命令模式使用示例"
+public class CommandPatternDemo {
+    public static void main(String[] args) {
+        // 创建接收者
+        Light livingRoomLight = new Light("Living Room");
+        Light kitchenLight = new Light("Kitchen");
+        
+        // 创建命令
+        LightOnCommand livingRoomLightOn = new LightOnCommand(livingRoomLight);
+        LightOffCommand livingRoomLightOff = new LightOffCommand(livingRoomLight);
+        LightOnCommand kitchenLightOn = new LightOnCommand(kitchenLight);
+        LightOffCommand kitchenLightOff = new LightOffCommand(kitchenLight);
+        
+        // 创建调用者
+        RemoteControl remote = new RemoteControl();
+        
+        // 设置命令
+        remote.setCommand(0, livingRoomLightOn, livingRoomLightOff);
+        remote.setCommand(1, kitchenLightOn, kitchenLightOff);
+        
+        // 执行命令
+        remote.onButtonWasPushed(0);  // 打开客厅灯
+        remote.onButtonWasPushed(1);  // 打开厨房灯
+        remote.offButtonWasPushed(0); // 关闭客厅灯
+        remote.undoButtonWasPushed(); // 撤销：重新打开客厅灯
+    }
+}
+```
+
+### 4.3 命令模式的高级应用
+
+#### 宏命令（组合命令）
+```java title="宏命令实现"
+// 宏命令：组合多个命令
+public class MacroCommand implements Command {
+    private List<Command> commands;
+    
+    public MacroCommand(List<Command> commands) {
+        this.commands = commands;
+    }
+    
+    @Override
+    public void execute() {
+        for (Command command : commands) {
+            command.execute();
+        }
+    }
+    
+    @Override
+    public void undo() {
+        // 反向执行撤销操作
+        for (int i = commands.size() - 1; i >= 0; i--) {
+            commands.get(i).undo();
+        }
+    }
+}
+
+// 使用宏命令
+public class MacroCommandDemo {
+    public static void main(String[] args) {
+        Light light = new Light("Living Room");
+        Stereo stereo = new Stereo("Living Room");
+        
+        LightOnCommand lightOn = new LightOnCommand(light);
+        StereoOnWithCDCommand stereoOn = new StereoOnWithCDCommand(stereo);
+        
+        List<Command> partyOn = Arrays.asList(lightOn, stereoOn);
+        MacroCommand partyOnMacro = new MacroCommand(partyOn);
+        
+        partyOnMacro.execute(); // 执行所有命令
+        partyOnMacro.undo();    // 撤销所有命令
+    }
+}
+```
+
+#### 命令队列和日志
+```java title="命令队列实现"
+// 命令队列
+public class CommandQueue {
+    private Queue<Command> commands = new LinkedList<>();
+    
+    public void addCommand(Command command) {
+        commands.offer(command);
+    }
+    
+    public void executeCommands() {
+        while (!commands.isEmpty()) {
+            Command command = commands.poll();
+            command.execute();
+        }
+    }
+}
+
+// 命令日志
+public class CommandLogger {
+    private List<Command> commandHistory = new ArrayList<>();
+    
+    public void logCommand(Command command) {
+        commandHistory.add(command);
+    }
+    
+    public void replayCommands() {
+        for (Command command : commandHistory) {
+            command.execute();
+        }
+    }
+    
+    public void clearHistory() {
+        commandHistory.clear();
+    }
+}
+```
+
+### 4.4 命令模式的优缺点
+
+#### 优点
+- **解耦调用者和接收者**：调用者不需要知道接收者的具体实现
+- **支持撤销操作**：可以轻松实现撤销功能
+- **支持宏命令**：可以组合多个命令
+- **支持日志和事务**：可以记录命令历史
+- **易于扩展**：添加新命令不需要修改现有代码
+
+#### 缺点
+- **增加系统复杂度**：每个命令都需要一个类
+- **可能过度设计**：对于简单操作可能过于复杂
+- **内存开销**：命令对象可能占用较多内存
+
+### 4.5 命令模式的应用场景
+
+#### 实际应用场景
+- **GUI按钮和菜单**：每个按钮对应一个命令
+- **撤销/重做功能**：文本编辑器、图形编辑器
+- **宏录制**：录制和回放用户操作
+- **任务队列**：异步任务处理
+- **事务处理**：数据库事务操作
+
+## 5. 状态模式（State Pattern）
+
+### 5.1 状态模式概述
+
+状态模式允许对象在内部状态改变时改变其行为，对象看起来好像修改了它的类。状态模式将状态相关的行为封装在独立的状态类中，并将状态转换逻辑分离出来。
+
+#### 模式结构
+```
+Context (上下文)
+├── state: State       // 当前状态
+├── setState()         // 设置状态
+└── request()          // 请求方法
+
+State (状态接口)
+└── handle()          // 处理方法
+
+ConcreteStateA (具体状态A)
+└── handle()          // 具体处理逻辑
+
+ConcreteStateB (具体状态B)
+└── handle()          // 具体处理逻辑
+```
+
+### 5.2 状态模式实现
+
+#### 基础实现
+```java title="状态模式基础实现"
+// 状态接口
+public interface VendingMachineState {
+    void insertCoin();
+    void ejectCoin();
+    void selectProduct();
+    void dispense();
+}
+
+// 具体状态
+public class NoCoinState implements VendingMachineState {
+    private VendingMachine vendingMachine;
+    
+    public NoCoinState(VendingMachine vendingMachine) {
+        this.vendingMachine = vendingMachine;
+    }
+    
+    @Override
+    public void insertCoin() {
+        System.out.println("Coin inserted");
+        vendingMachine.setState(vendingMachine.getHasCoinState());
+    }
+    
+    @Override
+    public void ejectCoin() {
+        System.out.println("No coin to eject");
+    }
+    
+    @Override
+    public void selectProduct() {
+        System.out.println("Please insert a coin first");
+    }
+    
+    @Override
+    public void dispense() {
+        System.out.println("Please insert a coin first");
+    }
+}
+
+public class HasCoinState implements VendingMachineState {
+    private VendingMachine vendingMachine;
+    
+    public HasCoinState(VendingMachine vendingMachine) {
+        this.vendingMachine = vendingMachine;
+    }
+    
+    @Override
+    public void insertCoin() {
+        System.out.println("Coin already inserted");
+    }
+    
+    @Override
+    public void ejectCoin() {
+        System.out.println("Coin ejected");
+        vendingMachine.setState(vendingMachine.getNoCoinState());
+    }
+    
+    @Override
+    public void selectProduct() {
+        System.out.println("Product selected");
+        vendingMachine.setState(vendingMachine.getSoldState());
+    }
+    
+    @Override
+    public void dispense() {
+        System.out.println("Please select a product first");
+    }
+}
+
+public class SoldState implements VendingMachineState {
+    private VendingMachine vendingMachine;
+    
+    public SoldState(VendingMachine vendingMachine) {
+        this.vendingMachine = vendingMachine;
+    }
+    
+    @Override
+    public void insertCoin() {
+        System.out.println("Please wait, product is being dispensed");
+    }
+    
+    @Override
+    public void ejectCoin() {
+        System.out.println("Cannot eject coin, product is being dispensed");
+    }
+    
+    @Override
+    public void selectProduct() {
+        System.out.println("Product already selected");
+    }
+    
+    @Override
+    public void dispense() {
+        System.out.println("Product dispensed");
+        vendingMachine.setCount(vendingMachine.getCount() - 1);
+        
+        if (vendingMachine.getCount() > 0) {
+            vendingMachine.setState(vendingMachine.getNoCoinState());
+        } else {
+            vendingMachine.setState(vendingMachine.getSoldOutState());
+        }
+    }
+}
+
+public class SoldOutState implements VendingMachineState {
+    private VendingMachine vendingMachine;
+    
+    public SoldOutState(VendingMachine vendingMachine) {
+        this.vendingMachine = vendingMachine;
+    }
+    
+    @Override
+    public void insertCoin() {
+        System.out.println("Machine is sold out");
+    }
+    
+    @Override
+    public void ejectCoin() {
+        System.out.println("No coin to eject");
+    }
+    
+    @Override
+    public void selectProduct() {
+        System.out.println("Machine is sold out");
+    }
+    
+    @Override
+    public void dispense() {
+        System.out.println("Machine is sold out");
+    }
+}
+
+// 上下文类
+public class VendingMachine {
+    private VendingMachineState noCoinState;
+    private VendingMachineState hasCoinState;
+    private VendingMachineState soldState;
+    private VendingMachineState soldOutState;
+    
+    private VendingMachineState currentState;
+    private int count;
+    
+    public VendingMachine(int count) {
+        this.count = count;
+        
+        noCoinState = new NoCoinState(this);
+        hasCoinState = new HasCoinState(this);
+        soldState = new SoldState(this);
+        soldOutState = new SoldOutState(this);
+        
+        if (count > 0) {
+            currentState = noCoinState;
+        } else {
+            currentState = soldOutState;
+        }
+    }
+    
+    public void insertCoin() {
+        currentState.insertCoin();
+    }
+    
+    public void ejectCoin() {
+        currentState.ejectCoin();
+    }
+    
+    public void selectProduct() {
+        currentState.selectProduct();
+    }
+    
+    public void dispense() {
+        currentState.dispense();
+    }
+    
+    public void setState(VendingMachineState state) {
+        this.currentState = state;
+    }
+    
+    // Getters for states
+    public VendingMachineState getNoCoinState() { return noCoinState; }
+    public VendingMachineState getHasCoinState() { return hasCoinState; }
+    public VendingMachineState getSoldState() { return soldState; }
+    public VendingMachineState getSoldOutState() { return soldOutState; }
+    
+    public int getCount() { return count; }
+    public void setCount(int count) { this.count = count; }
+}
+```
+
+#### 使用示例
+```java title="状态模式使用示例"
+public class StatePatternDemo {
+    public static void main(String[] args) {
+        VendingMachine machine = new VendingMachine(2);
+        
+        System.out.println("=== Vending Machine Demo ===");
+        
+        machine.insertCoin();    // 插入硬币
+        machine.selectProduct(); // 选择产品
+        machine.dispense();      // 分发产品
+        
+        System.out.println();
+        
+        machine.insertCoin();    // 插入硬币
+        machine.ejectCoin();     // 弹出硬币
+        
+        System.out.println();
+        
+        machine.insertCoin();    // 插入硬币
+        machine.selectProduct(); // 选择产品
+        machine.dispense();      // 分发产品（最后一个）
+        
+        System.out.println();
+        
+        machine.insertCoin();    // 尝试插入硬币（售罄状态）
+    }
+}
+```
+
+### 5.3 状态模式的高级应用
+
+#### 状态转换表
+```java title="状态转换表实现"
+// 状态转换表
+public class StateTransitionTable {
+    private Map<StateTransition, VendingMachineState> transitions = new HashMap<>();
+    
+    public void addTransition(VendingMachineState currentState, String action, VendingMachineState nextState) {
+        transitions.put(new StateTransition(currentState, action), nextState);
+    }
+    
+    public VendingMachineState getNextState(VendingMachineState currentState, String action) {
+        return transitions.get(new StateTransition(currentState, action));
+    }
+    
+    private static class StateTransition {
+        private VendingMachineState state;
+        private String action;
+        
+        public StateTransition(VendingMachineState state, String action) {
+            this.state = state;
+            this.action = action;
+        }
+        
+        @Override
+        public boolean equals(Object obj) {
+            if (this == obj) return true;
+            if (obj == null || getClass() != obj.getClass()) return false;
+            StateTransition that = (StateTransition) obj;
+            return Objects.equals(state, that.state) && Objects.equals(action, that.action);
+        }
+        
+        @Override
+        public int hashCode() {
+            return Objects.hash(state, action);
+        }
+    }
+}
+```
+
+### 5.4 状态模式的优缺点
+
+#### 优点
+- **消除条件语句**：避免了大量的if-else或switch语句
+- **状态转换清晰**：每个状态类负责自己的行为
+- **易于扩展**：添加新状态不需要修改现有代码
+- **状态封装**：状态相关的行为被封装在状态类中
+- **符合开闭原则**：对扩展开放，对修改关闭
+
+#### 缺点
+- **增加类数量**：每个状态都需要一个类
+- **状态转换复杂**：状态转换逻辑可能变得复杂
+- **可能过度设计**：对于简单状态机可能过于复杂
+
+### 5.5 状态模式的应用场景
+
+#### 实际应用场景
+- **游戏状态管理**：游戏角色的不同状态
+- **工作流引擎**：任务的不同处理状态
+- **网络连接状态**：连接、断开、重连等状态
+- **订单状态管理**：订单的创建、支付、发货等状态
+- **线程状态**：线程的创建、运行、阻塞、终止等状态
+
+## 6. 面试题精选
+
+### 6.1 基础概念题
+
+#### Q1: 什么是行为型设计模式？它们解决了什么问题？
+
+**答**: 行为型设计模式关注对象之间的通信机制，解决对象间责任分配和算法封装的问题。
+
+**解决的问题**:
+- **对象间通信**：定义对象如何协作完成单个对象无法完成的任务
+- **责任分配**：合理分配对象间的职责，使耦合度最小
+- **算法封装**：将算法封装在独立的类中，支持算法的替换和扩展
+- **状态管理**：管理对象的状态变化和行为
+
+**主要特点**:
+- 关注对象间的交互和通信
+- 强调松耦合设计
+- 支持算法的动态替换
+- 提高系统的可扩展性和可维护性
+
+#### Q2: 观察者模式和发布-订阅模式有什么区别？
+
+**答**: 虽然观察者模式和发布-订阅模式都实现了对象间的松耦合通信，但它们有一些重要区别：
+
+**观察者模式**:
+- 直接的一对多关系：主题直接通知观察者
+- 同步通信：观察者被直接调用
+- 紧耦合：观察者必须实现特定接口
+- 实现简单：通常在同一进程内
+
+**发布-订阅模式**:
+- 间接通信：通过消息代理或事件总线
+- 异步通信：发布者和订阅者不直接交互
+- 松耦合：订阅者不需要实现特定接口
+- 更灵活：可以跨进程、跨网络
+
+```java title="发布-订阅模式示例"
+// 事件总线
+public class EventBus {
+    private Map<String, List<Consumer<Object>>> subscribers = new HashMap<>();
+    
+    public void subscribe(String topic, Consumer<Object> subscriber) {
+        subscribers.computeIfAbsent(topic, k -> new ArrayList<>()).add(subscriber);
+    }
+    
+    public void publish(String topic, Object event) {
+        List<Consumer<Object>> topicSubscribers = subscribers.get(topic);
+        if (topicSubscribers != null) {
+            topicSubscribers.forEach(subscriber -> subscriber.accept(event));
+        }
+    }
+}
+
+// 使用示例
+EventBus eventBus = new EventBus();
+eventBus.subscribe("user.created", event -> System.out.println("User created: " + event));
+eventBus.subscribe("user.updated", event -> System.out.println("User updated: " + event));
+eventBus.publish("user.created", new User("John"));
+```
+
+#### Q3: 策略模式和状态模式有什么区别？
+
+**答**: 策略模式和状态模式在结构上很相似，但它们解决的问题和适用场景不同：
+
+**策略模式**:
+- **目的**：封装算法族，使它们可以互换
+- **选择时机**：客户端主动选择策略
+- **状态无关**：策略的选择不依赖于对象状态
+- **应用场景**：支付方式、排序算法、压缩算法等
+
+**状态模式**:
+- **目的**：管理对象的状态变化和行为
+- **选择时机**：状态转换由对象内部逻辑决定
+- **状态相关**：行为依赖于对象的当前状态
+- **应用场景**：游戏角色状态、订单状态、线程状态等
+
+```java title="策略模式 vs 状态模式对比"
+// 策略模式：客户端选择策略
+public class PaymentProcessor {
+    private PaymentStrategy strategy;
+    
+    public void setStrategy(PaymentStrategy strategy) {
+        this.strategy = strategy; // 客户端主动设置
+    }
+    
+    public void processPayment(double amount) {
+        strategy.pay(amount);
+    }
+}
+
+// 状态模式：状态自动转换
+public class Order {
+    private OrderState state;
+    
+    public void process() {
+        state.process(this); // 状态决定下一步行为
+    }
+    
+    public void setState(OrderState state) {
+        this.state = state; // 内部逻辑设置状态
+    }
+}
+```
+
+### 6.2 实践题
+
+#### Q4: 如何实现一个支持撤销/重做的文本编辑器？
+
+**答**: 可以使用命令模式实现撤销/重做功能：
+
+```java title="文本编辑器撤销/重做实现"
+// 命令接口
+public interface Command {
+    void execute();
+    void undo();
+}
+
+// 插入文本命令
+public class InsertTextCommand implements Command {
+    private TextEditor editor;
+    private String text;
+    private int position;
+    
+    public InsertTextCommand(TextEditor editor, String text, int position) {
+        this.editor = editor;
+        this.text = text;
+        this.position = position;
+    }
+    
+    @Override
+    public void execute() {
+        editor.insertText(text, position);
+    }
+    
+    @Override
+    public void undo() {
+        editor.deleteText(position, position + text.length());
+    }
+}
+
+// 删除文本命令
+public class DeleteTextCommand implements Command {
+    private TextEditor editor;
+    private String deletedText;
+    private int position;
+    
+    public DeleteTextCommand(TextEditor editor, int start, int end) {
+        this.editor = editor;
+        this.position = start;
+        this.deletedText = editor.getText(start, end);
+    }
+    
+    @Override
+    public void execute() {
+        editor.deleteText(position, position + deletedText.length());
+    }
+    
+    @Override
+    public void undo() {
+        editor.insertText(deletedText, position);
+    }
+}
+
+// 文本编辑器
+public class TextEditor {
+    private StringBuilder content = new StringBuilder();
+    private List<Command> commandHistory = new ArrayList<>();
+    private int currentIndex = -1;
+    
+    public void insertText(String text, int position) {
+        content.insert(position, text);
+    }
+    
+    public void deleteText(int start, int end) {
+        content.delete(start, end);
+    }
+    
+    public String getText(int start, int end) {
+        return content.substring(start, end);
+    }
+    
+    public void executeCommand(Command command) {
+        // 清除当前位置之后的历史
+        while (commandHistory.size() > currentIndex + 1) {
+            commandHistory.remove(commandHistory.size() - 1);
+        }
+        
+        command.execute();
+        commandHistory.add(command);
+        currentIndex++;
+    }
+    
+    public void undo() {
+        if (currentIndex >= 0) {
+            commandHistory.get(currentIndex).undo();
+            currentIndex--;
+        }
+    }
+    
+    public void redo() {
+        if (currentIndex < commandHistory.size() - 1) {
+            currentIndex++;
+            commandHistory.get(currentIndex).execute();
+        }
+    }
+    
+    public String getContent() {
+        return content.toString();
+    }
+}
+```
+
+#### Q5: 如何设计一个订单状态管理系统？
+
+**答**: 可以使用状态模式管理订单的不同状态：
+
+```java title="订单状态管理实现"
+// 订单状态接口
+public interface OrderState {
+    void confirm(Order order);
+    void pay(Order order);
+    void ship(Order order);
+    void deliver(Order order);
+    void cancel(Order order);
+}
+
+// 具体状态实现
+public class PendingState implements OrderState {
+    @Override
+    public void confirm(Order order) {
+        System.out.println("Order confirmed");
+        order.setState(new ConfirmedState());
+    }
+    
+    @Override
+    public void pay(Order order) {
+        System.out.println("Cannot pay pending order");
+    }
+    
+    @Override
+    public void ship(Order order) {
+        System.out.println("Cannot ship pending order");
+    }
+    
+    @Override
+    public void deliver(Order order) {
+        System.out.println("Cannot deliver pending order");
+    }
+    
+    @Override
+    public void cancel(Order order) {
+        System.out.println("Order cancelled");
+        order.setState(new CancelledState());
+    }
+}
+
+public class ConfirmedState implements OrderState {
+    @Override
+    public void confirm(Order order) {
+        System.out.println("Order already confirmed");
+    }
+    
+    @Override
+    public void pay(Order order) {
+        System.out.println("Payment processed");
+        order.setState(new PaidState());
+    }
+    
+    @Override
+    public void ship(Order order) {
+        System.out.println("Cannot ship unpaid order");
+    }
+    
+    @Override
+    public void deliver(Order order) {
+        System.out.println("Cannot deliver unpaid order");
+    }
+    
+    @Override
+    public void cancel(Order order) {
+        System.out.println("Order cancelled");
+        order.setState(new CancelledState());
+    }
+}
+
+// 订单类
+public class Order {
+    private String orderId;
+    private OrderState state;
+    private double amount;
+    
+    public Order(String orderId, double amount) {
+        this.orderId = orderId;
+        this.amount = amount;
+        this.state = new PendingState();
+    }
+    
+    public void confirm() {
+        state.confirm(this);
+    }
+    
+    public void pay() {
+        state.pay(this);
+    }
+    
+    public void ship() {
+        state.ship(this);
+    }
+    
+    public void deliver() {
+        state.deliver(this);
+    }
+    
+    public void cancel() {
+        state.cancel(this);
+    }
+    
+    public void setState(OrderState state) {
+        this.state = state;
+    }
+    
+    public String getOrderId() {
+        return orderId;
+    }
+    
+    public double getAmount() {
+        return amount;
+    }
+}
+```
+
+#### Q6: 如何实现一个简单的计算器，支持不同的计算策略？
+
+**答**: 可以使用策略模式实现计算器的不同运算：
+
+```java title="计算器策略模式实现"
+// 计算策略接口
+public interface CalculationStrategy {
+    double calculate(double a, double b);
+}
+
+// 具体计算策略
+public class AdditionStrategy implements CalculationStrategy {
+    @Override
+    public double calculate(double a, double b) {
+        return a + b;
+    }
+}
+
+public class SubtractionStrategy implements CalculationStrategy {
+    @Override
+    public double calculate(double a, double b) {
+        return a - b;
+    }
+}
+
+public class MultiplicationStrategy implements CalculationStrategy {
+    @Override
+    public double calculate(double a, double b) {
+        return a * b;
+    }
+}
+
+public class DivisionStrategy implements CalculationStrategy {
+    @Override
+    public double calculate(double a, double b) {
+        if (b == 0) {
+            throw new ArithmeticException("Division by zero");
+        }
+        return a / b;
+    }
+}
+
+// 计算器类
+public class Calculator {
+    private CalculationStrategy strategy;
+    
+    public void setStrategy(CalculationStrategy strategy) {
+        this.strategy = strategy;
+    }
+    
+    public double calculate(double a, double b) {
+        if (strategy == null) {
+            throw new IllegalStateException("Strategy not set");
+        }
+        return strategy.calculate(a, b);
+    }
+}
+
+// 使用示例
+public class CalculatorDemo {
+    public static void main(String[] args) {
+        Calculator calculator = new Calculator();
+        
+        double a = 10.0;
+        double b = 5.0;
+        
+        // 加法
+        calculator.setStrategy(new AdditionStrategy());
+        System.out.println(a + " + " + b + " = " + calculator.calculate(a, b));
+        
+        // 减法
+        calculator.setStrategy(new SubtractionStrategy());
+        System.out.println(a + " - " + b + " = " + calculator.calculate(a, b));
+        
+        // 乘法
+        calculator.setStrategy(new MultiplicationStrategy());
+        System.out.println(a + " * " + b + " = " + calculator.calculate(a, b));
+        
+        // 除法
+        calculator.setStrategy(new DivisionStrategy());
+        System.out.println(a + " / " + b + " = " + calculator.calculate(a, b));
+    }
+}
+```
+
+### 6.3 设计模式选择题
+
+#### Q7: 在什么情况下应该使用观察者模式？
+
+**答**: 观察者模式适用于以下场景：
+
+**适用场景**:
+- **事件处理系统**：GUI框架中的按钮点击、键盘输入等事件
+- **数据绑定**：当数据变化时需要通知多个组件更新
+- **消息推送**：实时通知系统，如股票价格变化、新闻推送
+- **日志系统**：多个日志处理器监听日志事件
+- **模型-视图分离**：MVC架构中的模型和视图解耦
+
+**判断标准**:
+- 对象间存在一对多的依赖关系
+- 一个对象的状态变化需要通知其他对象
+- 不希望对象间紧密耦合
+- 需要支持动态添加和移除观察者
+
+**示例场景**:
+```java
+// 股票价格监控系统
+StockMarket market = new StockMarket("AAPL");
+StockTrader trader1 = new StockTrader("John");
+StockTrader trader2 = new StockTrader("Alice");
+
+market.addObserver(trader1);
+market.addObserver(trader2);
+
+market.setPrice(150.0); // 自动通知所有观察者
+```
+
+#### Q8: 策略模式和工厂模式如何结合使用？
+
+**答**: 策略模式和工厂模式可以很好地结合，工厂负责创建策略对象：
+
+```java title="策略工厂模式"
+// 策略工厂
+public class PaymentStrategyFactory {
+    public static PaymentStrategy createStrategy(PaymentType type, Map<String, String> params) {
+        switch (type) {
+            case CREDIT_CARD:
+                return new CreditCardPayment(
+                    params.get("cardNumber"), 
+                    params.get("cvv")
+                );
+            case PAYPAL:
+                return new PayPalPayment(params.get("email"));
+            case BITCOIN:
+                return new BitcoinPayment(params.get("walletAddress"));
+            default:
+                throw new IllegalArgumentException("Unknown payment type: " + type);
+        }
+    }
+}
+
+// 使用示例
+public class PaymentProcessor {
+    public void processPayment(PaymentType type, double amount, Map<String, String> params) {
+        PaymentStrategy strategy = PaymentStrategyFactory.createStrategy(type, params);
+        strategy.pay(amount);
+    }
+}
+```
+
+**结合的优势**:
+- **封装创建逻辑**：客户端不需要知道策略的具体创建过程
+- **参数化创建**：工厂可以根据参数创建不同的策略实例
+- **统一接口**：所有策略通过统一的工厂方法创建
+- **易于扩展**：添加新策略只需要修改工厂类
+
+### 6.4 性能与最佳实践
+
+#### Q9: 行为型模式对性能有什么影响？如何优化？
+
+**答**: 行为型模式可能对性能产生以下影响：
+
+**性能影响**:
+- **对象创建开销**：每个策略、命令、状态都是一个对象
+- **方法调用开销**：额外的接口调用和虚方法调用
+- **内存占用**：更多的对象占用更多内存
+- **缓存不友好**：对象分散可能影响CPU缓存效率
+
+**优化策略**:
+```java title="性能优化示例"
+// 1. 对象池化
+public class CommandPool {
+    private static final Queue<Command> pool = new ConcurrentLinkedQueue<>();
+    
+    public static Command borrow() {
+        Command command = pool.poll();
+        return command != null ? command : new ConcreteCommand();
+    }
+    
+    public static void release(Command command) {
+        command.reset(); // 重置状态
+        pool.offer(command);
+    }
+}
+
+// 2. 享元模式结合
+public class LightweightStrategy {
+    private static final Map<String, CalculationStrategy> strategies = new HashMap<>();
+    
+    static {
+        strategies.put("add", new AdditionStrategy());
+        strategies.put("sub", new SubtractionStrategy());
+        strategies.put("mul", new MultiplicationStrategy());
+        strategies.put("div", new DivisionStrategy());
+    }
+    
+    public static CalculationStrategy getStrategy(String type) {
+        return strategies.get(type);
+    }
+}
+
+// 3. 函数式接口（减少对象创建）
+public class FunctionalCalculator {
+    private BiFunction<Double, Double, Double> strategy;
+    
+    public void setStrategy(BiFunction<Double, Double, Double> strategy) {
+        this.strategy = strategy;
+    }
+    
+    public double calculate(double a, double b) {
+        return strategy.apply(a, b);
+    }
+}
+```
+
+#### Q10: 如何在实际项目中合理选择和使用行为型模式？
+
+**答**: 选择行为型模式需要考虑以下因素：
+
+**选择标准**:
+1. **问题类型**：明确要解决的是通信、算法封装还是状态管理问题
+2. **系统复杂度**：简单问题可能不需要复杂的设计模式
+3. **扩展需求**：是否需要支持未来的功能扩展
+4. **团队能力**：团队对模式的熟悉程度
+5. **性能要求**：对性能敏感的场景需要权衡
+
+**最佳实践**:
+```java title="模式选择指南"
+// 1. 从简单开始，逐步重构
+public class SimpleCalculator {
+    public double calculate(String operation, double a, double b) {
+        switch (operation) {
+            case "add": return a + b;
+            case "sub": return a - b;
+            case "mul": return a * b;
+            case "div": return a / b;
+            default: throw new IllegalArgumentException("Unknown operation");
+        }
+    }
+}
+
+// 2. 当需要扩展时，引入策略模式
+public class CalculatorWithStrategy {
+    private Map<String, CalculationStrategy> strategies = new HashMap<>();
+    
+    public void registerStrategy(String name, CalculationStrategy strategy) {
+        strategies.put(name, strategy);
+    }
+    
+    public double calculate(String operation, double a, double b) {
+        CalculationStrategy strategy = strategies.get(operation);
+        if (strategy == null) {
+            throw new IllegalArgumentException("Unknown operation: " + operation);
+        }
+        return strategy.calculate(a, b);
+    }
+}
+```
+
+**实施建议**:
+- **渐进式引入**：不要一次性重构所有代码
+- **充分测试**：确保模式引入不破坏现有功能
+- **文档化**：记录模式的使用原因和方式
+- **团队培训**：确保团队理解模式的使用
+- **性能监控**：监控模式对性能的影响
+
+:::tip 行为型模式学习要点
+1. **理解通信机制**：掌握对象间如何协作和通信
+2. **掌握状态管理**：学会管理对象的状态变化
+3. **灵活运用策略**：根据场景选择合适的模式
+4. **注重性能优化**：在功能和性能间找到平衡
+5. **实践应用**：在实际项目中应用这些模式
+:::
+
+---
+
+通过本章的学习，你应该已经深入理解了行为型设计模式的核心概念、实现方式和应用场景。行为型模式是解决对象间通信和协作问题的重要工具，合理使用这些模式可以显著提高代码的可维护性、可扩展性和可读性。在实际开发中，要根据具体需求选择合适的模式，避免过度设计，同时注重性能优化和团队协作。

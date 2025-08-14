@@ -1,442 +1,1133 @@
 ---
-sidebar_position: 3
-title: "锁机制"
-description: "Java锁机制详解"
+sidebar_position: 6
+title: "Java锁机制详解"
+description: "全面介绍Java锁机制、synchronized、Lock接口、读写锁与最佳实践"
 authors: [Laby]
 last_update:
-  date: 2025-08-07
+  date: 2025-01-07
   author: Laby
 ---
 
-# 锁机制
+# Java 锁机制详解
 
-锁是Java并发编程中用于保护共享资源的重要机制，理解各种锁的特性和使用场景对于编写线程安全的代码至关重要。
+锁是Java并发编程中实现线程同步的核心机制，理解各种锁的特性和使用场景对于构建高性能的并发应用至关重要。本文将详细介绍Java中的各种锁机制。
 
-## synchronized关键字
+## 1. 锁机制概述
 
-### 1. 基本用法
-```java
-public class SynchronizedExample {
-    private int count = 0;
-    
-    // 方法级同步
-    public synchronized void increment() {
-        count++;
-    }
-    
-    // 代码块同步
-    public void incrementWithBlock() {
-        synchronized (this) {
-            count++;
-        }
-    }
-    
-    // 静态方法同步
-    public static synchronized void staticMethod() {
-        System.out.println("Static synchronized method");
-    }
-    
-    // 类锁
-    public void classLock() {
-        synchronized (SynchronizedExample.class) {
-            System.out.println("Class lock");
-        }
-    }
-}
-```
+### 1.1 什么是锁？
 
-### 2. 对象锁和类锁
-```java
-public class LockExample {
-    // 对象锁
-    public synchronized void instanceMethod() {
-        System.out.println("Instance method");
-    }
+:::tip 核心概念
+锁是一种同步机制，用于控制多个线程对共享资源的访问。锁确保在任意时刻只有一个线程能够访问被保护的资源，从而保证数据的一致性和完整性。
+:::
+
+### 1.2 锁的分类
+
+| 分类维度 | 类型 | 特点 | 适用场景 |
+|----------|------|------|----------|
+| **实现方式** | synchronized | 内置锁，自动管理 | 简单同步需求 |
+| | Lock接口 | 显式锁，手动管理 | 复杂同步需求 |
+| **公平性** | 非公平锁 | 性能高，不保证顺序 | 一般场景 |
+| | 公平锁 | 保证FIFO顺序 | 需要公平性场景 |
+| **可重入性** | 可重入锁 | 同一线程可多次获取 | 递归调用场景 |
+| | 不可重入锁 | 同一线程只能获取一次 | 简单场景 |
+| **读写特性** | 独占锁 | 只允许一个线程访问 | 写操作 |
+| | 读写锁 | 允许多个读，单个写 | 读多写少场景 |
+
+### 1.3 锁的性能特性
+
+```java title="锁性能特性对比"
+public class LockPerformanceCharacteristics {
     
-    // 类锁
-    public static synchronized void staticMethod() {
-        System.out.println("Static method");
-    }
-    
-    public static void main(String[] args) {
-        LockExample obj1 = new LockExample();
-        LockExample obj2 = new LockExample();
+    /**
+     * 锁的性能特性对比
+     */
+    public static void performanceComparison() {
+        System.out.println("=== 锁性能特性对比 ===");
         
-        // 对象锁：同一个对象的方法会互斥
-        Thread t1 = new Thread(() -> obj1.instanceMethod());
-        Thread t2 = new Thread(() -> obj1.instanceMethod());
+        // 1. synchronized - 内置锁
+        // 优点：简单易用，自动管理
+        // 缺点：功能有限，无法中断等待
+        synchronized (LockPerformanceCharacteristics.class) {
+            System.out.println("synchronized: 内置锁，自动管理");
+        }
         
-        // 类锁：所有对象的静态方法都会互斥
-        Thread t3 = new Thread(() -> LockExample.staticMethod());
-        Thread t4 = new Thread(() -> LockExample.staticMethod());
+        // 2. ReentrantLock - 可重入锁
+        // 优点：功能丰富，支持中断、超时、公平性
+        // 缺点：需要手动管理，可能忘记释放
+        ReentrantLock reentrantLock = new ReentrantLock();
+        reentrantLock.lock();
+        try {
+            System.out.println("ReentrantLock: 功能丰富，手动管理");
+        } finally {
+            reentrantLock.unlock();
+        }
         
-        t1.start();
-        t2.start();
-        t3.start();
-        t4.start();
-    }
-}
-```
-
-### 3. synchronized原理
-```java
-public class SynchronizedPrinciple {
-    public synchronized void method1() {
-        System.out.println("Method 1");
-    }
-    
-    public void method2() {
-        synchronized (this) {
-            System.out.println("Method 2");
-        }
-    }
-}
-
-// 编译后的字节码大致相当于：
-public class SynchronizedPrinciple {
-    public void method1() {
-        // 获取对象锁
-        monitorenter;
+        // 3. ReadWriteLock - 读写锁
+        // 优点：读读并发，提高性能
+        // 缺点：实现复杂，可能写饥饿
+        ReadWriteLock readWriteLock = new ReentrantReadWriteLock();
+        Lock readLock = readWriteLock.readLock();
+        Lock writeLock = readWriteLock.writeLock();
+        
+        readLock.lock();
         try {
-            System.out.println("Method 1");
+            System.out.println("ReadWriteLock: 读写分离，提高并发");
         } finally {
-            // 释放对象锁
-            monitorexit;
+            readLock.unlock();
         }
     }
 }
 ```
 
-## ReentrantLock
+## 2. synchronized 关键字
 
-### 1. 基本用法
-```java
-import java.util.concurrent.locks.ReentrantLock;
+### 2.1 synchronized 基本用法
 
-public class ReentrantLockExample {
-    private final ReentrantLock lock = new ReentrantLock();
-    private int count = 0;
+synchronized是Java内置的锁机制，使用简单但功能相对有限。
+
+```java title="synchronized基本用法示例"
+public class SynchronizedExamples {
     
-    public void increment() {
-        lock.lock();
-        try {
-            count++;
-        } finally {
-            lock.unlock();
+    /**
+     * 1. 实例方法同步
+     * 锁对象是当前实例(this)
+     */
+    public static class InstanceMethodSync {
+        private int counter = 0;
+        
+        public synchronized void increment() {
+            counter++;
+        }
+        
+        public synchronized void decrement() {
+            counter--;
+        }
+        
+        public synchronized int getCounter() {
+            return counter;
         }
     }
     
-    public int getCount() {
-        lock.lock();
-        try {
-            return count;
-        } finally {
-            lock.unlock();
+    /**
+     * 2. 静态方法同步
+     * 锁对象是类对象(Class对象)
+     */
+    public static class StaticMethodSync {
+        private static int counter = 0;
+        
+        public static synchronized void increment() {
+            counter++;
+        }
+        
+        public static synchronized void decrement() {
+            counter--;
+        }
+        
+        public static synchronized int getCounter() {
+            return counter;
+        }
+    }
+    
+    /**
+     * 3. 代码块同步
+     * 可以指定锁对象
+     */
+    public static class BlockSync {
+        private int counter = 0;
+        private final Object lock = new Object();
+        
+        public void increment() {
+            synchronized (lock) {
+                counter++;
+            }
+        }
+        
+        public void decrement() {
+            synchronized (lock) {
+                counter--;
+            }
+        }
+        
+        public int getCounter() {
+            synchronized (lock) {
+                return counter;
+            }
+        }
+        
+        // 使用this作为锁
+        public void incrementWithThis() {
+            synchronized (this) {
+                counter++;
+            }
+        }
+        
+        // 使用类对象作为锁
+        public void incrementWithClass() {
+            synchronized (BlockSync.class) {
+                counter++;
+            }
+        }
+    }
+    
+    /**
+     * 4. 双重检查锁定模式
+     */
+    public static class DoubleCheckedLocking {
+        private volatile static DoubleCheckedLocking instance;
+        
+        private DoubleCheckedLocking() {}
+        
+        public static DoubleCheckedLocking getInstance() {
+            if (instance == null) {
+                synchronized (DoubleCheckedLocking.class) {
+                    if (instance == null) {
+                        instance = new DoubleCheckedLocking();
+                    }
+                }
+            }
+            return instance;
         }
     }
 }
 ```
 
-### 2. 公平锁和非公平锁
-```java
-public class FairLockExample {
-    // 公平锁：按照申请锁的顺序获取锁
-    private final ReentrantLock fairLock = new ReentrantLock(true);
-    
-    // 非公平锁：默认，可能产生饥饿现象
-    private final ReentrantLock unfairLock = new ReentrantLock(false);
-    
-    public void fairMethod() {
-        fairLock.lock();
-        try {
-            System.out.println("Fair lock: " + Thread.currentThread().getName());
-            Thread.sleep(100);
-        } catch (InterruptedException e) {
-            e.printStackTrace();
-        } finally {
-            fairLock.unlock();
-        }
-    }
-    
-    public void unfairMethod() {
-        unfairLock.lock();
-        try {
-            System.out.println("Unfair lock: " + Thread.currentThread().getName());
-            Thread.sleep(100);
-        } catch (InterruptedException e) {
-            e.printStackTrace();
-        } finally {
-            unfairLock.unlock();
-        }
-    }
-}
-```
+### 2.2 synchronized 的特性
 
-### 3. 可中断锁
-```java
-public class InterruptibleLockExample {
-    private final ReentrantLock lock = new ReentrantLock();
+```java title="synchronized特性示例"
+public class SynchronizedFeatures {
     
-    public void interruptibleMethod() {
-        try {
-            // 可中断的获取锁
-            lock.lockInterruptibly();
+    /**
+     * 1. 可重入性
+     * 同一线程可以多次获取同一个锁
+     */
+    public static class ReentrantExample {
+        public synchronized void method1() {
+            System.out.println("method1 获得锁");
+            method2(); // 调用method2，可以再次获得锁
+            System.out.println("method1 释放锁");
+        }
+        
+        public synchronized void method2() {
+            System.out.println("method2 获得锁");
+            System.out.println("method2 释放锁");
+        }
+    }
+    
+    /**
+     * 2. 自动释放
+     * 方法执行完毕或异常时自动释放锁
+     */
+    public static class AutoReleaseExample {
+        public synchronized void safeMethod() {
             try {
-                System.out.println("Lock acquired");
-                Thread.sleep(5000);
+                System.out.println("执行可能抛出异常的操作");
+                if (Math.random() > 0.5) {
+                    throw new RuntimeException("模拟异常");
+                }
+            } catch (Exception e) {
+                System.out.println("捕获异常: " + e.getMessage());
+                // 锁会自动释放，无需手动处理
+            }
+        }
+    }
+    
+    /**
+     * 3. 内存可见性
+     * synchronized保证内存可见性
+     */
+    public static class VisibilityExample {
+        private boolean flag = false;
+        
+        public synchronized void setFlag() {
+            flag = true;
+        }
+        
+        public synchronized boolean getFlag() {
+            return flag;
+        }
+    }
+    
+    /**
+     * 4. 原子性
+     * synchronized保证操作的原子性
+     */
+    public static class AtomicityExample {
+        private int counter = 0;
+        
+        public synchronized void increment() {
+            counter++; // 这个操作是原子的
+        }
+        
+        public synchronized void complexOperation() {
+            // 复合操作也是原子的
+            int temp = counter;
+            temp = temp + 1;
+            counter = temp;
+        }
+    }
+}
+```
+
+### 2.3 synchronized 的局限性
+
+```java title="synchronized局限性示例"
+public class SynchronizedLimitations {
+    
+    /**
+     * 1. 无法中断等待
+     * synchronized无法响应中断
+     */
+    public static class NonInterruptibleExample {
+        public synchronized void longRunningMethod() {
+            try {
+                System.out.println("开始长时间运行");
+                Thread.sleep(10000); // 10秒
+                System.out.println("长时间运行完成");
+            } catch (InterruptedException e) {
+                System.out.println("被中断，但synchronized无法响应");
+                Thread.currentThread().interrupt();
+            }
+        }
+    }
+    
+    /**
+     * 2. 无法设置超时
+     * synchronized无法设置获取锁的超时时间
+     */
+    public static class NoTimeoutExample {
+        public synchronized void method() {
+            // 如果锁被其他线程持有，会一直等待
+            System.out.println("无法设置超时时间");
+        }
+    }
+    
+    /**
+     * 3. 无法实现公平性
+     * synchronized无法保证FIFO顺序
+     */
+    public static class NonFairExample {
+        public synchronized void method() {
+            System.out.println("无法保证公平性");
+        }
+    }
+    
+    /**
+     * 4. 无法获取等待队列信息
+     * synchronized无法获取等待线程信息
+     */
+    public static class NoQueueInfoExample {
+        public synchronized void method() {
+            System.out.println("无法获取等待队列信息");
+        }
+    }
+}
+```
+
+## 3. Lock 接口
+
+### 3.1 Lock 接口基本用法
+
+Lock接口提供了比synchronized更丰富的功能。
+
+```java title="Lock接口基本用法示例"
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
+import java.util.concurrent.TimeUnit;
+
+public class LockInterfaceExamples {
+    
+    /**
+     * 1. 基本Lock使用
+     */
+    public static class BasicLockExample {
+        private final Lock lock = new ReentrantLock();
+        private int counter = 0;
+        
+        public void increment() {
+            lock.lock();
+            try {
+                counter++;
+            } finally {
+                lock.unlock(); // 必须在finally中释放锁
+            }
+        }
+        
+        public void decrement() {
+            lock.lock();
+            try {
+                counter--;
             } finally {
                 lock.unlock();
             }
-        } catch (InterruptedException e) {
-            System.out.println("Interrupted while waiting for lock");
+        }
+        
+        public int getCounter() {
+            lock.lock();
+            try {
+                return counter;
+            } finally {
+                lock.unlock();
+            }
         }
     }
-}
-```
-
-### 4. 限时锁
-```java
-import java.util.concurrent.TimeUnit;
-
-public class TimedLockExample {
-    private final ReentrantLock lock = new ReentrantLock();
     
-    public boolean tryLockMethod() {
-        try {
-            // 尝试在指定时间内获取锁
-            if (lock.tryLock(1, TimeUnit.SECONDS)) {
+    /**
+     * 2. 可中断锁
+     */
+    public static class InterruptibleLockExample {
+        private final Lock lock = new ReentrantLock();
+        
+        public void interruptibleMethod() {
+            try {
+                lock.lockInterruptibly(); // 可中断的获取锁
                 try {
-                    System.out.println("Lock acquired");
-                    Thread.sleep(2000);
+                    System.out.println("获得锁，开始处理");
+                    Thread.sleep(5000); // 模拟长时间处理
+                    System.out.println("处理完成");
+                } finally {
+                    lock.unlock();
+                }
+            } catch (InterruptedException e) {
+                System.out.println("获取锁时被中断");
+                Thread.currentThread().interrupt();
+            }
+        }
+    }
+    
+    /**
+     * 3. 超时锁
+     */
+    public static class TimeoutLockExample {
+        private final Lock lock = new ReentrantLock();
+        
+        public boolean tryWithTimeout(long timeout, TimeUnit unit) {
+            try {
+                if (lock.tryLock(timeout, unit)) {
+                    try {
+                        System.out.println("在超时时间内获得锁");
+                        Thread.sleep(1000);
+                        return true;
+                    } finally {
+                        lock.unlock();
+                    }
+                } else {
+                    System.out.println("获取锁超时");
+                    return false;
+                }
+            } catch (InterruptedException e) {
+                System.out.println("获取锁时被中断");
+                Thread.currentThread().interrupt();
+                return false;
+            }
+        }
+        
+        public boolean tryLock() {
+            if (lock.tryLock()) {
+                try {
+                    System.out.println("立即尝试获得锁成功");
                     return true;
                 } finally {
                     lock.unlock();
                 }
             } else {
-                System.out.println("Failed to acquire lock");
+                System.out.println("立即尝试获得锁失败");
                 return false;
             }
-        } catch (InterruptedException e) {
-            System.out.println("Interrupted");
-            return false;
+        }
+    }
+    
+    /**
+     * 4. 公平锁
+     */
+    public static class FairLockExample {
+        private final Lock fairLock = new ReentrantLock(true); // 公平锁
+        private final Lock unfairLock = new ReentrantLock(false); // 非公平锁
+        
+        public void fairMethod() {
+            fairLock.lock();
+            try {
+                System.out.println("公平锁: " + Thread.currentThread().getName());
+                Thread.sleep(100);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            } finally {
+                fairLock.unlock();
+            }
+        }
+        
+        public void unfairMethod() {
+            unfairLock.lock();
+            try {
+                System.out.println("非公平锁: " + Thread.currentThread().getName());
+                Thread.sleep(100);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            } finally {
+                unfairLock.unlock();
+            }
         }
     }
 }
 ```
 
-## 读写锁
+### 3.2 ReentrantLock 高级特性
 
-### 1. ReadWriteLock
-```java
+```java title="ReentrantLock高级特性示例"
+public class ReentrantLockAdvancedFeatures {
+    
+    /**
+     * 1. 获取锁信息
+     */
+    public static class LockInfoExample {
+        private final ReentrantLock lock = new ReentrantLock();
+        
+        public void methodWithInfo() {
+            lock.lock();
+            try {
+                System.out.println("当前线程: " + Thread.currentThread().getName());
+                System.out.println("持有锁的线程: " + lock.getOwner());
+                System.out.println("等待队列长度: " + lock.getQueueLength());
+                System.out.println("是否有线程等待: " + lock.hasQueuedThreads());
+                System.out.println("当前线程是否在等待队列中: " + lock.hasQueuedThread(Thread.currentThread()));
+            } finally {
+                lock.unlock();
+            }
+        }
+    }
+    
+    /**
+     * 2. 条件变量
+     */
+    public static class ConditionExample {
+        private final ReentrantLock lock = new ReentrantLock();
+        private final Condition condition = lock.newCondition();
+        private boolean flag = false;
+        
+        public void await() {
+            lock.lock();
+            try {
+                while (!flag) {
+                    System.out.println("等待条件满足");
+                    condition.await(); // 等待条件
+                }
+                System.out.println("条件满足，继续执行");
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            } finally {
+                lock.unlock();
+            }
+        }
+        
+        public void signal() {
+            lock.lock();
+            try {
+                flag = true;
+                System.out.println("设置条件并通知");
+                condition.signal(); // 通知等待的线程
+            } finally {
+                lock.unlock();
+            }
+        }
+        
+        public void signalAll() {
+            lock.lock();
+            try {
+                flag = true;
+                System.out.println("设置条件并通知所有等待线程");
+                condition.signalAll(); // 通知所有等待的线程
+            } finally {
+                lock.unlock();
+            }
+        }
+    }
+    
+    /**
+     * 3. 多个条件变量
+     */
+    public static class MultipleConditionExample {
+        private final ReentrantLock lock = new ReentrantLock();
+        private final Condition notEmpty = lock.newCondition();
+        private final Condition notFull = lock.newCondition();
+        private final int capacity = 10;
+        private int count = 0;
+        
+        public void put() {
+            lock.lock();
+            try {
+                while (count >= capacity) {
+                    System.out.println("队列已满，等待消费");
+                    notFull.await();
+                }
+                count++;
+                System.out.println("生产一个元素，当前数量: " + count);
+                notEmpty.signal(); // 通知消费者
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            } finally {
+                lock.unlock();
+            }
+        }
+        
+        public void take() {
+            lock.lock();
+            try {
+                while (count <= 0) {
+                    System.out.println("队列为空，等待生产");
+                    notEmpty.await();
+                }
+                count--;
+                System.out.println("消费一个元素，当前数量: " + count);
+                notFull.signal(); // 通知生产者
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            } finally {
+                lock.unlock();
+            }
+        }
+    }
+}
+```
+
+## 4. 读写锁 (ReadWriteLock)
+
+### 4.1 读写锁基本用法
+
+读写锁允许多个线程同时读取，但只允许一个线程写入。
+
+```java title="读写锁基本用法示例"
 import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
-public class ReadWriteLockExample {
-    private final ReadWriteLock lock = new ReentrantReadWriteLock();
-    private final Lock readLock = lock.readLock();
-    private final Lock writeLock = lock.writeLock();
-    private String data = "Initial data";
+public class ReadWriteLockExamples {
     
-    public String readData() {
-        readLock.lock();
-        try {
-            System.out.println("Reading data: " + Thread.currentThread().getName());
-            Thread.sleep(100);
-            return data;
-        } catch (InterruptedException e) {
-            e.printStackTrace();
-            return null;
-        } finally {
-            readLock.unlock();
-        }
-    }
-    
-    public void writeData(String newData) {
-        writeLock.lock();
-        try {
-            System.out.println("Writing data: " + Thread.currentThread().getName());
-            Thread.sleep(1000);
-            this.data = newData;
-        } catch (InterruptedException e) {
-            e.printStackTrace();
-        } finally {
-            writeLock.unlock();
-        }
-    }
-}
-```
-
-### 2. 读写锁的特性
-```java
-public class ReadWriteLockFeatures {
-    private final ReadWriteLock lock = new ReentrantReadWriteLock();
-    private final Lock readLock = lock.readLock();
-    private final Lock writeLock = lock.writeLock();
-    
-    public void demonstrateFeatures() {
-        // 多个读锁可以同时获取
-        Thread reader1 = new Thread(() -> {
+    /**
+     * 1. 基本读写锁使用
+     */
+    public static class BasicReadWriteLock {
+        private final ReadWriteLock lock = new ReentrantReadWriteLock();
+        private final Lock readLock = lock.readLock();
+        private final Lock writeLock = lock.writeLock();
+        private String data = "initial";
+        
+        public String read() {
             readLock.lock();
             try {
-                System.out.println("Reader 1 acquired lock");
-                Thread.sleep(1000);
-            } catch (InterruptedException e) {
-                e.printStackTrace();
+                System.out.println("读取数据: " + data);
+                return data;
             } finally {
                 readLock.unlock();
             }
-        });
+        }
         
-        Thread reader2 = new Thread(() -> {
-            readLock.lock();
-            try {
-                System.out.println("Reader 2 acquired lock");
-                Thread.sleep(1000);
-            } catch (InterruptedException e) {
-                e.printStackTrace();
-            } finally {
-                readLock.unlock();
-            }
-        });
-        
-        // 写锁是独占的
-        Thread writer = new Thread(() -> {
+        public void write(String newData) {
             writeLock.lock();
             try {
-                System.out.println("Writer acquired lock");
-                Thread.sleep(1000);
-            } catch (InterruptedException e) {
-                e.printStackTrace();
+                System.out.println("写入数据: " + newData);
+                data = newData;
             } finally {
                 writeLock.unlock();
             }
-        });
+        }
+    }
+    
+    /**
+     * 2. 缓存实现
+     */
+    public static class CacheExample {
+        private final ReadWriteLock lock = new ReentrantReadWriteLock();
+        private final Lock readLock = lock.readLock();
+        private final Lock writeLock = lock.writeLock();
+        private final Map<String, String> cache = new HashMap<>();
         
-        reader1.start();
-        reader2.start();
-        writer.start();
+        public String get(String key) {
+            readLock.lock();
+            try {
+                String value = cache.get(key);
+                if (value != null) {
+                    System.out.println("缓存命中: " + key + " = " + value);
+                    return value;
+                }
+            } finally {
+                readLock.unlock();
+            }
+            
+            // 缓存未命中，需要写入
+            writeLock.lock();
+            try {
+                // 双重检查，防止其他线程已经写入
+                String value = cache.get(key);
+                if (value != null) {
+                    return value;
+                }
+                
+                // 模拟从数据库加载
+                value = loadFromDatabase(key);
+                cache.put(key, value);
+                System.out.println("缓存未命中，加载并缓存: " + key + " = " + value);
+                return value;
+            } finally {
+                writeLock.unlock();
+            }
+        }
+        
+        public void put(String key, String value) {
+            writeLock.lock();
+            try {
+                cache.put(key, value);
+                System.out.println("更新缓存: " + key + " = " + value);
+            } finally {
+                writeLock.unlock();
+            }
+        }
+        
+        public void clear() {
+            writeLock.lock();
+            try {
+                cache.clear();
+                System.out.println("清空缓存");
+            } finally {
+                writeLock.unlock();
+            }
+        }
+        
+        private String loadFromDatabase(String key) {
+            // 模拟数据库查询
+            try {
+                Thread.sleep(100);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+            return "data_for_" + key;
+        }
+    }
+    
+    /**
+     * 3. 读写锁的升级和降级
+     */
+    public static class LockUpgradeDowngrade {
+        private final ReadWriteLock lock = new ReentrantReadWriteLock();
+        private final Lock readLock = lock.readLock();
+        private final Lock writeLock = lock.writeLock();
+        private String data = "initial";
+        
+        /**
+         * 错误的升级方式 - 会导致死锁
+         */
+        public void wrongUpgrade() {
+            readLock.lock();
+            try {
+                // 这里尝试获取写锁会导致死锁
+                // writeLock.lock(); // 错误！
+                System.out.println("读取数据: " + data);
+            } finally {
+                readLock.unlock();
+            }
+        }
+        
+        /**
+         * 正确的升级方式 - 先释放读锁，再获取写锁
+         */
+        public void correctUpgrade() {
+            readLock.lock();
+            try {
+                System.out.println("读取数据: " + data);
+                if (data.equals("need_update")) {
+                    // 先释放读锁
+                    readLock.unlock();
+                    // 再获取写锁
+                    writeLock.lock();
+                    try {
+                        data = "updated";
+                        System.out.println("升级为写锁并更新数据");
+                    } finally {
+                        writeLock.unlock();
+                        // 重新获取读锁
+                        readLock.lock();
+                    }
+                }
+            } finally {
+                readLock.unlock();
+            }
+        }
+        
+        /**
+         * 降级 - 从写锁降级为读锁
+         */
+        public void downgrade() {
+            writeLock.lock();
+            try {
+                data = "new_data";
+                System.out.println("写入新数据");
+                
+                // 降级为读锁
+                readLock.lock();
+                writeLock.unlock(); // 释放写锁
+                
+                try {
+                    System.out.println("降级为读锁，读取数据: " + data);
+                } finally {
+                    readLock.unlock();
+                }
+            } finally {
+                // 确保写锁被释放
+                if (writeLock.tryLock()) {
+                    writeLock.unlock();
+                }
+            }
+        }
     }
 }
 ```
 
-## 锁优化
+### 4.2 读写锁的性能特性
 
-### 1. 锁分离
-```java
-public class LockSeparationExample {
-    // 分离读写锁
-    private final ReadWriteLock lock = new ReentrantReadWriteLock();
-    private final Lock readLock = lock.readLock();
-    private final Lock writeLock = lock.writeLock();
+```java title="读写锁性能特性示例"
+public class ReadWriteLockPerformance {
     
-    private String data;
-    private int readCount = 0;
-    private int writeCount = 0;
-    
-    public String read() {
-        readLock.lock();
-        try {
-            readCount++;
-            return data;
-        } finally {
-            readLock.unlock();
+    /**
+     * 读写锁性能测试
+     */
+    public static class PerformanceTest {
+        private final ReadWriteLock lock = new ReentrantReadWriteLock();
+        private final Lock readLock = lock.readLock();
+        private final Lock writeLock = lock.writeLock();
+        private int data = 0;
+        
+        public void readOperation() {
+            readLock.lock();
+            try {
+                // 模拟读取操作
+                int value = data;
+                Thread.sleep(1);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            } finally {
+                readLock.unlock();
+            }
         }
-    }
-    
-    public void write(String newData) {
-        writeLock.lock();
-        try {
-            writeCount++;
-            this.data = newData;
-        } finally {
-            writeLock.unlock();
+        
+        public void writeOperation() {
+            writeLock.lock();
+            try {
+                // 模拟写入操作
+                data++;
+                Thread.sleep(10);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            } finally {
+                writeLock.unlock();
+            }
+        }
+        
+        /**
+         * 性能对比测试
+         */
+        public void performanceComparison() {
+            System.out.println("=== 读写锁性能测试 ===");
+            
+            // 测试读多写少的场景
+            long startTime = System.currentTimeMillis();
+            
+            // 启动多个读线程
+            for (int i = 0; i < 10; i++) {
+                new Thread(() -> {
+                    for (int j = 0; j < 1000; j++) {
+                        readOperation();
+                    }
+                }).start();
+            }
+            
+            // 启动少量写线程
+            for (int i = 0; i < 2; i++) {
+                new Thread(() -> {
+                    for (int j = 0; j < 100; j++) {
+                        writeOperation();
+                    }
+                }).start();
+            }
+            
+            // 等待所有线程完成
+            try {
+                Thread.sleep(5000);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+            
+            long endTime = System.currentTimeMillis();
+            System.out.println("读写锁测试完成，耗时: " + (endTime - startTime) + "ms");
         }
     }
 }
 ```
 
-### 2. 锁粗化
-```java
-public class LockCoarseningExample {
-    private final Object lock = new Object();
+## 5. 锁的最佳实践
+
+### 5.1 锁的选择策略
+
+:::tip 核心原则
+选择合适的锁机制需要考虑以下因素：
+- **简单场景**：优先使用synchronized
+- **复杂需求**：使用Lock接口（中断、超时、公平性）
+- **读多写少**：使用读写锁
+- **性能要求**：考虑无锁数据结构
+:::
+
+### 5.2 避免死锁
+
+```java title="避免死锁示例"
+public class DeadlockPrevention {
     
-    // 锁粗化：将多个小锁合并为一个大锁
-    public void coarseGrainedLock() {
-        synchronized (lock) {
-            // 操作1
-            System.out.println("Operation 1");
-            // 操作2
-            System.out.println("Operation 2");
-            // 操作3
-            System.out.println("Operation 3");
+    /**
+     * 1. 固定锁顺序
+     */
+    public static class FixedLockOrder {
+        private final Object lock1 = new Object();
+        private final Object lock2 = new Object();
+        
+        public void method1() {
+            synchronized (lock1) {
+                synchronized (lock2) {
+                    System.out.println("method1 执行");
+                }
+            }
+        }
+        
+        public void method2() {
+            // 使用相同的锁顺序
+            synchronized (lock1) {
+                synchronized (lock2) {
+                    System.out.println("method2 执行");
+                }
+            }
         }
     }
     
-    // 锁细化：将大锁拆分为多个小锁
-    private final Object lock1 = new Object();
-    private final Object lock2 = new Object();
-    
-    public void fineGrainedLock() {
-        synchronized (lock1) {
-            System.out.println("Operation 1");
+    /**
+     * 2. 使用超时机制
+     */
+    public static class TimeoutPrevention {
+        private final ReentrantLock lock1 = new ReentrantLock();
+        private final ReentrantLock lock2 = new ReentrantLock();
+        
+        public void method1() {
+            if (lock1.tryLock()) {
+                try {
+                    if (lock2.tryLock(5, TimeUnit.SECONDS)) {
+                        try {
+                            System.out.println("method1 执行");
+                        } finally {
+                            lock2.unlock();
+                        }
+                    } else {
+                        System.out.println("method1 获取锁2超时");
+                    }
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                } finally {
+                    lock1.unlock();
+                }
+            }
         }
-        synchronized (lock2) {
-            System.out.println("Operation 2");
+        
+        public void method2() {
+            if (lock2.tryLock()) {
+                try {
+                    if (lock1.tryLock(5, TimeUnit.SECONDS)) {
+                        try {
+                            System.out.println("method2 执行");
+                        } finally {
+                            lock1.unlock();
+                        }
+                    } else {
+                        System.out.println("method2 获取锁1超时");
+                    }
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                } finally {
+                    lock2.unlock();
+                }
+            }
+        }
+    }
+    
+    /**
+     * 3. 使用锁的层次结构
+     */
+    public static class LockHierarchy {
+        private final Object lock1 = new Object();
+        private final Object lock2 = new Object();
+        private final Object lock3 = new Object();
+        
+        public void method1() {
+            synchronized (lock1) {
+                synchronized (lock2) {
+                    synchronized (lock3) {
+                        System.out.println("method1 执行");
+                    }
+                }
+            }
+        }
+        
+        public void method2() {
+            synchronized (lock1) {
+                synchronized (lock2) {
+                    System.out.println("method2 执行");
+                }
+            }
+        }
+        
+        public void method3() {
+            synchronized (lock1) {
+                System.out.println("method3 执行");
+            }
         }
     }
 }
 ```
 
-### 3. 无锁编程
-```java
-import java.util.concurrent.atomic.AtomicInteger;
+### 5.3 性能优化技巧
 
-public class LockFreeExample {
-    private AtomicInteger counter = new AtomicInteger(0);
+```java title="锁性能优化示例"
+public class LockPerformanceOptimization {
     
-    public void increment() {
-        counter.incrementAndGet();
+    /**
+     * 1. 减少锁的粒度
+     */
+    public static class FineGrainedLocking {
+        private final Object[] locks = new Object[16];
+        private final int[] counters = new int[16];
+        
+        public FineGrainedLocking() {
+            for (int i = 0; i < locks.length; i++) {
+                locks[i] = new Object();
+            }
+        }
+        
+        public void increment(int key) {
+            int index = Math.abs(key % locks.length);
+            synchronized (locks[index]) {
+                counters[index]++;
+            }
+        }
+        
+        public int getTotal() {
+            int total = 0;
+            for (int i = 0; i < locks.length; i++) {
+                synchronized (locks[i]) {
+                    total += counters[i];
+                }
+            }
+            return total;
+        }
     }
     
-    public int getCount() {
-        return counter.get();
+    /**
+     * 2. 使用读写锁提高并发性
+     */
+    public static class ReadWriteOptimization {
+        private final ReadWriteLock lock = new ReentrantReadWriteLock();
+        private final Lock readLock = lock.readLock();
+        private final Lock writeLock = lock.writeLock();
+        private final Map<String, String> data = new HashMap<>();
+        
+        public String get(String key) {
+            readLock.lock();
+            try {
+                return data.get(key);
+            } finally {
+                readLock.unlock();
+            }
+        }
+        
+        public void put(String key, String value) {
+            writeLock.lock();
+            try {
+                data.put(key, value);
+            } finally {
+                writeLock.unlock();
+            }
+        }
+        
+        public void putAll(Map<String, String> map) {
+            writeLock.lock();
+            try {
+                data.putAll(map);
+            } finally {
+                writeLock.unlock();
+            }
+        }
     }
     
-    // CAS操作
-    public boolean compareAndSet(int expect, int update) {
-        return counter.compareAndSet(expect, update);
+    /**
+     * 3. 使用条件变量避免忙等待
+     */
+    public static class ConditionOptimization {
+        private final ReentrantLock lock = new ReentrantLock();
+        private final Condition notEmpty = lock.newCondition();
+        private final Condition notFull = lock.newCondition();
+        private final Queue<String> queue = new LinkedList<>();
+        private final int capacity = 10;
+        
+        public void put(String item) {
+            lock.lock();
+            try {
+                while (queue.size() >= capacity) {
+                    notFull.await(); // 等待而不是忙等待
+                }
+                queue.offer(item);
+                notEmpty.signal();
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            } finally {
+                lock.unlock();
+            }
+        }
+        
+        public String take() {
+            lock.lock();
+            try {
+                while (queue.isEmpty()) {
+                    notEmpty.await(); // 等待而不是忙等待
+                }
+                String item = queue.poll();
+                notFull.signal();
+                return item;
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                return null;
+            } finally {
+                lock.unlock();
+            }
+        }
     }
 }
 ```
 
-## 面试题
+## 6. 总结
 
-### 1. synchronized和ReentrantLock的区别？
-**答案：**
-- **实现方式**：synchronized是JVM层面的锁，ReentrantLock是API层面的锁
-- **功能特性**：ReentrantLock功能更丰富，支持公平锁、可中断锁、限时锁等
-- **性能**：在JDK1.6之后，synchronized经过优化，性能与ReentrantLock相当
-- **使用方式**：synchronized自动释放锁，ReentrantLock需要手动释放
+Java锁机制是并发编程的核心，掌握各种锁的特性和使用场景对于构建高性能的并发应用至关重要。
 
-### 2. 什么是可重入锁？
-**答案：** 可重入锁是指同一个线程可以多次获取同一个锁，而不会死锁。synchronized和ReentrantLock都是可重入锁。
+### 6.1 关键要点
 
-### 3. 读写锁的特点是什么？
-**答案：**
-- 读锁是共享的，多个线程可以同时获取读锁
-- 写锁是独占的，只能有一个线程获取写锁
-- 读锁和写锁是互斥的，不能同时获取
+1. **锁的类型**：synchronized、Lock接口、读写锁
+2. **锁的特性**：可重入性、公平性、中断性、超时性
+3. **避免死锁**：固定锁顺序、超时机制、层次结构
+4. **性能优化**：减少锁粒度、读写分离、条件变量
 
-### 4. 如何避免死锁？
-**答案：**
-- 避免嵌套锁
-- 使用锁的顺序
-- 使用超时机制
-- 使用Lock接口的tryLock方法
+### 6.2 选择建议
 
-### 5. 锁的优化策略有哪些？
-**答案：**
-- **锁分离**：将读写锁分离
-- **锁粗化**：将多个小锁合并为大锁
-- **锁细化**：将大锁拆分为多个小锁
-- **无锁编程**：使用CAS操作和原子类
+| 场景 | 推荐锁类型 | 原因 |
+|------|------------|------|
+| **简单同步** | synchronized | 简单易用，自动管理 |
+| **复杂需求** | ReentrantLock | 功能丰富，支持中断和超时 |
+| **读多写少** | ReadWriteLock | 提高并发性能 |
+| **高性能要求** | 无锁数据结构 | 避免锁竞争 |
+
+### 6.3 学习建议
+
+1. **理解原理**：深入理解各种锁的工作原理
+2. **实践验证**：通过编写代码验证不同锁的效果
+3. **性能测试**：对比不同锁的性能差异
+4. **最佳实践**：遵循锁使用的最佳实践
+
+通过深入理解和熟练运用这些锁机制，我们能够构建出更加高效、健壮和可维护的Java并发应用程序。 

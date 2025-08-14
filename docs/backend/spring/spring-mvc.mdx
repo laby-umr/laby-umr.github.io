@@ -1,164 +1,96 @@
 ---
 sidebar_position: 4
-title: "Spring MVC"
-description: "Spring MVC框架原理与应用"
+title: "Spring MVC详解"
+description: "深入理解Spring MVC架构、请求处理流程与最佳实践"
 authors: [Laby]
 last_update:
   date: 2025-08-07
   author: Laby
 ---
 
-# Spring MVC
+# Spring MVC 详解
 
-Spring MVC是Spring框架的一个模块，用于构建Web应用程序。它基于MVC（Model-View-Controller）设计模式，提供了灵活的Web开发解决方案。
+Spring MVC是Spring框架的核心Web模块，基于MVC（Model-View-Controller）设计模式构建，提供了灵活、强大的Web应用开发解决方案。它是构建企业级Web应用的标准选择。
 
-## MVC架构
+:::tip 核心价值
+Spring MVC = 松耦合架构 + 灵活配置 + 强大扩展 + 企业级支持
+:::
 
-### 什么是MVC？
+## 1. Spring MVC基础概念
 
-MVC是一种软件架构模式，将应用程序分为三个核心组件：
+### 1.1 什么是Spring MVC？
 
-```java
-// 1. Model（模型）- 数据和业务逻辑
+Spring MVC是一个基于Java的Web框架，实现了MVC设计模式，用于构建Web应用程序。它提供了完整的Web开发解决方案，包括请求处理、视图渲染、数据绑定等功能。
+
+#### MVC架构模式
+```java title="MVC架构示例"
+// Model（模型）- 数据和业务逻辑
 @Entity
 public class User {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
-    
     private String name;
     private String email;
     
     // getter和setter方法
-    public Long getId() {
-        return id;
-    }
-    
-    public void setId(Long id) {
-        this.id = id;
-    }
-    
-    public String getName() {
-        return name;
-    }
-    
-    public void setName(String name) {
-        this.name = name;
-    }
-    
-    public String getEmail() {
-        return email;
-    }
-    
-    public void setEmail(String email) {
-        this.email = email;
-    }
+    public Long getId() { return id; }
+    public void setId(Long id) { this.id = id; }
+    public String getName() { return name; }
+    public void setName(String name) { this.name = name; }
+    public String getEmail() { return email; }
+    public void setEmail(String email) { this.email = email; }
 }
 
-// 2. View（视图）- 用户界面
+// View（视图）- 用户界面
 @Controller
 public class UserController {
-    
     @GetMapping("/users")
     public String listUsers(Model model) {
-        List`<User>` users = userService.findAll();
+        List<User> users = userService.findAll();
         model.addAttribute("users", users);
         return "user/list"; // 返回视图名称
     }
 }
 
-// 3. Controller（控制器）- 处理请求和响应
+// Controller（控制器）- 处理请求和响应
 @Controller
 @RequestMapping("/users")
 public class UserController {
-    
     @Autowired
     private UserService userService;
     
     @GetMapping
     public String listUsers(Model model) {
-        List`<User>` users = userService.findAll();
+        List<User> users = userService.findAll();
         model.addAttribute("users", users);
         return "user/list";
     }
-    
-    @GetMapping("/{id}")
-    public String getUser(@PathVariable Long id, Model model) {
-        User user = userService.findById(id);
-        model.addAttribute("user", user);
-        return "user/detail";
-    }
-    
-    @PostMapping
-    public String createUser(@ModelAttribute User user) {
-        userService.save(user);
-        return "redirect:/users";
-    }
 }
 ```
 
-### MVC组件详解
+### 1.2 Spring MVC核心组件
 
-```java
-// 1. DispatcherServlet - 前端控制器
-@WebServlet("/")
-public class DispatcherServlet extends HttpServlet {
-    
-    @Override
-    protected void doGet(HttpServletRequest request, HttpServletResponse response) 
-            throws ServletException, IOException {
-        // 处理GET请求
-        processRequest(request, response);
-    }
-    
-    @Override
-    protected void doPost(HttpServletRequest request, HttpServletResponse response) 
-            throws ServletException, IOException {
-        // 处理POST请求
-        processRequest(request, response);
-    }
-    
-    private void processRequest(HttpServletRequest request, HttpServletResponse response) {
-        // 1. 获取HandlerMapping
-        HandlerMapping handlerMapping = getHandlerMapping();
-        
-        // 2. 获取Handler
-        Object handler = handlerMapping.getHandler(request);
-        
-        // 3. 获取HandlerAdapter
-        HandlerAdapter handlerAdapter = getHandlerAdapter(handler);
-        
-        // 4. 执行Handler
-        ModelAndView mv = handlerAdapter.handle(request, response, handler);
-        
-        // 5. 处理视图
-        processView(request, response, mv);
-    }
-}
+| 组件 | 作用 | 实现类 |
+|------|------|--------|
+| **DispatcherServlet** | 前端控制器，统一处理请求 | `org.springframework.web.servlet.DispatcherServlet` |
+| **HandlerMapping** | 处理器映射，根据URL找到Handler | `RequestMappingHandlerMapping` |
+| **HandlerAdapter** | 处理器适配器，执行Handler | `RequestMappingHandlerAdapter` |
+| **ViewResolver** | 视图解析器，解析视图名称 | `InternalResourceViewResolver` |
+| **Handler** | 处理器，执行业务逻辑 | `@Controller`注解的类 |
+| **View** | 视图，渲染响应 | JSP、Thymeleaf等 |
 
-// 2. HandlerMapping - 处理器映射
-public interface HandlerMapping {
-    Object getHandler(HttpServletRequest request) throws Exception;
-}
+:::info 组件协作
+Spring MVC通过这些核心组件的协作，实现了请求的统一处理和响应的统一返回，提供了松耦合的Web开发架构。
+:::
 
-// 3. HandlerAdapter - 处理器适配器
-public interface HandlerAdapter {
-    boolean supports(Object handler);
-    ModelAndView handle(HttpServletRequest request, HttpServletResponse response, Object handler) throws Exception;
-}
+## 2. Spring MVC请求处理流程
 
-// 4. ViewResolver - 视图解析器
-public interface ViewResolver {
-    View resolveViewName(String viewName, Locale locale) throws Exception;
-}
-```
+### 2.1 请求处理流程详解
 
-## 请求处理流程
+Spring MVC的请求处理流程是一个完整的责任链模式实现：
 
-### 1. 请求处理流程详解
-
-```java
-// Spring MVC请求处理流程
+```java title="请求处理流程"
 public class RequestProcessingFlow {
     
     public void processRequest(HttpServletRequest request, HttpServletResponse response) {
@@ -190,17 +122,14 @@ public class RequestProcessingFlow {
     }
     
     private HandlerMapping getHandlerMapping() {
-        // 获取HandlerMapping实现
         return new RequestMappingHandlerMapping();
     }
     
     private HandlerAdapter getHandlerAdapter(Object handler) {
-        // 获取HandlerAdapter实现
         return new RequestMappingHandlerAdapter();
     }
     
     private void processView(HttpServletRequest request, HttpServletResponse response, ModelAndView mv) {
-        // 视图处理逻辑
         ViewResolver viewResolver = new InternalResourceViewResolver();
         View view = viewResolver.resolveViewName(mv.getViewName(), Locale.getDefault());
         view.render(mv.getModel(), request, response);
@@ -208,9 +137,46 @@ public class RequestProcessingFlow {
 }
 ```
 
-### 2. 控制器方法详解
+#### 详细流程说明
+1. **请求接收**：客户端发送HTTP请求到DispatcherServlet
+2. **Handler映射**：通过HandlerMapping找到对应的Handler
+3. **Handler适配**：通过HandlerAdapter适配并执行Handler
+4. **业务处理**：Handler执行业务逻辑，返回ModelAndView
+5. **视图解析**：通过ViewResolver解析视图名称
+6. **视图渲染**：渲染视图并返回响应
 
-```java
+### 2.2 核心接口详解
+
+```java title="核心接口定义"
+// HandlerMapping接口
+public interface HandlerMapping {
+    Object getHandler(HttpServletRequest request) throws Exception;
+}
+
+// HandlerAdapter接口
+public interface HandlerAdapter {
+    boolean supports(Object handler);
+    ModelAndView handle(HttpServletRequest request, HttpServletResponse response, Object handler) throws Exception;
+}
+
+// ViewResolver接口
+public interface ViewResolver {
+    View resolveViewName(String viewName, Locale locale) throws Exception;
+}
+
+// View接口
+public interface View {
+    void render(Map<String, ?> model, HttpServletRequest request, HttpServletResponse response) throws Exception;
+}
+```
+
+## 3. 控制器开发
+
+### 3.1 控制器基础
+
+控制器是Spring MVC的核心组件，负责处理HTTP请求并返回响应。
+
+```java title="基础控制器"
 @Controller
 @RequestMapping("/api/users")
 public class UserController {
@@ -218,16 +184,16 @@ public class UserController {
     @Autowired
     private UserService userService;
     
-    // 1. GET请求 - 获取用户列表
+    // GET请求 - 获取用户列表
     @GetMapping
-    public ResponseEntity`<List<User>>` getUsers() {
-        List`<User>` users = userService.findAll();
+    public ResponseEntity<List<User>> getUsers() {
+        List<User> users = userService.findAll();
         return ResponseEntity.ok(users);
     }
     
-    // 2. GET请求 - 获取单个用户
+    // GET请求 - 获取单个用户
     @GetMapping("/{id}")
-    public ResponseEntity`<User>` getUser(@PathVariable Long id) {
+    public ResponseEntity<User> getUser(@PathVariable Long id) {
         User user = userService.findById(id);
         if (user != null) {
             return ResponseEntity.ok(user);
@@ -235,68 +201,93 @@ public class UserController {
         return ResponseEntity.notFound().build();
     }
     
-    // 3. POST请求 - 创建用户
+    // POST请求 - 创建用户
     @PostMapping
-    public ResponseEntity`<User>` createUser(@RequestBody User user) {
+    public ResponseEntity<User> createUser(@RequestBody User user) {
         User savedUser = userService.save(user);
         return ResponseEntity.status(HttpStatus.CREATED).body(savedUser);
     }
     
-    // 4. PUT请求 - 更新用户
+    // PUT请求 - 更新用户
     @PutMapping("/{id}")
-    public ResponseEntity`<User>` updateUser(@PathVariable Long id, @RequestBody User user) {
+    public ResponseEntity<User> updateUser(@PathVariable Long id, @RequestBody User user) {
         user.setId(id);
         User updatedUser = userService.update(user);
         return ResponseEntity.ok(updatedUser);
     }
     
-    // 5. DELETE请求 - 删除用户
+    // DELETE请求 - 删除用户
     @DeleteMapping("/{id}")
-    public ResponseEntity`<Void>` deleteUser(@PathVariable Long id) {
+    public ResponseEntity<Void> deleteUser(@PathVariable Long id) {
         userService.deleteById(id);
         return ResponseEntity.noContent().build();
-    }
-    
-    // 6. 查询参数处理
-    @GetMapping("/search")
-    public ResponseEntity`<List<User>>` searchUsers(
-            @RequestParam String name,
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "10") int size) {
-        
-        List`<User>` users = userService.searchByName(name, page, size);
-        return ResponseEntity.ok(users);
-    }
-    
-    // 7. 文件上传
-    @PostMapping("/upload")
-    public ResponseEntity`<String>` uploadFile(@RequestParam("file") MultipartFile file) {
-        String fileName = fileService.saveFile(file);
-        return ResponseEntity.ok("文件上传成功: " + fileName);
-    }
-    
-    // 8. 表单处理
-    @PostMapping("/form")
-    public String handleForm(@ModelAttribute User user, BindingResult result) {
-        if (result.hasErrors()) {
-            return "user/form";
-        }
-        userService.save(user);
-        return "redirect:/users";
     }
 }
 ```
 
-### 3. 参数绑定注解
+### 3.2 请求映射注解
 
-```java
+Spring MVC提供了丰富的请求映射注解，支持各种HTTP方法和参数绑定：
+
+```java title="请求映射注解"
+@Controller
+public class RequestMappingController {
+    
+    // 1. @RequestMapping - 通用映射
+    @RequestMapping(value = "/users", method = RequestMethod.GET)
+    public String getUsers() {
+        return "user/list";
+    }
+    
+    // 2. @GetMapping - GET请求映射
+    @GetMapping("/users/{id}")
+    public String getUser(@PathVariable Long id) {
+        return "user/detail";
+    }
+    
+    // 3. @PostMapping - POST请求映射
+    @PostMapping("/users")
+    public String createUser(@ModelAttribute User user) {
+        return "redirect:/users";
+    }
+    
+    // 4. @PutMapping - PUT请求映射
+    @PutMapping("/users/{id}")
+    public String updateUser(@PathVariable Long id, @RequestBody User user) {
+        return "user/updated";
+    }
+    
+    // 5. @DeleteMapping - DELETE请求映射
+    @DeleteMapping("/users/{id}")
+    public String deleteUser(@PathVariable Long id) {
+        return "user/deleted";
+    }
+    
+    // 6. @PatchMapping - PATCH请求映射
+    @PatchMapping("/users/{id}")
+    public String patchUser(@PathVariable Long id, @RequestBody User user) {
+        return "user/patched";
+    }
+}
+```
+
+:::tip 注解选择
+- 使用具体的HTTP方法注解（@GetMapping、@PostMapping等）比@RequestMapping更清晰
+- 对于RESTful API，推荐使用@RestController注解
+- 对于传统Web应用，使用@Controller注解
+:::
+
+### 3.3 参数绑定注解
+
+Spring MVC提供了多种参数绑定注解，支持各种参数类型的自动绑定：
+
+```java title="参数绑定注解"
 @Controller
 public class ParameterBindingController {
     
     // 1. @PathVariable - 路径变量
     @GetMapping("/users/{id}/orders/{orderId}")
     public String getUserOrder(@PathVariable Long id, @PathVariable Long orderId) {
-        // 处理逻辑
         return "user/order";
     }
     
@@ -305,13 +296,12 @@ public class ParameterBindingController {
     public String search(@RequestParam String keyword, 
                         @RequestParam(defaultValue = "1") int page,
                         @RequestParam(required = false) String sort) {
-        // 处理逻辑
         return "search/result";
     }
     
     // 3. @RequestBody - 请求体
     @PostMapping("/api/users")
-    public ResponseEntity`<User>` createUser(@RequestBody User user) {
+    public ResponseEntity<User> createUser(@RequestBody User user) {
         User savedUser = userService.save(user);
         return ResponseEntity.ok(savedUser);
     }
@@ -326,33 +316,38 @@ public class ParameterBindingController {
     
     // 5. @RequestHeader - 请求头
     @GetMapping("/api/data")
-    public ResponseEntity`<String>` getData(@RequestHeader("Authorization") String auth) {
-        // 处理认证逻辑
+    public ResponseEntity<String> getData(@RequestHeader("Authorization") String auth) {
         return ResponseEntity.ok("数据");
     }
     
     // 6. @CookieValue - Cookie值
     @GetMapping("/preferences")
     public String getPreferences(@CookieValue("theme") String theme) {
-        // 处理主题偏好
         return "preferences";
     }
     
     // 7. @SessionAttribute - 会话属性
     @GetMapping("/profile")
     public String getProfile(@SessionAttribute("user") User user) {
-        // 处理用户资料
         return "user/profile";
+    }
+    
+    // 8. @RequestPart - 文件上传
+    @PostMapping("/upload")
+    public String uploadFile(@RequestPart("file") MultipartFile file) {
+        return "upload/success";
     }
 }
 ```
 
-## 拦截器
+## 4. 拦截器机制
 
-### 1. 拦截器实现
+### 4.1 拦截器基础
 
-```java
-// 1. 实现HandlerInterceptor接口
+拦截器是Spring MVC的重要特性，允许在请求处理的不同阶段进行拦截和处理。
+
+```java title="拦截器实现"
+// 实现HandlerInterceptor接口
 public class LoggingInterceptor implements HandlerInterceptor {
     
     private static final Logger logger = LoggerFactory.getLogger(LoggingInterceptor.class);
@@ -376,8 +371,11 @@ public class LoggingInterceptor implements HandlerInterceptor {
         logger.info("请求完成: {} {} 耗时: {}ms", request.getMethod(), request.getRequestURI(), endTime - startTime);
     }
 }
+```
 
-// 2. 认证拦截器
+### 4.2 认证拦截器
+
+```java title="认证拦截器"
 public class AuthenticationInterceptor implements HandlerInterceptor {
     
     @Override
@@ -397,7 +395,6 @@ public class AuthenticationInterceptor implements HandlerInterceptor {
     }
     
     private boolean isValidToken(String token) {
-        // 验证token逻辑
         return token != null && token.startsWith("Bearer ");
     }
     
@@ -406,8 +403,11 @@ public class AuthenticationInterceptor implements HandlerInterceptor {
         return new User();
     }
 }
+```
 
-// 3. 权限拦截器
+### 4.3 权限拦截器
+
+```java title="权限拦截器"
 public class AuthorizationInterceptor implements HandlerInterceptor {
     
     @Override
@@ -429,15 +429,14 @@ public class AuthorizationInterceptor implements HandlerInterceptor {
     }
     
     private boolean hasPermission(User user, String uri) {
-        // 权限检查逻辑
         return user.getPermissions().contains(uri);
     }
 }
 ```
 
-### 2. 拦截器配置
+### 4.4 拦截器配置
 
-```java
+```java title="拦截器配置"
 @Configuration
 public class WebMvcConfig implements WebMvcConfigurer {
     
@@ -476,12 +475,13 @@ public class WebMvcConfig implements WebMvcConfigurer {
 }
 ```
 
-## 异常处理
+## 5. 异常处理机制
 
-### 1. 全局异常处理
+### 5.1 全局异常处理
 
-```java
-// 1. 使用@ControllerAdvice注解
+Spring MVC提供了强大的异常处理机制，可以统一处理各种异常。
+
+```java title="全局异常处理器"
 @ControllerAdvice
 public class GlobalExceptionHandler {
     
@@ -489,7 +489,7 @@ public class GlobalExceptionHandler {
     
     // 处理业务异常
     @ExceptionHandler(BusinessException.class)
-    public ResponseEntity`<ErrorResponse>` handleBusinessException(BusinessException e) {
+    public ResponseEntity<ErrorResponse> handleBusinessException(BusinessException e) {
         logger.error("业务异常: {}", e.getMessage());
         
         ErrorResponse error = new ErrorResponse();
@@ -502,10 +502,10 @@ public class GlobalExceptionHandler {
     
     // 处理验证异常
     @ExceptionHandler(MethodArgumentNotValidException.class)
-    public ResponseEntity`<ErrorResponse>` handleValidationException(MethodArgumentNotValidException e) {
+    public ResponseEntity<ErrorResponse> handleValidationException(MethodArgumentNotValidException e) {
         logger.error("参数验证失败: {}", e.getMessage());
         
-        List`<String>` errors = e.getBindingResult()
+        List<String> errors = e.getBindingResult()
                 .getFieldErrors()
                 .stream()
                 .map(FieldError::getDefaultMessage)
@@ -522,7 +522,7 @@ public class GlobalExceptionHandler {
     
     // 处理文件上传异常
     @ExceptionHandler(MaxUploadSizeExceededException.class)
-    public ResponseEntity`<ErrorResponse>` handleFileUploadException(MaxUploadSizeExceededException e) {
+    public ResponseEntity<ErrorResponse> handleFileUploadException(MaxUploadSizeExceededException e) {
         logger.error("文件上传失败: {}", e.getMessage());
         
         ErrorResponse error = new ErrorResponse();
@@ -535,7 +535,7 @@ public class GlobalExceptionHandler {
     
     // 处理通用异常
     @ExceptionHandler(Exception.class)
-    public ResponseEntity`<ErrorResponse>` handleGenericException(Exception e) {
+    public ResponseEntity<ErrorResponse> handleGenericException(Exception e) {
         logger.error("系统异常: {}", e.getMessage(), e);
         
         ErrorResponse error = new ErrorResponse();
@@ -546,108 +546,33 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(error);
     }
 }
+```
 
-// 2. 错误响应类
+### 5.2 错误响应类
+
+```java title="错误响应类"
 public class ErrorResponse {
     private String code;
     private String message;
-    private List`<String>` details;
+    private List<String> details;
     private long timestamp;
     
     // getter和setter方法
-    public String getCode() {
-        return code;
-    }
-    
-    public void setCode(String code) {
-        this.code = code;
-    }
-    
-    public String getMessage() {
-        return message;
-    }
-    
-    public void setMessage(String message) {
-        this.message = message;
-    }
-    
-    public List`<String>` getDetails() {
-        return details;
-    }
-    
-    public void setDetails(List`<String>` details) {
-        this.details = details;
-    }
-    
-    public long getTimestamp() {
-        return timestamp;
-    }
-    
-    public void setTimestamp(long timestamp) {
-        this.timestamp = timestamp;
-    }
+    public String getCode() { return code; }
+    public void setCode(String code) { this.code = code; }
+    public String getMessage() { return message; }
+    public void setMessage(String message) { this.message = message; }
+    public List<String> getDetails() { return details; }
+    public void setDetails(List<String> details) { this.details = details; }
+    public long getTimestamp() { return timestamp; }
+    public void setTimestamp(long timestamp) { this.timestamp = timestamp; }
 }
 ```
 
-### 2. 控制器级异常处理
+### 5.3 自定义异常
 
-```java
-@Controller
-@RequestMapping("/users")
-public class UserController {
-    
-    @Autowired
-    private UserService userService;
-    
-    @GetMapping("/{id}")
-    public ResponseEntity`<User>` getUser(@PathVariable Long id) {
-        try {
-            User user = userService.findById(id);
-            if (user == null) {
-                return ResponseEntity.notFound().build();
-            }
-            return ResponseEntity.ok(user);
-        } catch (UserNotFoundException e) {
-            return ResponseEntity.notFound().build();
-        } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
-        }
-    }
-    
-    @PostMapping
-    public ResponseEntity`<User>` createUser(@Valid @RequestBody User user, BindingResult result) {
-        if (result.hasErrors()) {
-            List`<String>` errors = result.getFieldErrors()
-                    .stream()
-                    .map(FieldError::getDefaultMessage)
-                    .collect(Collectors.toList());
-            
-            ErrorResponse error = new ErrorResponse();
-            error.setCode("VALIDATION_ERROR");
-            error.setMessage("用户信息验证失败");
-            error.setDetails(errors);
-            
-            return ResponseEntity.badRequest().body(error);
-        }
-        
-        try {
-            User savedUser = userService.save(user);
-            return ResponseEntity.status(HttpStatus.CREATED).body(savedUser);
-        } catch (DuplicateUserException e) {
-            ErrorResponse error = new ErrorResponse();
-            error.setCode("DUPLICATE_USER");
-            error.setMessage("用户已存在");
-            
-            return ResponseEntity.badRequest().body(error);
-        }
-    }
-}
-```
-
-### 3. 自定义异常
-
-```java
-// 1. 业务异常基类
+```java title="自定义异常"
+// 业务异常基类
 public abstract class BusinessException extends RuntimeException {
     
     private String code;
@@ -666,7 +591,7 @@ public abstract class BusinessException extends RuntimeException {
     }
 }
 
-// 2. 具体业务异常
+// 具体业务异常
 public class UserNotFoundException extends BusinessException {
     
     public UserNotFoundException(Long id) {
@@ -687,72 +612,427 @@ public class InsufficientPermissionException extends BusinessException {
         super("INSUFFICIENT_PERMISSION", "权限不足: " + operation);
     }
 }
+```
 
-// 3. 系统异常
-public class SystemException extends RuntimeException {
+## 6. 数据绑定与验证
+
+### 6.1 数据绑定
+
+Spring MVC提供了强大的数据绑定功能，支持各种数据类型的自动转换。
+
+```java title="数据绑定示例"
+@Controller
+public class DataBindingController {
     
-    private String code;
-    
-    public SystemException(String message) {
-        super(message);
+    // 基本类型绑定
+    @GetMapping("/user/{id}")
+    public String getUser(@PathVariable Long id, 
+                         @RequestParam String name,
+                         @RequestParam(defaultValue = "0") int age) {
+        return "user/detail";
     }
     
-    public SystemException(String code, String message) {
-        super(message);
-        this.code = code;
+    // 对象绑定
+    @PostMapping("/user")
+    public String createUser(@ModelAttribute User user) {
+        userService.save(user);
+        return "redirect:/users";
     }
     
-    public String getCode() {
-        return code;
+    // JSON绑定
+    @PostMapping("/api/user")
+    public ResponseEntity<User> createUserApi(@RequestBody User user) {
+        User savedUser = userService.save(user);
+        return ResponseEntity.ok(savedUser);
+    }
+    
+    // 集合绑定
+    @PostMapping("/users/batch")
+    public String createUsers(@RequestBody List<User> users) {
+        userService.saveAll(users);
+        return "redirect:/users";
+    }
+    
+    // 日期绑定
+    @GetMapping("/events")
+    public String getEvents(@RequestParam @DateTimeFormat(pattern = "yyyy-MM-dd") Date date) {
+        return "events/list";
     }
 }
 ```
 
-## 面试题
+### 6.2 数据验证
 
-### 1. Spring MVC的请求处理流程是怎样的？
+```java title="数据验证示例"
+@Controller
+public class ValidationController {
+    
+    @PostMapping("/user")
+    public String createUser(@Valid @ModelAttribute User user, BindingResult result) {
+        if (result.hasErrors()) {
+            return "user/form";
+        }
+        userService.save(user);
+        return "redirect:/users";
+    }
+    
+    @PostMapping("/api/user")
+    public ResponseEntity<?> createUserApi(@Valid @RequestBody User user, BindingResult result) {
+        if (result.hasErrors()) {
+            List<String> errors = result.getFieldErrors()
+                    .stream()
+                    .map(FieldError::getDefaultMessage)
+                    .collect(Collectors.toList());
+            
+            ErrorResponse error = new ErrorResponse();
+            error.setCode("VALIDATION_ERROR");
+            error.setMessage("参数验证失败");
+            error.setDetails(errors);
+            
+            return ResponseEntity.badRequest().body(error);
+        }
+        
+            User savedUser = userService.save(user);
+        return ResponseEntity.ok(savedUser);
+    }
+}
 
-**答案：**
-1. 请求进入DispatcherServlet
-2. 通过HandlerMapping找到对应的Handler
-3. 通过HandlerAdapter执行Handler
-4. 返回ModelAndView
-5. 通过ViewResolver解析视图
-6. 渲染视图并返回响应
+// 验证注解示例
+public class User {
+    @NotNull(message = "用户ID不能为空")
+    private Long id;
+    
+    @NotBlank(message = "用户名不能为空")
+    @Size(min = 2, max = 20, message = "用户名长度必须在2-20之间")
+    private String name;
+    
+    @Email(message = "邮箱格式不正确")
+    @NotBlank(message = "邮箱不能为空")
+    private String email;
+    
+    @Min(value = 0, message = "年龄不能小于0")
+    @Max(value = 150, message = "年龄不能大于150")
+    private Integer age;
+    
+    // getter和setter方法
+}
+```
 
-### 2. @RequestMapping和@GetMapping有什么区别？
+## 7. 文件上传
 
-**答案：**
-- @RequestMapping是通用注解，可以指定method属性
-- @GetMapping是@RequestMapping(method = RequestMethod.GET)的简写
-- @GetMapping更简洁，专门用于GET请求
-- @RequestMapping更灵活，可以处理多种HTTP方法
+### 7.1 文件上传配置
 
-### 3. 如何实现RESTful API？
+```java title="文件上传配置"
+@Configuration
+public class FileUploadConfig {
+    
+    @Bean
+    public MultipartResolver multipartResolver() {
+        CommonsMultipartResolver resolver = new CommonsMultipartResolver();
+        resolver.setMaxUploadSize(10 * 1024 * 1024); // 10MB
+        resolver.setMaxUploadSizePerFile(5 * 1024 * 1024); // 5MB
+        resolver.setDefaultEncoding("UTF-8");
+        return resolver;
+    }
+}
+```
 
-**答案：**
-- 使用@RestController注解
-- 使用@GetMapping、@PostMapping等注解
-- 返回ResponseEntity对象
-- 使用@PathVariable处理路径参数
-- 使用@RequestBody处理请求体
+### 7.2 文件上传处理
+
+```java title="文件上传控制器"
+@Controller
+public class FileUploadController {
+    
+    @PostMapping("/upload")
+    public String uploadFile(@RequestParam("file") MultipartFile file, Model model) {
+        if (file.isEmpty()) {
+            model.addAttribute("error", "请选择文件");
+            return "upload/form";
+        }
+        
+        try {
+            // 保存文件
+            String fileName = saveFile(file);
+            model.addAttribute("message", "文件上传成功: " + fileName);
+        } catch (Exception e) {
+            model.addAttribute("error", "文件上传失败: " + e.getMessage());
+        }
+        
+        return "upload/result";
+    }
+    
+    @PostMapping("/api/upload")
+    public ResponseEntity<String> uploadFileApi(@RequestParam("file") MultipartFile file) {
+        if (file.isEmpty()) {
+            return ResponseEntity.badRequest().body("请选择文件");
+        }
+        
+        try {
+            String fileName = saveFile(file);
+            return ResponseEntity.ok("文件上传成功: " + fileName);
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body("文件上传失败: " + e.getMessage());
+        }
+    }
+    
+    private String saveFile(MultipartFile file) throws IOException {
+        String fileName = System.currentTimeMillis() + "_" + file.getOriginalFilename();
+        String uploadDir = "uploads/";
+        
+        File dir = new File(uploadDir);
+        if (!dir.exists()) {
+            dir.mkdirs();
+        }
+        
+        File dest = new File(uploadDir + fileName);
+        file.transferTo(dest);
+        
+        return fileName;
+    }
+}
+```
+
+## 8. RESTful API设计
+
+### 8.1 RESTful API原则
+
+RESTful API设计遵循以下原则：
+
+| 原则 | 说明 | 示例 |
+|------|------|------|
+| **资源导向** | 使用名词而非动词 | `/users` 而不是 `/getUsers` |
+| **HTTP方法语义** | 使用正确的HTTP方法 | GET、POST、PUT、DELETE |
+| **无状态** | 每个请求包含完整信息 | 不依赖会话状态 |
+| **统一接口** | 使用标准HTTP状态码 | 200、201、400、404等 |
+| **可缓存** | 支持缓存机制 | 使用ETag、Cache-Control |
+
+### 8.2 RESTful API实现
+
+```java title="RESTful API控制器"
+@RestController
+@RequestMapping("/api/users")
+public class UserRestController {
+    
+    @Autowired
+    private UserService userService;
+    
+    // GET /api/users - 获取用户列表
+    @GetMapping
+    public ResponseEntity<List<User>> getUsers(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size) {
+        
+        List<User> users = userService.findAll(page, size);
+        return ResponseEntity.ok(users);
+    }
+    
+    // GET /api/users/{id} - 获取单个用户
+    @GetMapping("/{id}")
+    public ResponseEntity<User> getUser(@PathVariable Long id) {
+        User user = userService.findById(id);
+        if (user == null) {
+            return ResponseEntity.notFound().build();
+        }
+        return ResponseEntity.ok(user);
+    }
+    
+    // POST /api/users - 创建用户
+    @PostMapping
+    public ResponseEntity<User> createUser(@Valid @RequestBody User user) {
+        User savedUser = userService.save(user);
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .header("Location", "/api/users/" + savedUser.getId())
+                .body(savedUser);
+    }
+    
+    // PUT /api/users/{id} - 更新用户
+    @PutMapping("/{id}")
+    public ResponseEntity<User> updateUser(@PathVariable Long id, @Valid @RequestBody User user) {
+        user.setId(id);
+        User updatedUser = userService.update(user);
+        return ResponseEntity.ok(updatedUser);
+    }
+    
+    // DELETE /api/users/{id} - 删除用户
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Void> deleteUser(@PathVariable Long id) {
+        userService.deleteById(id);
+        return ResponseEntity.noContent().build();
+    }
+    
+    // PATCH /api/users/{id} - 部分更新用户
+    @PatchMapping("/{id}")
+    public ResponseEntity<User> patchUser(@PathVariable Long id, @RequestBody Map<String, Object> updates) {
+        User patchedUser = userService.patch(id, updates);
+        return ResponseEntity.ok(patchedUser);
+    }
+}
+```
+
+## 9. 性能优化
+
+### 9.1 异步处理
+
+```java title="异步控制器"
+@RestController
+public class AsyncController {
+    
+    @Autowired
+    private AsyncTaskService asyncTaskService;
+    
+    // 异步处理
+    @GetMapping("/async/task")
+    public CompletableFuture<String> asyncTask() {
+        return asyncTaskService.processAsync();
+    }
+    
+    // 异步文件处理
+    @PostMapping("/async/upload")
+    public CompletableFuture<ResponseEntity<String>> asyncUpload(@RequestParam("file") MultipartFile file) {
+        return CompletableFuture.supplyAsync(() -> {
+            try {
+                String result = processFile(file);
+                return ResponseEntity.ok(result);
+            } catch (Exception e) {
+                return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                        .body("处理失败: " + e.getMessage());
+            }
+        });
+    }
+}
+
+// 异步配置
+@Configuration
+@EnableAsync
+public class AsyncConfig implements AsyncConfigurer {
+    
+    @Override
+    public Executor getAsyncExecutor() {
+        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+        executor.setCorePoolSize(10);
+        executor.setMaxPoolSize(50);
+        executor.setQueueCapacity(100);
+        executor.setThreadNamePrefix("Async-");
+        executor.initialize();
+        return executor;
+    }
+    
+    @Override
+    public AsyncUncaughtExceptionHandler getAsyncUncaughtExceptionHandler() {
+        return new SimpleAsyncUncaughtExceptionHandler();
+    }
+}
+```
+
+### 9.2 缓存支持
+
+```java title="缓存控制器"
+@RestController
+@RequestMapping("/api/cache")
+public class CacheController {
+    
+    @Autowired
+    private UserService userService;
+    
+    // 使用缓存
+    @Cacheable(value = "users", key = "#id")
+    @GetMapping("/users/{id}")
+    public ResponseEntity<User> getUser(@PathVariable Long id) {
+        User user = userService.findById(id);
+        return ResponseEntity.ok(user);
+    }
+    
+    // 清除缓存
+    @CacheEvict(value = "users", key = "#id")
+    @DeleteMapping("/users/{id}")
+    public ResponseEntity<Void> deleteUser(@PathVariable Long id) {
+        userService.deleteById(id);
+        return ResponseEntity.noContent().build();
+    }
+    
+    // 更新缓存
+    @CachePut(value = "users", key = "#user.id")
+    @PutMapping("/users")
+    public ResponseEntity<User> updateUser(@RequestBody User user) {
+        User updatedUser = userService.update(user);
+        return ResponseEntity.ok(updatedUser);
+    }
+}
+```
+
+## 10. 面试题精选
+
+### 10.1 基础概念题
+
+**Q: Spring MVC的请求处理流程是怎样的？**
+
+A: Spring MVC的请求处理流程如下：
+1. **请求接收**：客户端发送HTTP请求到DispatcherServlet
+2. **Handler映射**：通过HandlerMapping找到对应的Handler
+3. **Handler适配**：通过HandlerAdapter适配并执行Handler
+4. **业务处理**：Handler执行业务逻辑，返回ModelAndView
+5. **视图解析**：通过ViewResolver解析视图名称
+6. **视图渲染**：渲染视图并返回响应
+
+**Q: @RequestMapping和@GetMapping有什么区别？**
+
+A: 
+- `@RequestMapping`是通用注解，可以指定method属性
+- `@GetMapping`是`@RequestMapping(method = RequestMethod.GET)`的简写
+- `@GetMapping`更简洁，专门用于GET请求
+- `@RequestMapping`更灵活，可以处理多种HTTP方法
+
+### 10.2 实践题
+
+**Q: 如何实现RESTful API？**
+
+A: 实现RESTful API需要：
+- 使用`@RestController`注解
+- 使用`@GetMapping`、`@PostMapping`等注解
+- 返回`ResponseEntity`对象
+- 使用`@PathVariable`处理路径参数
+- 使用`@RequestBody`处理请求体
 - 遵循REST设计原则
 
-### 4. Spring MVC的拦截器有什么作用？
+**Q: Spring MVC的拦截器有什么作用？**
 
-**答案：**
-- 日志记录
-- 权限验证
-- 性能监控
-- 事务管理
-- 跨域处理
-- 请求预处理和后处理
+A: Spring MVC拦截器的作用包括：
+- **日志记录**：记录请求处理时间和状态
+- **权限验证**：检查用户权限和认证状态
+- **性能监控**：监控请求处理性能
+- **事务管理**：管理数据库事务
+- **跨域处理**：处理跨域请求
+- **请求预处理和后处理**：在请求处理前后执行特定逻辑
 
-### 5. 如何实现全局异常处理？
+### 10.3 高级题
 
-**答案：**
-- 使用@ControllerAdvice注解
-- 使用@ExceptionHandler处理特定异常
+**Q: 如何实现全局异常处理？**
+
+A: 实现全局异常处理需要：
+- 使用`@ControllerAdvice`注解
+- 使用`@ExceptionHandler`处理特定异常
 - 返回统一的错误响应格式
 - 记录异常日志
 - 区分业务异常和系统异常 
+
+**Q: Spring MVC如何支持文件上传？**
+
+A: Spring MVC支持文件上传的方式：
+- 配置`MultipartResolver`
+- 使用`@RequestParam("file") MultipartFile file`接收文件
+- 设置文件大小限制和编码
+- 处理文件保存逻辑
+- 提供文件上传进度反馈
+
+:::tip Spring MVC学习要点
+1. **理解MVC架构**：掌握Model、View、Controller的职责分工
+2. **熟悉请求处理流程**：了解从请求到响应的完整过程
+3. **掌握注解使用**：熟练使用各种Spring MVC注解
+4. **学会异常处理**：实现统一的异常处理机制
+5. **了解性能优化**：掌握异步处理和缓存技术
+:::
+
+---
+
+通过本章的学习，你应该已经掌握了Spring MVC的核心概念、架构设计和实际应用。Spring MVC是构建企业级Web应用的重要框架，掌握其原理和使用方法对于Java Web开发至关重要。在实际项目中，合理使用Spring MVC的各种特性可以构建出高效、可维护的Web应用。 

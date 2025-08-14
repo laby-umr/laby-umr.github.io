@@ -1,21 +1,1109 @@
 ---
-sidebar_position: 2
-title: "结构型模式"
-description: "结构型设计模式详解"
+sidebar_position: 3
+title: 结构型模式详解
+description: 深入理解适配器、桥接、组合、装饰器、外观、享元、代理等结构型模式
 authors: [Laby]
 last_update:
   date: 2025-08-07
   author: Laby
 ---
 
-# 结构型模式
+# 结构型模式详解
 
-## 适配器模式
+结构型模式关注类和对象的组合，通过组合机制来创建更复杂的结构。本章将深入探讨七种结构型模式的原理、实现方式和实际应用。
 
-## 装饰器模式
+:::tip 学习目标
+通过本章学习，你将掌握：
+- 七种结构型模式的核心原理和实现方式
+- 各种模式的适用场景和选择标准
+- 模式间的区别和联系
+- 在实际项目中的应用实践
+:::
 
-## 代理模式
+## 1. 适配器模式（Adapter）
 
-## 外观模式
+### 1.1 模式定义
 
-## 面试题
+将一个类的接口转换成客户希望的另外一个接口，使得原本由于接口不兼容而不能一起工作的那些类可以一起工作。
+
+### 1.2 实现方式
+
+#### 类适配器模式
+```java title="类适配器模式"
+// 目标接口
+public interface Target {
+    void request();
+}
+
+// 被适配的类
+public class Adaptee {
+    public void specificRequest() {
+        System.out.println("被适配类的特殊请求");
+    }
+}
+
+// 类适配器
+public class ClassAdapter extends Adaptee implements Target {
+    @Override
+    public void request() {
+        // 调用被适配类的方法
+        specificRequest();
+    }
+}
+```
+
+#### 对象适配器模式
+```java title="对象适配器模式"
+// 对象适配器
+public class ObjectAdapter implements Target {
+    private Adaptee adaptee;
+    
+    public ObjectAdapter(Adaptee adaptee) {
+        this.adaptee = adaptee;
+    }
+    
+    @Override
+    public void request() {
+        adaptee.specificRequest();
+    }
+}
+```
+
+### 1.3 应用场景
+
+```java title="适配器模式应用示例"
+// 第三方支付接口适配
+public interface PaymentProcessor {
+    void processPayment(double amount);
+    boolean isPaymentSuccessful();
+}
+
+// 第三方支付库
+public class ThirdPartyPayment {
+    public void pay(double amount) {
+        System.out.println("第三方支付处理: " + amount);
+    }
+    
+    public boolean getPaymentStatus() {
+        return true;
+    }
+}
+
+// 支付适配器
+public class PaymentAdapter implements PaymentProcessor {
+    private ThirdPartyPayment thirdPartyPayment;
+    
+    public PaymentAdapter(ThirdPartyPayment thirdPartyPayment) {
+        this.thirdPartyPayment = thirdPartyPayment;
+    }
+    
+    @Override
+    public void processPayment(double amount) {
+        thirdPartyPayment.pay(amount);
+    }
+    
+    @Override
+    public boolean isPaymentSuccessful() {
+        return thirdPartyPayment.getPaymentStatus();
+    }
+}
+
+// 使用示例
+public class PaymentService {
+    public void processPayment(PaymentProcessor processor, double amount) {
+        processor.processPayment(amount);
+        if (processor.isPaymentSuccessful()) {
+            System.out.println("支付成功");
+        } else {
+            System.out.println("支付失败");
+        }
+    }
+}
+```
+
+## 2. 桥接模式（Bridge）
+
+### 2.1 模式定义
+
+将抽象部分与实现部分分离，使它们都可以独立地变化。
+
+### 2.2 实现示例
+
+```java title="桥接模式"
+// 实现者接口
+public interface Implementor {
+    void operationImpl();
+}
+
+// 具体实现者A
+public class ConcreteImplementorA implements Implementor {
+    @Override
+    public void operationImpl() {
+        System.out.println("具体实现者A的操作");
+    }
+}
+
+// 具体实现者B
+public class ConcreteImplementorB implements Implementor {
+    @Override
+    public void operationImpl() {
+        System.out.println("具体实现者B的操作");
+    }
+}
+
+// 抽象类
+public abstract class Abstraction {
+    protected Implementor implementor;
+    
+    public Abstraction(Implementor implementor) {
+        this.implementor = implementor;
+    }
+    
+    public abstract void operation();
+}
+
+// 精确抽象类
+public class RefinedAbstraction extends Abstraction {
+    public RefinedAbstraction(Implementor implementor) {
+        super(implementor);
+    }
+    
+    @Override
+    public void operation() {
+        System.out.println("精确抽象类的操作");
+        implementor.operationImpl();
+    }
+}
+```
+
+### 2.3 应用场景
+
+```java title="桥接模式应用示例"
+// 图形渲染系统
+public interface Renderer {
+    void renderCircle(double x, double y, double radius);
+    void renderRectangle(double x, double y, double width, double height);
+}
+
+public class VectorRenderer implements Renderer {
+    @Override
+    public void renderCircle(double x, double y, double radius) {
+        System.out.println("矢量渲染圆形: (" + x + ", " + y + "), 半径: " + radius);
+    }
+    
+    @Override
+    public void renderRectangle(double x, double y, double width, double height) {
+        System.out.println("矢量渲染矩形: (" + x + ", " + y + "), 尺寸: " + width + "x" + height);
+    }
+}
+
+public class RasterRenderer implements Renderer {
+    @Override
+    public void renderCircle(double x, double y, double radius) {
+        System.out.println("光栅渲染圆形: (" + x + ", " + y + "), 半径: " + radius);
+    }
+    
+    @Override
+    public void renderRectangle(double x, double y, double width, double height) {
+        System.out.println("光栅渲染矩形: (" + x + ", " + y + "), 尺寸: " + width + "x" + height);
+    }
+}
+
+public abstract class Shape {
+    protected Renderer renderer;
+    
+    public Shape(Renderer renderer) {
+        this.renderer = renderer;
+    }
+    
+    public abstract void draw();
+}
+
+public class Circle extends Shape {
+    private double x, y, radius;
+    
+    public Circle(Renderer renderer, double x, double y, double radius) {
+        super(renderer);
+        this.x = x;
+        this.y = y;
+        this.radius = radius;
+    }
+    
+    @Override
+    public void draw() {
+        renderer.renderCircle(x, y, radius);
+    }
+}
+
+public class Rectangle extends Shape {
+    private double x, y, width, height;
+    
+    public Rectangle(Renderer renderer, double x, double y, double width, double height) {
+        super(renderer);
+        this.x = x;
+        this.y = y;
+        this.width = width;
+        this.height = height;
+    }
+    
+    @Override
+    public void draw() {
+        renderer.renderRectangle(x, y, width, height);
+    }
+}
+```
+
+## 3. 组合模式（Composite）
+
+### 3.1 模式定义
+
+将对象组合成树形结构以表示"部分-整体"的层次结构，使得用户对单个对象和组合对象的使用具有一致性。
+
+### 3.2 实现示例
+
+```java title="组合模式"
+// 抽象组件
+public abstract class Component {
+    protected String name;
+    
+    public Component(String name) {
+        this.name = name;
+    }
+    
+    public abstract void add(Component component);
+    public abstract void remove(Component component);
+    public abstract void display(int depth);
+    public abstract void operation();
+}
+
+// 叶子节点
+public class Leaf extends Component {
+    public Leaf(String name) {
+        super(name);
+    }
+    
+    @Override
+    public void add(Component component) {
+        throw new UnsupportedOperationException("叶子节点不能添加子节点");
+    }
+    
+    @Override
+    public void remove(Component component) {
+        throw new UnsupportedOperationException("叶子节点不能删除子节点");
+    }
+    
+    @Override
+    public void display(int depth) {
+        StringBuilder prefix = new StringBuilder();
+        for (int i = 0; i < depth; i++) {
+            prefix.append("  ");
+        }
+        System.out.println(prefix + "- " + name);
+    }
+    
+    @Override
+    public void operation() {
+        System.out.println("叶子节点操作: " + name);
+    }
+}
+
+// 复合节点
+public class Composite extends Component {
+    private List<Component> children = new ArrayList<>();
+    
+    public Composite(String name) {
+        super(name);
+    }
+    
+    @Override
+    public void add(Component component) {
+        children.add(component);
+    }
+    
+    @Override
+    public void remove(Component component) {
+        children.remove(component);
+    }
+    
+    @Override
+    public void display(int depth) {
+        StringBuilder prefix = new StringBuilder();
+        for (int i = 0; i < depth; i++) {
+            prefix.append("  ");
+        }
+        System.out.println(prefix + "+ " + name);
+        
+        for (Component child : children) {
+            child.display(depth + 1);
+        }
+    }
+    
+    @Override
+    public void operation() {
+        System.out.println("复合节点操作: " + name);
+        for (Component child : children) {
+            child.operation();
+        }
+    }
+}
+```
+
+### 3.3 应用场景
+
+```java title="组合模式应用示例"
+// 文件系统
+public abstract class FileSystemItem {
+    protected String name;
+    protected long size;
+    
+    public FileSystemItem(String name, long size) {
+        this.name = name;
+        this.size = size;
+    }
+    
+    public abstract void display(int depth);
+    public abstract long getSize();
+    public abstract void add(FileSystemItem item);
+    public abstract void remove(FileSystemItem item);
+}
+
+public class File extends FileSystemItem {
+    public File(String name, long size) {
+        super(name, size);
+    }
+    
+    @Override
+    public void display(int depth) {
+        StringBuilder prefix = new StringBuilder();
+        for (int i = 0; i < depth; i++) {
+            prefix.append("  ");
+        }
+        System.out.println(prefix + "文件: " + name + " (" + size + " bytes)");
+    }
+    
+    @Override
+    public long getSize() {
+        return size;
+    }
+    
+    @Override
+    public void add(FileSystemItem item) {
+        throw new UnsupportedOperationException("文件不能添加子项");
+    }
+    
+    @Override
+    public void remove(FileSystemItem item) {
+        throw new UnsupportedOperationException("文件不能删除子项");
+    }
+}
+
+public class Directory extends FileSystemItem {
+    private List<FileSystemItem> children = new ArrayList<>();
+    
+    public Directory(String name) {
+        super(name, 0);
+    }
+    
+    @Override
+    public void display(int depth) {
+        StringBuilder prefix = new StringBuilder();
+        for (int i = 0; i < depth; i++) {
+            prefix.append("  ");
+        }
+        System.out.println(prefix + "目录: " + name + " (" + getSize() + " bytes)");
+        
+        for (FileSystemItem child : children) {
+            child.display(depth + 1);
+        }
+    }
+    
+    @Override
+    public long getSize() {
+        long totalSize = 0;
+        for (FileSystemItem child : children) {
+            totalSize += child.getSize();
+        }
+        return totalSize;
+    }
+    
+    @Override
+    public void add(FileSystemItem item) {
+        children.add(item);
+    }
+    
+    @Override
+    public void remove(FileSystemItem item) {
+        children.remove(item);
+    }
+}
+```
+
+## 4. 装饰器模式（Decorator）
+
+### 4.1 模式定义
+
+动态地给一个对象添加一些额外的职责，就增加功能来说，装饰器模式比生成子类更为灵活。
+
+### 4.2 实现示例
+
+```java title="装饰器模式"
+// 抽象组件
+public interface Component {
+    void operation();
+}
+
+// 具体组件
+public class ConcreteComponent implements Component {
+    @Override
+    public void operation() {
+        System.out.println("具体组件的操作");
+    }
+}
+
+// 抽象装饰器
+public abstract class Decorator implements Component {
+    protected Component component;
+    
+    public Decorator(Component component) {
+        this.component = component;
+    }
+    
+    @Override
+    public void operation() {
+        component.operation();
+    }
+}
+
+// 具体装饰器A
+public class ConcreteDecoratorA extends Decorator {
+    public ConcreteDecoratorA(Component component) {
+        super(component);
+    }
+    
+    @Override
+    public void operation() {
+        super.operation();
+        addedBehavior();
+    }
+    
+    private void addedBehavior() {
+        System.out.println("装饰器A添加的行为");
+    }
+}
+
+// 具体装饰器B
+public class ConcreteDecoratorB extends Decorator {
+    public ConcreteDecoratorB(Component component) {
+        super(component);
+    }
+    
+    @Override
+    public void operation() {
+        super.operation();
+        addedBehavior();
+    }
+    
+    private void addedBehavior() {
+        System.out.println("装饰器B添加的行为");
+    }
+}
+```
+
+### 4.3 应用场景
+
+```java title="装饰器模式应用示例"
+// IO流装饰器
+public interface InputStream {
+    int read();
+    void close();
+}
+
+public class FileInputStream implements InputStream {
+    private String filename;
+    
+    public FileInputStream(String filename) {
+        this.filename = filename;
+    }
+    
+    @Override
+    public int read() {
+        System.out.println("从文件读取: " + filename);
+        return 0;
+    }
+    
+    @Override
+    public void close() {
+        System.out.println("关闭文件: " + filename);
+    }
+}
+
+public abstract class InputStreamDecorator implements InputStream {
+    protected InputStream inputStream;
+    
+    public InputStreamDecorator(InputStream inputStream) {
+        this.inputStream = inputStream;
+    }
+    
+    @Override
+    public int read() {
+        return inputStream.read();
+    }
+    
+    @Override
+    public void close() {
+        inputStream.close();
+    }
+}
+
+public class BufferedInputStream extends InputStreamDecorator {
+    public BufferedInputStream(InputStream inputStream) {
+        super(inputStream);
+    }
+    
+    @Override
+    public int read() {
+        System.out.println("缓冲读取");
+        return super.read();
+    }
+}
+
+public class DataInputStream extends InputStreamDecorator {
+    public DataInputStream(InputStream inputStream) {
+        super(inputStream);
+    }
+    
+    @Override
+    public int read() {
+        System.out.println("数据读取");
+        return super.read();
+    }
+    
+    public String readString() {
+        System.out.println("读取字符串");
+        return "Hello World";
+    }
+}
+```
+
+## 5. 外观模式（Facade）
+
+### 5.1 模式定义
+
+为子系统中的一组接口提供一个一致的界面，外观模式定义了一个高层接口，这个接口使得这一子系统更加容易使用。
+
+### 5.2 实现示例
+
+```java title="外观模式"
+// 子系统A
+public class SubsystemA {
+    public void operationA() {
+        System.out.println("子系统A的操作");
+    }
+}
+
+// 子系统B
+public class SubsystemB {
+    public void operationB() {
+        System.out.println("子系统B的操作");
+    }
+}
+
+// 子系统C
+public class SubsystemC {
+    public void operationC() {
+        System.out.println("子系统C的操作");
+    }
+}
+
+// 外观类
+public class Facade {
+    private SubsystemA subsystemA;
+    private SubsystemB subsystemB;
+    private SubsystemC subsystemC;
+    
+    public Facade() {
+        this.subsystemA = new SubsystemA();
+        this.subsystemB = new SubsystemB();
+        this.subsystemC = new SubsystemC();
+    }
+    
+    public void operation() {
+        System.out.println("外观模式开始操作");
+        subsystemA.operationA();
+        subsystemB.operationB();
+        subsystemC.operationC();
+        System.out.println("外观模式结束操作");
+    }
+}
+```
+
+### 5.3 应用场景
+
+```java title="外观模式应用示例"
+// 家庭影院系统
+public class Amplifier {
+    public void on() {
+        System.out.println("放大器开启");
+    }
+    
+    public void setVolume(int volume) {
+        System.out.println("设置音量: " + volume);
+    }
+    
+    public void off() {
+        System.out.println("放大器关闭");
+    }
+}
+
+public class DvdPlayer {
+    public void on() {
+        System.out.println("DVD播放器开启");
+    }
+    
+    public void play(String movie) {
+        System.out.println("播放电影: " + movie);
+    }
+    
+    public void stop() {
+        System.out.println("停止播放");
+    }
+    
+    public void off() {
+        System.out.println("DVD播放器关闭");
+    }
+}
+
+public class Projector {
+    public void on() {
+        System.out.println("投影仪开启");
+    }
+    
+    public void wideScreenMode() {
+        System.out.println("设置宽屏模式");
+    }
+    
+    public void off() {
+        System.out.println("投影仪关闭");
+    }
+}
+
+public class HomeTheaterFacade {
+    private Amplifier amplifier;
+    private DvdPlayer dvdPlayer;
+    private Projector projector;
+    
+    public HomeTheaterFacade() {
+        this.amplifier = new Amplifier();
+        this.dvdPlayer = new DvdPlayer();
+        this.projector = new Projector();
+    }
+    
+    public void watchMovie(String movie) {
+        System.out.println("准备观看电影...");
+        amplifier.on();
+        amplifier.setVolume(10);
+        dvdPlayer.on();
+        dvdPlayer.play(movie);
+        projector.on();
+        projector.wideScreenMode();
+        System.out.println("开始观看电影: " + movie);
+    }
+    
+    public void endMovie() {
+        System.out.println("结束观看电影...");
+        amplifier.off();
+        dvdPlayer.stop();
+        dvdPlayer.off();
+        projector.off();
+        System.out.println("电影观看结束");
+    }
+}
+```
+
+## 6. 享元模式（Flyweight）
+
+### 6.1 模式定义
+
+运用共享技术有效地支持大量细粒度对象的复用。
+
+### 6.2 实现示例
+
+```java title="享元模式"
+// 抽象享元
+public abstract class Flyweight {
+    public abstract void operation(String extrinsicState);
+}
+
+// 具体享元
+public class ConcreteFlyweight extends Flyweight {
+    private String intrinsicState;
+    
+    public ConcreteFlyweight(String intrinsicState) {
+        this.intrinsicState = intrinsicState;
+    }
+    
+    @Override
+    public void operation(String extrinsicState) {
+        System.out.println("具体享元: " + intrinsicState + ", 外部状态: " + extrinsicState);
+    }
+}
+
+// 享元工厂
+public class FlyweightFactory {
+    private Map<String, Flyweight> flyweights = new HashMap<>();
+    
+    public Flyweight getFlyweight(String key) {
+        Flyweight flyweight = flyweights.get(key);
+        if (flyweight == null) {
+            flyweight = new ConcreteFlyweight(key);
+            flyweights.put(key, flyweight);
+        }
+        return flyweight;
+    }
+    
+    public int getFlyweightCount() {
+        return flyweights.size();
+    }
+}
+```
+
+### 6.3 应用场景
+
+```java title="享元模式应用示例"
+// 字符渲染系统
+public class Character {
+    private char symbol;
+    private String font;
+    private int size;
+    private String color;
+    
+    public Character(char symbol, String font, int size, String color) {
+        this.symbol = symbol;
+        this.font = font;
+        this.size = size;
+        this.color = color;
+    }
+    
+    public void render(int x, int y) {
+        System.out.println("渲染字符 '" + symbol + "' 在位置 (" + x + ", " + y + 
+                          ") 使用字体 " + font + " 大小 " + size + " 颜色 " + color);
+    }
+}
+
+public class CharacterFactory {
+    private Map<String, Character> characters = new HashMap<>();
+    
+    public Character getCharacter(char symbol, String font, int size, String color) {
+        String key = symbol + font + size + color;
+        Character character = characters.get(key);
+        if (character == null) {
+            character = new Character(symbol, font, size, color);
+            characters.put(key, character);
+        }
+        return character;
+    }
+    
+    public int getCharacterCount() {
+        return characters.size();
+    }
+}
+
+public class TextEditor {
+    private CharacterFactory characterFactory;
+    private List<Character> characters = new ArrayList<>();
+    
+    public TextEditor() {
+        this.characterFactory = new CharacterFactory();
+    }
+    
+    public void addCharacter(char symbol, String font, int size, String color, int x, int y) {
+        Character character = characterFactory.getCharacter(symbol, font, size, color);
+        characters.add(character);
+        character.render(x, y);
+    }
+    
+    public void renderAll() {
+        int x = 0, y = 0;
+        for (Character character : characters) {
+            character.render(x, y);
+            x += 10; // 假设每个字符宽度为10
+        }
+    }
+}
+```
+
+## 7. 代理模式（Proxy）
+
+### 7.1 模式定义
+
+为其他对象提供一种代理以控制对这个对象的访问。
+
+### 7.2 实现方式
+
+#### 静态代理
+```java title="静态代理模式"
+// 抽象主题
+public interface Subject {
+    void request();
+}
+
+// 真实主题
+public class RealSubject implements Subject {
+    @Override
+    public void request() {
+        System.out.println("真实主题的请求");
+    }
+}
+
+// 代理类
+public class Proxy implements Subject {
+    private RealSubject realSubject;
+    
+    public Proxy() {
+        this.realSubject = new RealSubject();
+    }
+    
+    @Override
+    public void request() {
+        preRequest();
+        realSubject.request();
+        postRequest();
+    }
+    
+    private void preRequest() {
+        System.out.println("代理前置处理");
+    }
+    
+    private void postRequest() {
+        System.out.println("代理后置处理");
+    }
+}
+```
+
+#### 动态代理
+```java title="动态代理模式"
+public class DynamicProxy implements InvocationHandler {
+    private Object target;
+    
+    public DynamicProxy(Object target) {
+        this.target = target;
+    }
+    
+    @Override
+    public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
+        System.out.println("动态代理前置处理");
+        Object result = method.invoke(target, args);
+        System.out.println("动态代理后置处理");
+        return result;
+    }
+    
+    public static Object createProxy(Object target) {
+        return Proxy.newProxyInstance(
+            target.getClass().getClassLoader(),
+            target.getClass().getInterfaces(),
+            new DynamicProxy(target)
+        );
+    }
+}
+```
+
+### 7.3 应用场景
+
+```java title="代理模式应用示例"
+// 虚拟代理 - 图片加载
+public interface Image {
+    void display();
+}
+
+public class RealImage implements Image {
+    private String filename;
+    
+    public RealImage(String filename) {
+        this.filename = filename;
+        loadFromDisk();
+    }
+    
+    private void loadFromDisk() {
+        System.out.println("从磁盘加载图片: " + filename);
+    }
+    
+    @Override
+    public void display() {
+        System.out.println("显示图片: " + filename);
+    }
+}
+
+public class ProxyImage implements Image {
+    private RealImage realImage;
+    private String filename;
+    
+    public ProxyImage(String filename) {
+        this.filename = filename;
+    }
+    
+    @Override
+    public void display() {
+        if (realImage == null) {
+            realImage = new RealImage(filename);
+        }
+        realImage.display();
+    }
+}
+
+// 保护代理 - 权限控制
+public interface UserService {
+    void updateUser(User user);
+    void deleteUser(String userId);
+}
+
+public class UserServiceImpl implements UserService {
+    @Override
+    public void updateUser(User user) {
+        System.out.println("更新用户: " + user.getName());
+    }
+    
+    @Override
+    public void deleteUser(String userId) {
+        System.out.println("删除用户: " + userId);
+    }
+}
+
+public class UserServiceProxy implements UserService {
+    private UserService userService;
+    private String currentUser;
+    
+    public UserServiceProxy(UserService userService, String currentUser) {
+        this.userService = userService;
+        this.currentUser = currentUser;
+    }
+    
+    @Override
+    public void updateUser(User user) {
+        if (hasPermission("UPDATE_USER")) {
+            userService.updateUser(user);
+        } else {
+            throw new SecurityException("没有更新用户的权限");
+        }
+    }
+    
+    @Override
+    public void deleteUser(String userId) {
+        if (hasPermission("DELETE_USER")) {
+            userService.deleteUser(userId);
+        } else {
+            throw new SecurityException("没有删除用户的权限");
+        }
+    }
+    
+    private boolean hasPermission(String permission) {
+        // 简化的权限检查逻辑
+        return "admin".equals(currentUser);
+    }
+}
+```
+
+## 8. 结构型模式对比
+
+### 8.1 模式选择指南
+
+| 模式 | 适用场景 | 优点 | 缺点 |
+|------|----------|------|------|
+| **适配器** | 接口不兼容 | 提高复用性 | 增加复杂度 |
+| **桥接** | 多维度变化 | 避免继承爆炸 | 增加抽象层 |
+| **组合** | 树形结构 | 统一接口 | 类型检查困难 |
+| **装饰器** | 动态扩展 | 灵活扩展 | 产生小对象 |
+| **外观** | 简化接口 | 降低耦合 | 可能成为上帝类 |
+| **享元** | 大量对象 | 节省内存 | 增加复杂度 |
+| **代理** | 访问控制 | 控制访问 | 增加间接层 |
+
+### 8.2 模式组合使用
+
+```java title="模式组合示例"
+// 组合模式 + 装饰器模式
+public abstract class FileSystemItem {
+    public abstract void display(int depth);
+    public abstract void add(FileSystemItem item);
+    public abstract void remove(FileSystemItem item);
+}
+
+public class File extends FileSystemItem {
+    private String name;
+    
+    public File(String name) {
+        this.name = name;
+    }
+    
+    @Override
+    public void display(int depth) {
+        StringBuilder prefix = new StringBuilder();
+        for (int i = 0; i < depth; i++) {
+            prefix.append("  ");
+        }
+        System.out.println(prefix + "文件: " + name);
+    }
+    
+    @Override
+    public void add(FileSystemItem item) {
+        throw new UnsupportedOperationException();
+    }
+    
+    @Override
+    public void remove(FileSystemItem item) {
+        throw new UnsupportedOperationException();
+    }
+}
+
+// 装饰器
+public abstract class FileSystemDecorator extends FileSystemItem {
+    protected FileSystemItem component;
+    
+    public FileSystemDecorator(FileSystemItem component) {
+        this.component = component;
+    }
+    
+    @Override
+    public void display(int depth) {
+        component.display(depth);
+    }
+    
+    @Override
+    public void add(FileSystemItem item) {
+        component.add(item);
+    }
+    
+    @Override
+    public void remove(FileSystemItem item) {
+        component.remove(item);
+    }
+}
+
+public class ReadOnlyDecorator extends FileSystemDecorator {
+    public ReadOnlyDecorator(FileSystemItem component) {
+        super(component);
+    }
+    
+    @Override
+    public void add(FileSystemItem item) {
+        throw new UnsupportedOperationException("只读文件系统不能添加文件");
+    }
+    
+    @Override
+    public void remove(FileSystemItem item) {
+        throw new UnsupportedOperationException("只读文件系统不能删除文件");
+    }
+}
+```
+
+:::tip 结构型模式选择原则
+1. **适配器模式**：需要接口兼容时使用
+2. **桥接模式**：需要多维度变化时使用
+3. **组合模式**：需要树形结构时使用
+4. **装饰器模式**：需要动态扩展功能时使用
+5. **外观模式**：需要简化复杂接口时使用
+6. **享元模式**：需要大量对象共享时使用
+7. **代理模式**：需要控制对象访问时使用
+:::
+
+---
+
+通过本章的学习，你应该已经掌握了七种结构型模式的原理、实现方式和应用场景。在实际项目中，要根据具体需求选择合适的结构型模式，并注意模式间的组合使用。

@@ -1,0 +1,363 @@
+---
+sidebar_position: 4
+title: MyBatis-Plus框架详解
+description: 深入理解MyBatis-Plus核心特性、代码生成器与高级功能实战
+authors: [Laby]
+tags: [MyBatis-Plus, ORM, 代码生成, 分页插件, 条件构造器]
+last_update:
+  date: 2025-08-11
+  author: Laby
+---
+
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+import CodeBlock from '@theme/CodeBlock';
+
+# MyBatis-Plus框架详解
+
+MyBatis-Plus（简称MP）是一个MyBatis的增强工具，在MyBatis的基础上只做增强不做改变，为简化开发、提高效率而生。它提供了强大的CRUD操作、代码生成器、条件构造器等功能，让开发者专注于业务逻辑而非重复的CRUD代码。
+
+:::tip 核心价值
+**MyBatis-Plus = MyBatis增强 + 零侵入 + 损耗小 + 强大CRUD + 支持Lambda**
+- 🚀 **开箱即用**：只需简单配置，即可快速进行CRUD操作
+- 🎯 **代码生成**：内置代码生成器，快速生成Entity、Mapper、Service、Controller
+- 💡 **条件构造器**：强大的条件构造器，支持各种复杂查询
+- 🔧 **内置分页**：基于MyBatis物理分页，性能优秀
+- 🛡️ **防全表更新删除**：内置防止全表更新删除插件
+:::
+
+## 1. 核心特性与架构
+
+### 1.1 框架优势
+
+MyBatis-Plus相比原生MyBatis具有显著的优势，主要体现在代码量减少、开发效率提升、功能更加丰富、性能损耗极小和无侵入性等方面。
+
+| 特性 | MyBatis | MyBatis-Plus |
+|------|---------|--------------|
+| **通用CRUD** | ❌ 需手动编写 | ✅ 内置通用Mapper |
+| **分页支持** | ❌ 需手动实现 | ✅ 内置分页插件 |
+| **条件构造器** | ❌ 需手动拼接SQL | ✅ 强大的条件构造器 |
+| **代码生成器** | ❌ 需第三方插件 | ✅ 内置代码生成器 |
+| **逻辑删除** | ❌ 需手动实现 | ✅ 一键配置即用 |
+| **乐观锁插件** | ❌ 需手动实现 | ✅ 内置乐观锁插件 |
+
+### 1.2 核心组件
+
+MyBatis-Plus的核心组件包括：
+
+- **BaseMapper**：提供基础的CRUD方法
+- **IService/ServiceImpl**：业务层封装，提供更多批量操作方法
+- **条件构造器**：QueryWrapper、LambdaQueryWrapper等
+- **分页插件**：物理分页支持
+- **代码生成器**：快速生成各层代码
+- **插件体系**：提供多种扩展插件
+
+## 2. CRUD增强功能
+
+### 2.1 通用Mapper接口
+
+BaseMapper接口提供了常用的CRUD方法，只需让自己的Mapper接口继承BaseMapper即可获得这些方法。
+
+```java
+public interface UserMapper extends BaseMapper<User> {
+    // 无需编写任何方法，已经继承了BaseMapper的所有方法
+}
+```
+
+常用方法包括：
+- `insert(T entity)`：插入一条记录
+- `deleteById(Serializable id)`：根据ID删除
+- `updateById(T entity)`：根据ID更新
+- `selectById(Serializable id)`：根据ID查询
+- `selectList(Wrapper<T> queryWrapper)`：条件查询
+- `selectPage(Page<T> page, Wrapper<T> queryWrapper)`：分页查询
+
+### 2.2 通用Service接口
+
+IService接口和ServiceImpl实现类进一步封装了BaseMapper的方法，提供了更多的批量操作和链式调用方法。
+
+```java
+public interface UserService extends IService<User> {
+    // 自定义方法
+}
+
+@Service
+public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements UserService {
+    // 实现自定义方法
+}
+```
+
+IService相比BaseMapper的优势：
+- 返回操作结果(boolean)而非影响行数(int)
+- 提供更多批量操作方法
+- 支持链式调用API
+- 更好的事务支持
+
+### 2.3 ActiveRecord模式
+
+ActiveRecord模式允许直接通过模型对象进行数据库操作，无需额外的DAO层。
+
+```java
+@Data
+@TableName("user")
+public class User extends Model<User> {
+    private Long id;
+    private String name;
+    
+    @Override
+    protected Serializable pkVal() {
+        return this.id;
+    }
+}
+
+// 使用示例
+User user = new User();
+user.setName("张三");
+user.insert(); // 直接调用insert方法插入数据
+```
+
+## 3. 条件构造器
+
+### 3.1 QueryWrapper
+
+QueryWrapper用于构建WHERE条件、ORDER BY、GROUP BY等SQL片段。
+
+```java
+// 基本使用
+QueryWrapper<User> queryWrapper = new QueryWrapper<>();
+queryWrapper.eq("name", "张三")       // name = '张三'
+           .ge("age", 18)            // age >= 18
+           .orderByDesc("create_time"); // ORDER BY create_time DESC
+```
+
+### 3.2 LambdaQueryWrapper
+
+LambdaQueryWrapper是QueryWrapper的Lambda表达式增强版，通过Lambda表达式实现类型安全的查询条件构建。
+
+```java
+LambdaQueryWrapper<User> lambdaQuery = Wrappers.<User>lambdaQuery();
+lambdaQuery.eq(User::getName, "张三")
+          .ge(User::getAge, 18);
+```
+
+### 3.3 条件构造器高级用法
+
+- **动态条件**：根据参数值是否为空决定是否加入条件
+- **嵌套查询**：使用nested、and、or方法实现复杂条件组合
+- **子查询**：使用inSql、exists等方法实现子查询
+- **SQL函数**：使用apply方法支持SQL函数
+
+## 4. 代码生成器
+
+代码生成器可以快速生成Entity、Mapper、Service、Controller等各层代码。
+
+```java
+// 基本配置
+AutoGenerator generator = new AutoGenerator();
+// 全局配置、数据源配置、包配置、策略配置等
+generator.execute();
+```
+
+主要配置项：
+- **全局配置**：输出目录、作者、是否覆盖等
+- **数据源配置**：数据库连接信息
+- **包配置**：各层包名设置
+- **策略配置**：表名生成策略、字段名生成策略等
+- **模板配置**：自定义代码模板
+
+## 5. 分页插件
+
+### 5.1 配置分页插件
+
+```java
+@Configuration
+public class MybatisPlusConfig {
+    @Bean
+    public MybatisPlusInterceptor mybatisPlusInterceptor() {
+        MybatisPlusInterceptor interceptor = new MybatisPlusInterceptor();
+        // 添加分页插件
+        interceptor.addInnerInterceptor(new PaginationInnerInterceptor(DbType.MYSQL));
+        return interceptor;
+    }
+}
+```
+
+### 5.2 使用分页查询
+
+```java
+// 创建Page对象
+Page<User> page = new Page<>(1, 10);
+// 执行分页查询
+Page<User> userPage = userMapper.selectPage(page, null);
+// 获取分页结果
+List<User> records = userPage.getRecords(); // 当前页数据
+long total = userPage.getTotal(); // 总记录数
+```
+
+### 5.3 自定义分页查询
+
+对于复杂的分页查询，可以自定义SQL并使用分页插件：
+
+```java
+public interface UserMapper extends BaseMapper<User> {
+    IPage<UserVO> selectUserPage(Page<UserVO> page, Integer state);
+}
+
+// XML配置
+<select id="selectUserPage" resultType="com.example.vo.UserVO">
+    SELECT * FROM user WHERE state = #{state}
+</select>
+```
+
+## 6. 逻辑删除与乐观锁
+
+### 6.1 逻辑删除
+
+逻辑删除是指在数据库中并不真正删除数据，而是通过修改一个字段的值来标记该数据已被删除。
+
+```yaml
+# 全局配置
+mybatis-plus:
+  global-config:
+    db-config:
+      logic-delete-field: deleted
+      logic-delete-value: 1
+      logic-not-delete-value: 0
+```
+
+```java
+// 实体类配置
+public class User {
+    @TableLogic
+    private Integer deleted;
+}
+```
+
+### 6.2 乐观锁
+
+乐观锁是一种并发控制机制，通过版本号或时间戳来实现。
+
+```java
+@Configuration
+public class MybatisPlusConfig {
+    @Bean
+    public MybatisPlusInterceptor mybatisPlusInterceptor() {
+        MybatisPlusInterceptor interceptor = new MybatisPlusInterceptor();
+        // 添加乐观锁插件
+        interceptor.addInnerInterceptor(new OptimisticLockerInnerInterceptor());
+        return interceptor;
+    }
+}
+```
+
+```java
+// 实体类配置
+public class User {
+    @Version
+    private Integer version;
+}
+```
+
+## 7. 插件体系
+
+MyBatis-Plus提供了丰富的插件体系，包括：
+
+### 7.1 多租户插件
+
+多租户插件可以实现行级别的多租户数据隔离：
+
+```java
+interceptor.addInnerInterceptor(new TenantLineInnerInterceptor(new TenantLineHandler() {
+    @Override
+    public Expression getTenantId() {
+        return new LongValue(TenantContext.getCurrentTenantId());
+    }
+    
+    @Override
+    public String getTenantIdColumn() {
+        return "tenant_id";
+    }
+}));
+```
+
+### 7.2 动态表名插件
+
+动态表名插件可以在运行时动态替换SQL中的表名：
+
+```java
+DynamicTableNameInnerInterceptor dynamicTableNameInnerInterceptor = new DynamicTableNameInnerInterceptor();
+dynamicTableNameInnerInterceptor.setTableNameHandler((sql, tableName) -> {
+    if ("user".equals(tableName)) {
+        return "user_" + DateUtil.format(new Date(), "yyyyMM");
+    }
+    return tableName;
+});
+```
+
+### 7.3 自定义插件开发
+
+可以通过实现InnerInterceptor接口来开发自定义插件：
+
+```java
+public class MyCustomInterceptor implements InnerInterceptor {
+    @Override
+    public void beforeQuery(Executor executor, MappedStatement ms, Object parameter, RowBounds rowBounds, ResultHandler resultHandler, BoundSql boundSql) {
+        // 查询前的处理
+    }
+}
+```
+
+## 8. 实战应用与最佳实践
+
+### 8.1 权限系统开发
+
+在权限系统中，可以使用多租户插件实现数据隔离，使用动态表名插件实现分表，使用乐观锁插件实现并发控制。
+
+### 8.2 大数据量表格优化
+
+对于大数据量表格，可以使用分页插件实现高效分页，使用条件构造器优化查询条件，使用动态表名插件实现分表。
+
+### 8.3 性能优化建议
+
+- 使用分页插件进行物理分页
+- 合理使用条件构造器，避免全表扫描
+- 使用批量操作方法，减少数据库交互次数
+- 使用二级缓存，提高查询性能
+- 使用乐观锁，避免悲观锁导致的性能问题
+
+## 9. 总结
+
+MyBatis-Plus作为MyBatis的增强工具，提供了丰富的功能和插件，大大简化了开发工作，提高了开发效率。通过本文的学习，你应该已经掌握了MyBatis-Plus的核心特性和使用方法，可以在实际项目中灵活应用。
+
+## 10. 面试题精选
+
+### 10.1 MyBatis-Plus的核心特性有哪些？
+
+- 通用CRUD操作
+- 条件构造器
+- 分页插件
+- 代码生成器
+- 逻辑删除
+- 乐观锁
+- 多租户
+- 动态表名
+
+### 10.2 MyBatis-Plus如何防止全表更新与删除？
+
+MyBatis-Plus提供了防止全表更新与删除的功能，可以通过配置`update-strategy`为`not_empty`来实现。当没有WHERE条件的更新或删除操作将会被阻止。
+
+### 10.3 MyBatis-Plus的条件构造器有哪些优势？
+
+- 链式调用，代码简洁
+- 类型安全（LambdaQueryWrapper）
+- 动态条件，根据参数值决定是否加入条件
+- 支持复杂条件组合，如嵌套查询、子查询等
+- 防SQL注入
+
+:::tip MyBatis-Plus学习要点
+1. **掌握核心概念**：理解BaseMapper、IService等核心接口
+2. **熟练使用条件构造器**：掌握各种查询条件的构造方法
+3. **合理使用代码生成器**：提高开发效率，但要理解生成的代码
+4. **关注性能优化**：学会分析和优化SQL性能
+5. **持续学习**：关注MyBatis-Plus新版本特性和最佳实践
+:::

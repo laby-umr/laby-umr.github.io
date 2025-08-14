@@ -1,378 +1,1084 @@
 ---
-sidebar_position: 2
-title: "线程池"
-description: "Java线程池原理与应用"
+sidebar_position: 8
+title: "Java线程池详解"
+description: "全面介绍Java线程池、Executor框架、线程池配置与最佳实践"
 authors: [Laby]
 last_update:
-  date: 2025-08-07
+  date: 2025-01-07
   author: Laby
 ---
 
-# 线程池
+# Java 线程池详解
 
-线程池是Java并发编程中的重要组件，用于管理和复用线程，避免频繁创建和销毁线程带来的性能开销。
+线程池是Java并发编程中的重要组件，它通过复用线程来减少线程创建和销毁的开销，提高系统的性能和稳定性。本文将详细介绍Java线程池的原理、配置和最佳实践。
 
-## 线程池核心参数
+## 1. 线程池概述
 
-### ThreadPoolExecutor构造参数
-```java
-public ThreadPoolExecutor(
-    int corePoolSize,           // 核心线程数
-    int maximumPoolSize,        // 最大线程数
-    long keepAliveTime,         // 线程空闲时间
-    TimeUnit unit,              // 时间单位
-    BlockingQueue<Runnable> workQueue,  // 工作队列
-    ThreadFactory threadFactory, // 线程工厂
-    RejectedExecutionHandler handler     // 拒绝策略
-)
+### 1.1 什么是线程池？
+
+:::tip 核心概念
+线程池是一种线程复用机制，它预先创建一定数量的线程，并将这些线程放入池中。当有任务需要执行时，从池中取出一个线程来执行任务，任务执行完毕后，线程返回池中等待下一个任务。
+:::
+
+### 1.2 线程池的优势
+
+| 优势 | 具体体现 | 业务价值 |
+|------|----------|----------|
+| **减少开销** | 避免频繁创建和销毁线程 | 提高系统性能 |
+| **控制并发数** | 限制同时运行的线程数量 | 防止资源耗尽 |
+| **提高响应速度** | 任务到达时立即执行 | 提升用户体验 |
+| **统一管理** | 集中管理线程生命周期 | 简化编程模型 |
+| **提供监控** | 可以监控线程池状态 | 便于运维管理 |
+
+### 1.3 线程池的核心组件
+
+```java title="线程池核心组件示例"
+public class ThreadPoolComponents {
+    
+    /**
+     * 线程池的核心组件
+     */
+    public static void explainComponents() {
+        System.out.println("=== 线程池核心组件 ===");
+        
+        // 1. 核心线程数 (corePoolSize)
+        // 线程池中会维护的最小线程数量
+        int corePoolSize = 5;
+        System.out.println("核心线程数: " + corePoolSize);
+        
+        // 2. 最大线程数 (maximumPoolSize)
+        // 线程池中允许的最大线程数量
+        int maximumPoolSize = 10;
+        System.out.println("最大线程数: " + maximumPoolSize);
+        
+        // 3. 工作队列 (workQueue)
+        // 用于存储等待执行的任务
+        BlockingQueue<Runnable> workQueue = new LinkedBlockingQueue<>(100);
+        System.out.println("工作队列容量: " + workQueue.remainingCapacity());
+        
+        // 4. 线程工厂 (threadFactory)
+        // 用于创建新线程的工厂
+        ThreadFactory threadFactory = r -> {
+            Thread t = new Thread(r);
+            t.setName("CustomThread-" + t.getId());
+            return t;
+        };
+        System.out.println("线程工厂: " + threadFactory.getClass().getSimpleName());
+        
+        // 5. 拒绝策略 (rejectedExecutionHandler)
+        // 当线程池和队列都满时的处理策略
+        RejectedExecutionHandler rejectedHandler = new ThreadPoolExecutor.AbortPolicy();
+        System.out.println("拒绝策略: " + rejectedHandler.getClass().getSimpleName());
+        
+        // 6. 线程存活时间 (keepAliveTime)
+        // 非核心线程的空闲存活时间
+        long keepAliveTime = 60L;
+        System.out.println("线程存活时间: " + keepAliveTime + "秒");
+    }
+}
 ```
 
-### 参数详解
+## 2. Executor 框架
 
-#### 1. corePoolSize（核心线程数）
-- 线程池中会维护的最小线程数
-- 即使这些线程是空闲的，也不会被回收
-- 当提交的任务数小于核心线程数时，会创建新线程
+### 2.1 Executor 接口体系
 
-#### 2. maximumPoolSize（最大线程数）
-- 线程池中允许的最大线程数
-- 当工作队列满了，且当前线程数小于最大线程数时，会创建新线程
-- 当线程数达到最大值时，新任务会被拒绝
+Java提供了完整的Executor框架来支持线程池的使用。
 
-#### 3. keepAliveTime（线程空闲时间）
-- 当线程数大于核心线程数时，多余的空闲线程的存活时间
-- 超过这个时间，多余的线程会被回收
+```java title="Executor接口体系示例"
+import java.util.concurrent.Executor;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
 
-#### 4. workQueue（工作队列）
-- 用于存储等待执行的任务
-- 常用的队列类型：
-  - ArrayBlockingQueue：有界队列
-  - LinkedBlockingQueue：无界队列
-  - SynchronousQueue：同步队列
-  - PriorityBlockingQueue：优先级队列
-
-#### 5. threadFactory（线程工厂）
-- 用于创建新线程的工厂
-- 可以自定义线程的名称、优先级、是否为守护线程等
-
-#### 6. handler（拒绝策略）
-- 当线程池和队列都满了时的处理策略
-
-## 线程池拒绝策略
-
-### 1. AbortPolicy（默认策略）
-```java
-public class AbortPolicyExample {
-    public static void main(String[] args) {
-        ThreadPoolExecutor executor = new ThreadPoolExecutor(
-            1, 1, 0L, TimeUnit.MILLISECONDS,
-            new ArrayBlockingQueue<>(1),
-            new ThreadPoolExecutor.AbortPolicy()
-        );
+public class ExecutorFramework {
+    
+    /**
+     * 1. Executor 接口
+     * 最基本的执行器接口
+     */
+    public static class BasicExecutor implements Executor {
+        @Override
+        public void execute(Runnable command) {
+            // 直接在当前线程执行
+            command.run();
+        }
+    }
+    
+    /**
+     * 2. ExecutorService 接口
+     * 扩展了Executor，提供了生命周期管理
+     */
+    public static class ExecutorServiceExample {
+        private final ExecutorService executor = Executors.newFixedThreadPool(5);
         
-        try {
-            for (int i = 0; i < 5; i++) {
-                executor.execute(() -> {
-                    System.out.println("Task executed");
+        public void submitTask() {
+            // 提交任务并返回Future
+            executor.submit(() -> {
+                System.out.println("任务执行中...");
+                return "任务完成";
+            });
+        }
+        
+        public void shutdown() {
+            // 优雅关闭
+            executor.shutdown();
+        }
+        
+        public void shutdownNow() {
+            // 立即关闭
+            executor.shutdownNow();
+        }
+        
+        public boolean isShutdown() {
+            return executor.isShutdown();
+        }
+        
+        public boolean isTerminated() {
+            return executor.isTerminated();
+        }
+    }
+    
+    /**
+     * 3. ScheduledExecutorService 接口
+     * 支持定时和周期性任务
+     */
+    public static class ScheduledExecutorExample {
+        private final ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(2);
+        
+        public void scheduleTask() {
+            // 延迟执行
+            scheduler.schedule(() -> {
+                System.out.println("延迟任务执行");
+            }, 5, TimeUnit.SECONDS);
+        }
+        
+        public void scheduleAtFixedRate() {
+            // 固定频率执行
+            scheduler.scheduleAtFixedRate(() -> {
+                System.out.println("固定频率任务执行");
+            }, 0, 1, TimeUnit.SECONDS);
+        }
+        
+        public void scheduleWithFixedDelay() {
+            // 固定延迟执行
+            scheduler.scheduleWithFixedDelay(() -> {
+                System.out.println("固定延迟任务执行");
+            }, 0, 1, TimeUnit.SECONDS);
+        }
+    }
+}
+```
+
+### 2.2 预定义线程池
+
+Java提供了几种预定义的线程池实现。
+
+```java title="预定义线程池示例"
+public class PredefinedThreadPools {
+    
+    /**
+     * 1. FixedThreadPool - 固定大小线程池
+     */
+    public static class FixedThreadPoolExample {
+        private final ExecutorService executor = Executors.newFixedThreadPool(5);
+        
+        public void executeTasks() {
+            for (int i = 0; i < 10; i++) {
+                final int taskId = i;
+                executor.submit(() -> {
+                    System.out.println("任务 " + taskId + " 在线程 " + 
+                                     Thread.currentThread().getName() + " 中执行");
                     try {
                         Thread.sleep(1000);
                     } catch (InterruptedException e) {
-                        e.printStackTrace();
+                        Thread.currentThread().interrupt();
                     }
                 });
             }
-        } catch (RejectedExecutionException e) {
-            System.out.println("Task rejected: " + e.getMessage());
+        }
+        
+        public void shutdown() {
+            executor.shutdown();
+        }
+    }
+    
+    /**
+     * 2. CachedThreadPool - 缓存线程池
+     */
+    public static class CachedThreadPoolExample {
+        private final ExecutorService executor = Executors.newCachedThreadPool();
+        
+        public void executeTasks() {
+            for (int i = 0; i < 20; i++) {
+                final int taskId = i;
+                executor.submit(() -> {
+                    System.out.println("任务 " + taskId + " 在线程 " + 
+                                     Thread.currentThread().getName() + " 中执行");
+                    try {
+                        Thread.sleep(500);
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                    }
+                });
+            }
+        }
+        
+        public void shutdown() {
+            executor.shutdown();
+        }
+    }
+    
+    /**
+     * 3. SingleThreadExecutor - 单线程池
+     */
+    public static class SingleThreadExecutorExample {
+        private final ExecutorService executor = Executors.newSingleThreadExecutor();
+        
+        public void executeSequentialTasks() {
+            for (int i = 0; i < 5; i++) {
+                final int taskId = i;
+                executor.submit(() -> {
+                    System.out.println("任务 " + taskId + " 在线程 " + 
+                                     Thread.currentThread().getName() + " 中执行");
+                    try {
+                        Thread.sleep(1000);
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                    }
+                });
+            }
+        }
+        
+        public void shutdown() {
+            executor.shutdown();
+        }
+    }
+    
+    /**
+     * 4. ScheduledThreadPool - 定时线程池
+     */
+    public static class ScheduledThreadPoolExample {
+        private final ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(2);
+        
+        public void scheduleTasks() {
+            // 延迟执行
+            scheduler.schedule(() -> {
+                System.out.println("延迟5秒执行的任务");
+            }, 5, TimeUnit.SECONDS);
+            
+            // 固定频率执行
+            scheduler.scheduleAtFixedRate(() -> {
+                System.out.println("每2秒执行一次的任务");
+            }, 0, 2, TimeUnit.SECONDS);
+            
+            // 固定延迟执行
+            scheduler.scheduleWithFixedDelay(() -> {
+                System.out.println("任务完成后延迟1秒再执行");
+                try {
+                    Thread.sleep(500);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
+            }, 0, 1, TimeUnit.SECONDS);
+        }
+        
+        public void shutdown() {
+            scheduler.shutdown();
         }
     }
 }
 ```
 
-### 2. CallerRunsPolicy
-```java
-public class CallerRunsPolicyExample {
-    public static void main(String[] args) {
-        ThreadPoolExecutor executor = new ThreadPoolExecutor(
-            1, 1, 0L, TimeUnit.MILLISECONDS,
-            new ArrayBlockingQueue<>(1),
+## 3. ThreadPoolExecutor 详解
+
+### 3.1 ThreadPoolExecutor 构造参数
+
+ThreadPoolExecutor是线程池的核心实现类，提供了丰富的配置选项。
+
+```java title="ThreadPoolExecutor构造参数示例"
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.SynchronousQueue;
+import java.util.concurrent.PriorityBlockingQueue;
+
+public class ThreadPoolExecutorDetailed {
+    
+    /**
+     * ThreadPoolExecutor 构造参数详解
+     */
+    public static class ThreadPoolExecutorBuilder {
+        
+        /**
+         * 1. 基本参数配置
+         */
+        public static ThreadPoolExecutor createBasicPool() {
+            int corePoolSize = 5;        // 核心线程数
+            int maximumPoolSize = 10;    // 最大线程数
+            long keepAliveTime = 60L;    // 线程存活时间
+            TimeUnit unit = TimeUnit.SECONDS;  // 时间单位
+            BlockingQueue<Runnable> workQueue = new LinkedBlockingQueue<>(100); // 工作队列
+            ThreadFactory threadFactory = r -> {
+                Thread t = new Thread(r);
+                t.setName("CustomThread-" + t.getId());
+                return t;
+            };
+            RejectedExecutionHandler handler = new ThreadPoolExecutor.AbortPolicy();
+            
+            return new ThreadPoolExecutor(
+                corePoolSize, maximumPoolSize, keepAliveTime, unit,
+                workQueue, threadFactory, handler
+            );
+        }
+        
+        /**
+         * 2. 不同队列类型的线程池
+         */
+        public static ThreadPoolExecutor createUnboundedQueuePool() {
+            // 无界队列 - 可能导致内存溢出
+            BlockingQueue<Runnable> unboundedQueue = new LinkedBlockingQueue<>();
+            return new ThreadPoolExecutor(
+                5, 5, 0L, TimeUnit.MILLISECONDS, unboundedQueue
+            );
+        }
+        
+        public static ThreadPoolExecutor createBoundedQueuePool() {
+            // 有界队列 - 推荐使用
+            BlockingQueue<Runnable> boundedQueue = new ArrayBlockingQueue<>(100);
+            return new ThreadPoolExecutor(
+                5, 10, 60L, TimeUnit.SECONDS, boundedQueue
+            );
+        }
+        
+        public static ThreadPoolExecutor createSynchronousQueuePool() {
+            // 同步队列 - 适合快速执行的任务
+            BlockingQueue<Runnable> syncQueue = new SynchronousQueue<>();
+            return new ThreadPoolExecutor(
+                0, Integer.MAX_VALUE, 60L, TimeUnit.SECONDS, syncQueue
+            );
+        }
+        
+        public static ThreadPoolExecutor createPriorityQueuePool() {
+            // 优先级队列 - 支持任务优先级
+            BlockingQueue<Runnable> priorityQueue = new PriorityBlockingQueue<>();
+            return new ThreadPoolExecutor(
+                5, 10, 60L, TimeUnit.SECONDS, priorityQueue
+            );
+        }
+    }
+    
+    /**
+     * 线程池执行流程演示
+     */
+    public static class ExecutionFlowDemo {
+        private final ThreadPoolExecutor executor;
+        
+        public ExecutionFlowDemo() {
+            this.executor = new ThreadPoolExecutor(
+                2, 4, 60L, TimeUnit.SECONDS,
+                new ArrayBlockingQueue<>(3),
             new ThreadPoolExecutor.CallerRunsPolicy()
         );
+        }
         
-        for (int i = 0; i < 5; i++) {
-            executor.execute(() -> {
-                System.out.println("Task executed by: " + Thread.currentThread().getName());
+        public void demonstrateFlow() {
+            System.out.println("=== 线程池执行流程演示 ===");
+            
+            // 提交任务，观察执行流程
+            for (int i = 0; i < 10; i++) {
+                final int taskId = i;
+                executor.submit(() -> {
+                    System.out.println("任务 " + taskId + " 开始执行，线程: " + 
+                                     Thread.currentThread().getName() + 
+                                     "，池大小: " + executor.getPoolSize() +
+                                     "，活跃线程: " + executor.getActiveCount() +
+                                     "，队列大小: " + executor.getQueue().size());
+                    try {
+                        Thread.sleep(2000);
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                    }
+                    System.out.println("任务 " + taskId + " 执行完成");
+                });
+                
                 try {
-                    Thread.sleep(1000);
+                    Thread.sleep(500);
                 } catch (InterruptedException e) {
-                    e.printStackTrace();
+                    Thread.currentThread().interrupt();
                 }
-            });
+            }
+        }
+        
+        public void shutdown() {
+            executor.shutdown();
         }
     }
 }
 ```
 
-### 3. DiscardPolicy
-```java
-public class DiscardPolicyExample {
-    public static void main(String[] args) {
-        ThreadPoolExecutor executor = new ThreadPoolExecutor(
+### 3.2 拒绝策略详解
+
+当线程池和队列都满时，会触发拒绝策略。
+
+```java title="拒绝策略示例"
+public class RejectionPolicies {
+    
+    /**
+     * 1. AbortPolicy - 默认策略，抛出异常
+     */
+    public static class AbortPolicyExample {
+        private final ThreadPoolExecutor executor;
+        
+        public AbortPolicyExample() {
+            this.executor = new ThreadPoolExecutor(
+                1, 1, 0L, TimeUnit.MILLISECONDS,
+                new ArrayBlockingQueue<>(1),
+                new ThreadPoolExecutor.AbortPolicy()
+            );
+        }
+        
+        public void demonstrateAbortPolicy() {
+            System.out.println("=== AbortPolicy 演示 ===");
+            
+            try {
+                // 提交3个任务，但线程池只能处理2个
+                for (int i = 0; i < 3; i++) {
+                    final int taskId = i;
+                    executor.submit(() -> {
+                        System.out.println("任务 " + taskId + " 执行");
+                        try {
+                            Thread.sleep(2000);
+                        } catch (InterruptedException e) {
+                            Thread.currentThread().interrupt();
+                        }
+                    });
+                }
+            } catch (RejectedExecutionException e) {
+                System.out.println("任务被拒绝: " + e.getMessage());
+            }
+        }
+    }
+    
+    /**
+     * 2. CallerRunsPolicy - 调用者运行策略
+     */
+    public static class CallerRunsPolicyExample {
+        private final ThreadPoolExecutor executor;
+        
+        public CallerRunsPolicyExample() {
+            this.executor = new ThreadPoolExecutor(
+                1, 1, 0L, TimeUnit.MILLISECONDS,
+                new ArrayBlockingQueue<>(1),
+                new ThreadPoolExecutor.CallerRunsPolicy()
+            );
+        }
+        
+        public void demonstrateCallerRunsPolicy() {
+            System.out.println("=== CallerRunsPolicy 演示 ===");
+            
+            for (int i = 0; i < 3; i++) {
+                final int taskId = i;
+                executor.submit(() -> {
+                    System.out.println("任务 " + taskId + " 在线程 " + 
+                                     Thread.currentThread().getName() + " 中执行");
+                    try {
+                        Thread.sleep(2000);
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                    }
+                });
+            }
+        }
+    }
+    
+    /**
+     * 3. DiscardPolicy - 丢弃策略
+     */
+    public static class DiscardPolicyExample {
+        private final ThreadPoolExecutor executor;
+        
+        public DiscardPolicyExample() {
+            this.executor = new ThreadPoolExecutor(
             1, 1, 0L, TimeUnit.MILLISECONDS,
             new ArrayBlockingQueue<>(1),
             new ThreadPoolExecutor.DiscardPolicy()
         );
-        
-        for (int i = 0; i < 5; i++) {
-            executor.execute(() -> {
-                System.out.println("Task executed");
-                try {
-                    Thread.sleep(1000);
-                } catch (InterruptedException e) {
-                    e.printStackTrace();
-                }
-            });
         }
-        // 被拒绝的任务会被静默丢弃
+        
+        public void demonstrateDiscardPolicy() {
+            System.out.println("=== DiscardPolicy 演示 ===");
+            
+            for (int i = 0; i < 3; i++) {
+                final int taskId = i;
+                executor.submit(() -> {
+                    System.out.println("任务 " + taskId + " 执行");
+                    try {
+                        Thread.sleep(2000);
+                } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                    }
+                });
+                System.out.println("提交任务 " + taskId);
+            }
+        }
     }
-}
-```
-
-### 4. DiscardOldestPolicy
-```java
-public class DiscardOldestPolicyExample {
-    public static void main(String[] args) {
-        ThreadPoolExecutor executor = new ThreadPoolExecutor(
+    
+    /**
+     * 4. DiscardOldestPolicy - 丢弃最旧策略
+     */
+    public static class DiscardOldestPolicyExample {
+        private final ThreadPoolExecutor executor;
+        
+        public DiscardOldestPolicyExample() {
+            this.executor = new ThreadPoolExecutor(
             1, 1, 0L, TimeUnit.MILLISECONDS,
             new ArrayBlockingQueue<>(1),
             new ThreadPoolExecutor.DiscardOldestPolicy()
         );
-        
-        for (int i = 0; i < 5; i++) {
-            final int taskId = i;
-            executor.execute(() -> {
-                System.out.println("Task " + taskId + " executed");
-                try {
-                    Thread.sleep(1000);
-                } catch (InterruptedException e) {
-                    e.printStackTrace();
-                }
-            });
-        }
-        // 被拒绝的任务会丢弃队列中最旧的任务
-    }
-}
-```
-
-## 常用线程池
-
-### 1. FixedThreadPool
-```java
-public class FixedThreadPoolExample {
-    public static void main(String[] args) {
-        ExecutorService executor = Executors.newFixedThreadPool(3);
-        
-        for (int i = 0; i < 10; i++) {
-            final int taskId = i;
-            executor.execute(() -> {
-                System.out.println("Task " + taskId + " executed by " + Thread.currentThread().getName());
-                try {
-                    Thread.sleep(1000);
-                } catch (InterruptedException e) {
-                    e.printStackTrace();
-                }
-            });
         }
         
-        executor.shutdown();
-    }
-}
-```
-
-### 2. CachedThreadPool
-```java
-public class CachedThreadPoolExample {
-    public static void main(String[] args) {
-        ExecutorService executor = Executors.newCachedThreadPool();
-        
-        for (int i = 0; i < 10; i++) {
+        public void demonstrateDiscardOldestPolicy() {
+            System.out.println("=== DiscardOldestPolicy 演示 ===");
+            
+            for (int i = 0; i < 3; i++) {
             final int taskId = i;
-            executor.execute(() -> {
-                System.out.println("Task " + taskId + " executed by " + Thread.currentThread().getName());
+                executor.submit(() -> {
+                    System.out.println("任务 " + taskId + " 执行");
                 try {
-                    Thread.sleep(1000);
+                        Thread.sleep(2000);
                 } catch (InterruptedException e) {
-                    e.printStackTrace();
-                }
-            });
-        }
-        
-        executor.shutdown();
-    }
-}
-```
-
-### 3. ScheduledThreadPool
-```java
-public class ScheduledThreadPoolExample {
-    public static void main(String[] args) {
-        ScheduledExecutorService executor = Executors.newScheduledThreadPool(2);
-        
-        // 延迟执行
-        executor.schedule(() -> {
-            System.out.println("Delayed task executed");
-        }, 2, TimeUnit.SECONDS);
-        
-        // 定期执行
-        executor.scheduleAtFixedRate(() -> {
-            System.out.println("Fixed rate task executed");
-        }, 0, 1, TimeUnit.SECONDS);
-        
-        // 定期执行（考虑任务执行时间）
-        executor.scheduleWithFixedDelay(() -> {
-            System.out.println("Fixed delay task executed");
-            try {
-                Thread.sleep(500);
-            } catch (InterruptedException e) {
-                e.printStackTrace();
+                        Thread.currentThread().interrupt();
+                    }
+                });
+                System.out.println("提交任务 " + taskId);
             }
-        }, 0, 1, TimeUnit.SECONDS);
-        
-        try {
-            Thread.sleep(10000);
-        } catch (InterruptedException e) {
-            e.printStackTrace();
         }
-        
-        executor.shutdown();
     }
-}
-```
-
-### 4. SingleThreadExecutor
-```java
-public class SingleThreadExecutorExample {
-    public static void main(String[] args) {
-        ExecutorService executor = Executors.newSingleThreadExecutor();
-        
-        for (int i = 0; i < 5; i++) {
-            final int taskId = i;
-            executor.execute(() -> {
-                System.out.println("Task " + taskId + " executed by " + Thread.currentThread().getName());
-                try {
-                    Thread.sleep(1000);
-                } catch (InterruptedException e) {
-                    e.printStackTrace();
-                }
-            });
-        }
-        
-        executor.shutdown();
-    }
-}
-```
-
-## 实际应用场景
-
-### 1. Web服务器处理请求
-```java
-public class WebServer {
-    private final ExecutorService executor;
     
-    public WebServer() {
-        // 根据CPU核心数设置线程池大小
-        int processors = Runtime.getRuntime().availableProcessors();
-        this.executor = new ThreadPoolExecutor(
-            processors, processors * 2, 60L, TimeUnit.SECONDS,
-            new LinkedBlockingQueue<>(1000),
+    /**
+     * 5. 自定义拒绝策略
+     */
+    public static class CustomRejectionPolicy implements RejectedExecutionHandler {
+        @Override
+        public void rejectedExecution(Runnable r, ThreadPoolExecutor executor) {
+            System.out.println("自定义拒绝策略: 任务被拒绝，当前线程池状态:");
+            System.out.println("  池大小: " + executor.getPoolSize());
+            System.out.println("  活跃线程: " + executor.getActiveCount());
+            System.out.println("  队列大小: " + executor.getQueue().size());
+            
+            // 可以选择记录日志、发送告警等
+            System.out.println("  记录拒绝日志...");
+        }
+    }
+}
+```
+
+## 4. 线程池监控与管理
+
+### 4.1 线程池状态监控
+
+```java title="线程池监控示例"
+public class ThreadPoolMonitoring {
+    
+    /**
+     * 线程池监控器
+     */
+    public static class ThreadPoolMonitor {
+        private final ThreadPoolExecutor executor;
+        private final ScheduledExecutorService monitor;
+        
+        public ThreadPoolMonitor(ThreadPoolExecutor executor) {
+            this.executor = executor;
+            this.monitor = Executors.newSingleThreadScheduledExecutor();
+        }
+        
+        public void startMonitoring() {
+            monitor.scheduleAtFixedRate(() -> {
+                printStatus();
+            }, 0, 1, TimeUnit.SECONDS);
+        }
+        
+        public void printStatus() {
+            System.out.println("=== 线程池状态 ===");
+            System.out.println("核心线程数: " + executor.getCorePoolSize());
+            System.out.println("最大线程数: " + executor.getMaximumPoolSize());
+            System.out.println("当前池大小: " + executor.getPoolSize());
+            System.out.println("活跃线程数: " + executor.getActiveCount());
+            System.out.println("队列大小: " + executor.getQueue().size());
+            System.out.println("已完成任务数: " + executor.getCompletedTaskCount());
+            System.out.println("总任务数: " + executor.getTaskCount());
+            System.out.println("是否关闭: " + executor.isShutdown());
+            System.out.println("是否终止: " + executor.isTerminated());
+            System.out.println("------------------------");
+        }
+        
+        public void stopMonitoring() {
+            monitor.shutdown();
+        }
+    }
+    
+    /**
+     * 线程池性能统计
+     */
+    public static class ThreadPoolStatistics {
+        private final ThreadPoolExecutor executor;
+        private long startTime;
+        private long totalTasks;
+        private long completedTasks;
+        
+        public ThreadPoolStatistics(ThreadPoolExecutor executor) {
+            this.executor = executor;
+            this.startTime = System.currentTimeMillis();
+        }
+        
+        public void recordTaskSubmission() {
+            totalTasks++;
+        }
+        
+        public void recordTaskCompletion() {
+            completedTasks++;
+        }
+        
+        public void printStatistics() {
+            long currentTime = System.currentTimeMillis();
+            long runningTime = currentTime - startTime;
+            
+            System.out.println("=== 线程池统计信息 ===");
+            System.out.println("运行时间: " + runningTime + "ms");
+            System.out.println("总提交任务: " + totalTasks);
+            System.out.println("已完成任务: " + completedTasks);
+            System.out.println("任务完成率: " + (totalTasks > 0 ? (completedTasks * 100.0 / totalTasks) : 0) + "%");
+            System.out.println("平均任务处理时间: " + (completedTasks > 0 ? (runningTime / completedTasks) : 0) + "ms");
+        }
+    }
+}
+```
+
+### 4.2 线程池生命周期管理
+
+```java title="线程池生命周期管理示例"
+public class ThreadPoolLifecycle {
+    
+    /**
+     * 优雅关闭线程池
+     */
+    public static class GracefulShutdown {
+        private final ThreadPoolExecutor executor;
+        
+        public GracefulShutdown(ThreadPoolExecutor executor) {
+            this.executor = executor;
+        }
+        
+        public void shutdownGracefully() {
+            System.out.println("开始优雅关闭线程池...");
+            
+            // 1. 停止接受新任务
+            executor.shutdown();
+            
+            try {
+                // 2. 等待现有任务完成
+                if (!executor.awaitTermination(60, TimeUnit.SECONDS)) {
+                    System.out.println("等待超时，强制关闭...");
+                    executor.shutdownNow();
+                    
+                    // 3. 再次等待
+                    if (!executor.awaitTermination(60, TimeUnit.SECONDS)) {
+                        System.err.println("线程池无法关闭");
+                    }
+                }
+            } catch (InterruptedException e) {
+                System.out.println("等待过程中被中断，强制关闭...");
+                executor.shutdownNow();
+                Thread.currentThread().interrupt();
+            }
+            
+            System.out.println("线程池已关闭");
+        }
+    }
+    
+    /**
+     * 线程池重启机制
+     */
+    public static class ThreadPoolRestart {
+        private volatile ThreadPoolExecutor executor;
+        private final Object lock = new Object();
+        
+        public ThreadPoolRestart() {
+            this.executor = createNewExecutor();
+        }
+        
+        private ThreadPoolExecutor createNewExecutor() {
+            return new ThreadPoolExecutor(
+                5, 10, 60L, TimeUnit.SECONDS,
+                new ArrayBlockingQueue<>(100),
+                new ThreadPoolExecutor.CallerRunsPolicy()
+            );
+        }
+        
+        public void restart() {
+            synchronized (lock) {
+                System.out.println("开始重启线程池...");
+                
+                // 1. 关闭旧线程池
+                ThreadPoolExecutor oldExecutor = executor;
+                oldExecutor.shutdown();
+                
+                try {
+                    if (!oldExecutor.awaitTermination(30, TimeUnit.SECONDS)) {
+                        oldExecutor.shutdownNow();
+                    }
+                } catch (InterruptedException e) {
+                    oldExecutor.shutdownNow();
+                    Thread.currentThread().interrupt();
+                }
+                
+                // 2. 创建新线程池
+                executor = createNewExecutor();
+                System.out.println("线程池重启完成");
+            }
+        }
+        
+        public void submitTask(Runnable task) {
+            synchronized (lock) {
+                executor.submit(task);
+            }
+        }
+    }
+}
+```
+
+## 5. 线程池最佳实践
+
+### 5.1 线程池配置策略
+
+:::tip 核心原则
+配置线程池时需要考虑以下因素：
+- **任务类型**：CPU密集型、IO密集型、混合型
+- **系统资源**：CPU核心数、内存大小
+- **业务需求**：响应时间、吞吐量要求
+- **监控能力**：线程池状态监控
+:::
+
+```java title="线程池配置最佳实践示例"
+public class ThreadPoolBestPractices {
+    
+    /**
+     * 1. CPU密集型任务配置
+     */
+    public static class CPUIntensiveConfig {
+        public static ThreadPoolExecutor createCPUIntensivePool() {
+            int cpuCores = Runtime.getRuntime().availableProcessors();
+            return new ThreadPoolExecutor(
+                cpuCores,                    // 核心线程数 = CPU核心数
+                cpuCores,                    // 最大线程数 = CPU核心数
+                0L, TimeUnit.MILLISECONDS,   // 不保留空闲线程
+                new LinkedBlockingQueue<>(), // 无界队列
+                new ThreadPoolExecutor.CallerRunsPolicy()
+            );
+        }
+    }
+    
+    /**
+     * 2. IO密集型任务配置
+     */
+    public static class IOIntensiveConfig {
+        public static ThreadPoolExecutor createIOIntensivePool() {
+            int cpuCores = Runtime.getRuntime().availableProcessors();
+            return new ThreadPoolExecutor(
+                cpuCores * 2,               // 核心线程数 = CPU核心数 * 2
+                cpuCores * 4,               // 最大线程数 = CPU核心数 * 4
+                60L, TimeUnit.SECONDS,      // 保留空闲线程60秒
+                new ArrayBlockingQueue<>(1000), // 有界队列
             new ThreadPoolExecutor.CallerRunsPolicy()
         );
+        }
     }
     
-    public void handleRequest(HttpRequest request) {
-        executor.execute(() -> {
-            // 处理HTTP请求
-            processRequest(request);
-        });
+    /**
+     * 3. 混合型任务配置
+     */
+    public static class MixedTaskConfig {
+        public static ThreadPoolExecutor createMixedTaskPool() {
+            int cpuCores = Runtime.getRuntime().availableProcessors();
+            return new ThreadPoolExecutor(
+                cpuCores,                    // 核心线程数 = CPU核心数
+                cpuCores * 2,                // 最大线程数 = CPU核心数 * 2
+                30L, TimeUnit.SECONDS,       // 保留空闲线程30秒
+                new ArrayBlockingQueue<>(500), // 有界队列
+                new ThreadPoolExecutor.CallerRunsPolicy()
+            );
+        }
     }
     
-    private void processRequest(HttpRequest request) {
-        // 具体的请求处理逻辑
-        System.out.println("Processing request: " + request.getUrl());
+    /**
+     * 4. 定时任务配置
+     */
+    public static class ScheduledTaskConfig {
+        public static ScheduledExecutorService createScheduledPool() {
+            int cpuCores = Runtime.getRuntime().availableProcessors();
+            return Executors.newScheduledThreadPool(cpuCores);
+        }
     }
 }
 ```
 
-### 2. 批量任务处理
-```java
-public class BatchTaskProcessor {
-    private final ExecutorService executor;
+### 5.2 任务提交最佳实践
+
+```java title="任务提交最佳实践示例"
+public class TaskSubmissionBestPractices {
     
-    public BatchTaskProcessor() {
-        this.executor = Executors.newFixedThreadPool(10);
-    }
-    
-    public void processBatch(List<Task> tasks) {
-        List<Future<Result>> futures = new ArrayList<>();
+    /**
+     * 1. 使用合适的提交方法
+     */
+    public static class TaskSubmissionMethods {
+        private final ExecutorService executor = Executors.newFixedThreadPool(5);
         
-        for (Task task : tasks) {
-            Future<Result> future = executor.submit(() -> {
-                return processTask(task);
+        public void demonstrateSubmissionMethods() {
+            // 1. execute() - 不关心返回值
+            executor.execute(() -> {
+                System.out.println("使用execute提交任务");
             });
-            futures.add(future);
-        }
-        
-        // 收集结果
-        for (Future<Result> future : futures) {
+            
+            // 2. submit() - 关心返回值
+            Future<String> future = executor.submit(() -> {
+                return "任务执行结果";
+            });
+            
+            // 3. submit() - 提交Callable
+            Future<Integer> result = executor.submit(() -> {
+                return 42;
+            });
+            
+            // 4. invokeAll() - 批量提交
+            List<Callable<String>> tasks = Arrays.asList(
+                () -> "任务1",
+                () -> "任务2",
+                () -> "任务3"
+            );
+            
             try {
-                Result result = future.get();
-                System.out.println("Task completed: " + result);
-            } catch (Exception e) {
+                List<Future<String>> futures = executor.invokeAll(tasks);
+                for (Future<String> f : futures) {
+                    System.out.println("结果: " + f.get());
+                }
+            } catch (InterruptedException | ExecutionException e) {
                 e.printStackTrace();
             }
         }
     }
     
-    private Result processTask(Task task) {
-        // 具体的任务处理逻辑
-        return new Result();
+    /**
+     * 2. 异常处理
+     */
+    public static class ExceptionHandling {
+        private final ExecutorService executor = Executors.newFixedThreadPool(5);
+        
+        public void handleExceptions() {
+            // 1. 在任务内部处理异常
+            executor.submit(() -> {
+                try {
+                    // 可能抛出异常的操作
+                    throw new RuntimeException("任务异常");
+                } catch (Exception e) {
+                    System.err.println("任务内部处理异常: " + e.getMessage());
+                }
+            });
+            
+            // 2. 通过Future处理异常
+            Future<String> future = executor.submit(() -> {
+                throw new RuntimeException("任务异常");
+            });
+            
+            try {
+                String result = future.get();
+            } catch (ExecutionException e) {
+                System.err.println("通过Future捕获异常: " + e.getCause().getMessage());
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+        }
+    }
+    
+    /**
+     * 3. 任务取消
+     */
+    public static class TaskCancellation {
+        private final ExecutorService executor = Executors.newFixedThreadPool(5);
+        
+        public void demonstrateCancellation() {
+            Future<?> future = executor.submit(() -> {
+                try {
+                    Thread.sleep(10000); // 长时间运行的任务
+                } catch (InterruptedException e) {
+                    System.out.println("任务被中断");
+                    Thread.currentThread().interrupt();
+                }
+            });
+            
+            // 取消任务
+            boolean cancelled = future.cancel(true);
+            System.out.println("任务取消结果: " + cancelled);
+        }
     }
 }
 ```
 
-## 面试题
+### 5.3 性能优化技巧
 
-### 1. 为什么要使用线程池？
-**答案：**
-- **减少线程创建和销毁的开销**：线程的创建和销毁需要消耗系统资源
-- **控制并发线程数**：避免创建过多线程导致系统负载过高
-- **提供线程复用**：线程可以重复使用，提高效率
-- **提供任务队列**：可以缓存待执行的任务
+```java title="线程池性能优化示例"
+public class ThreadPoolPerformanceOptimization {
+    
+    /**
+     * 1. 任务分解
+     */
+    public static class TaskDecomposition {
+        private final ExecutorService executor = Executors.newFixedThreadPool(5);
+        
+        public void decomposeLargeTask() {
+            int[] data = new int[1000];
+            // 初始化数据...
+            
+            // 将大任务分解为小任务
+            int chunkSize = 100;
+            List<Future<Integer>> futures = new ArrayList<>();
+            
+            for (int i = 0; i < data.length; i += chunkSize) {
+                final int start = i;
+                final int end = Math.min(i + chunkSize, data.length);
+                
+                Future<Integer> future = executor.submit(() -> {
+                    int sum = 0;
+                    for (int j = start; j < end; j++) {
+                        sum += data[j];
+                    }
+                    return sum;
+                });
+                futures.add(future);
+            }
+            
+            // 收集结果
+            int totalSum = 0;
+            for (Future<Integer> future : futures) {
+                try {
+                    totalSum += future.get();
+                } catch (InterruptedException | ExecutionException e) {
+                    e.printStackTrace();
+                }
+            }
+        }
+    }
+    
+    /**
+     * 2. 任务优先级
+     */
+    public static class TaskPriority {
+        private final ThreadPoolExecutor executor;
+        
+        public TaskPriority() {
+            this.executor = new ThreadPoolExecutor(
+                5, 10, 60L, TimeUnit.SECONDS,
+                new PriorityBlockingQueue<>(),
+                new ThreadPoolExecutor.CallerRunsPolicy()
+            );
+        }
+        
+        public void submitPriorityTasks() {
+            // 高优先级任务
+            executor.submit(new PriorityTask("高优先级任务", 1));
+            
+            // 低优先级任务
+            executor.submit(new PriorityTask("低优先级任务", 3));
+            
+            // 中优先级任务
+            executor.submit(new PriorityTask("中优先级任务", 2));
+        }
+        
+        private static class PriorityTask implements Runnable, Comparable<PriorityTask> {
+            private final String name;
+            private final int priority;
+            
+            public PriorityTask(String name, int priority) {
+                this.name = name;
+                this.priority = priority;
+            }
+            
+            @Override
+            public void run() {
+                System.out.println("执行任务: " + name + "，优先级: " + priority);
+            }
+            
+            @Override
+            public int compareTo(PriorityTask other) {
+                return Integer.compare(this.priority, other.priority);
+            }
+        }
+    }
+    
+    /**
+     * 3. 线程池预热
+     */
+    public static class ThreadPoolWarmup {
+        private final ThreadPoolExecutor executor;
+        
+        public ThreadPoolWarmup() {
+            this.executor = new ThreadPoolExecutor(
+                5, 10, 60L, TimeUnit.SECONDS,
+                new ArrayBlockingQueue<>(100),
+                new ThreadPoolExecutor.CallerRunsPolicy()
+            );
+        }
+        
+        public void warmup() {
+            System.out.println("开始预热线程池...");
+            
+            // 提交一些轻量级任务来预热线程池
+            for (int i = 0; i < 5; i++) {
+                executor.submit(() -> {
+                    System.out.println("预热任务执行");
+                });
+            }
+            
+            // 等待预热完成
+            try {
+                Thread.sleep(1000);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+            
+            System.out.println("线程池预热完成");
+        }
+    }
+}
+```
 
-### 2. 线程池的核心参数有哪些？
-**答案：** 线程池的核心参数包括：
-- corePoolSize：核心线程数
-- maximumPoolSize：最大线程数
-- keepAliveTime：线程空闲时间
-- workQueue：工作队列
-- threadFactory：线程工厂
-- handler：拒绝策略
+## 6. 总结
 
-### 3. 线程池的工作流程是什么？
-**答案：**
-1. 当提交任务时，如果当前线程数 < corePoolSize，创建新线程
-2. 如果当前线程数 >= corePoolSize，将任务放入队列
-3. 如果队列满了，且当前线程数 < maximumPoolSize，创建新线程
-4. 如果当前线程数 >= maximumPoolSize，执行拒绝策略
+线程池是Java并发编程中的重要组件，合理使用线程池可以显著提高系统性能和稳定性。
 
-### 4. 如何选择合适的线程池大小？
-**答案：**
-- **CPU密集型任务**：线程数 = CPU核心数 + 1
-- **IO密集型任务**：线程数 = CPU核心数 * (1 + 平均等待时间/平均工作时间)
-- **混合型任务**：根据实际情况调整，通常设置为CPU核心数的2-4倍
+### 6.1 关键要点
 
-### 5. 线程池的拒绝策略有哪些？
-**答案：** 线程池有4种拒绝策略：
-- **AbortPolicy**：抛出RejectedExecutionException异常
-- **CallerRunsPolicy**：由调用线程执行任务
-- **DiscardPolicy**：丢弃任务，不抛出异常
-- **DiscardOldestPolicy**：丢弃队列中最旧的任务，然后提交新任务
+1. **线程池类型**：FixedThreadPool、CachedThreadPool、SingleThreadExecutor、ScheduledThreadPool
+2. **配置参数**：核心线程数、最大线程数、队列类型、拒绝策略
+3. **监控管理**：状态监控、生命周期管理、性能统计
+4. **最佳实践**：合理配置、异常处理、任务分解、性能优化
+
+### 6.2 选择建议
+
+| 场景 | 推荐线程池 | 配置要点 |
+|------|------------|----------|
+| **固定并发数** | FixedThreadPool | 核心线程数 = 最大线程数 |
+| **短期异步任务** | CachedThreadPool | 适合任务执行时间短 |
+| **顺序执行** | SingleThreadExecutor | 保证任务顺序执行 |
+| **定时任务** | ScheduledThreadPool | 支持延迟和周期性执行 |
+| **自定义需求** | ThreadPoolExecutor | 完全控制配置参数 |
+
+### 6.3 学习建议
+
+1. **理解原理**：深入理解线程池的工作原理和参数含义
+2. **实践验证**：通过编写代码验证不同配置的效果
+3. **性能测试**：对比不同线程池配置的性能差异
+4. **监控运维**：建立线程池监控和告警机制
+
+通过深入理解和熟练运用线程池技术，我们能够构建出更加高效、健壮和可维护的Java并发应用程序。 

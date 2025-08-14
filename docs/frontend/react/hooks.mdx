@@ -1,27 +1,668 @@
 ---
 sidebar_position: 2
-title: "React Hooks"
-description: "React Hooks详解与最佳实践"
+title: React Hooks深度解析与实战指南
+description: 全面掌握React Hooks的核心概念、使用技巧与性能优化最佳实践
 authors: [Laby]
+tags: [React Hooks, useState, useEffect, useContext, useReducer, 自定义Hook, 性能优化]
 last_update:
-  date: 2025-08-07
+  date: 2025-08-14
   author: Laby
 ---
 
-# React Hooks
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+import CodeBlock from '@theme/CodeBlock';
 
-Hooks是React 16.8引入的特性，允许在函数组件中使用状态和其他React特性。
+# React Hooks深度解析与实战指南
 
-## useState
+React Hooks是React 16.8引入的革命性特性，让函数组件拥有了类组件的所有能力，同时提供了更简洁、更灵活的状态管理和副作用处理方式。通过Hooks，我们可以在函数组件中使用状态、生命周期方法和其他React特性。
 
-## useEffect
+:::tip 核心价值
+**React Hooks = 状态管理 + 副作用处理 + 逻辑复用 + 性能优化**
+- 🎯 **状态管理**：useState、useReducer提供灵活的状态解决方案
+- 🔄 **副作用处理**：useEffect统一处理生命周期和副作用
+- 🧩 **逻辑复用**：自定义Hook实现跨组件逻辑共享
+- ⚡ **性能优化**：useMemo、useCallback、React.memo优化渲染
+- 🎨 **代码简洁**：函数式编程，减少样板代码
+- 🔧 **开发体验**：更好的TypeScript支持和调试体验
+:::
 
-## useContext
+## 1. useState - 状态管理基石
 
-## useReducer
+useState是最基础也是最重要的Hook，用于在函数组件中添加状态。
 
-## useRef
+<Tabs>
+<TabItem value="basic-usage" label="基础用法">
 
-## 自定义Hook
+```typescript title="useState基础与进阶用法"
+import React, { useState, useCallback } from 'react';
 
-## 面试题 
+// 1. 基础计数器示例
+const Counter: React.FC = () => {
+  const [count, setCount] = useState(0);
+  
+  return (
+    <div className="counter">
+      <h2>计数器: {count}</h2>
+      <button onClick={() => setCount(count + 1)}>+1</button>
+      <button onClick={() => setCount(count - 1)}>-1</button>
+      <button onClick={() => setCount(0)}>重置</button>
+    </div>
+  );
+};
+
+// 2. 复杂状态管理
+interface UserProfile {
+  name: string;
+  email: string;
+  age: number;
+  preferences: {
+    theme: 'light' | 'dark';
+    language: string;
+    notifications: boolean;
+  };
+}
+
+const UserProfileForm: React.FC = () => {
+  const [profile, setProfile] = useState<UserProfile>({
+    name: '',
+    email: '',
+    age: 0,
+    preferences: {
+      theme: 'light',
+      language: 'zh-CN',
+      notifications: true
+    }
+  });
+  
+  const updateBasicInfo = useCallback((field: keyof Pick<UserProfile, 'name' | 'email' | 'age'>, value: string | number) => {
+    setProfile(prev => ({
+      ...prev,
+      [field]: value
+    }));
+  }, []);
+  
+  const updatePreferences = useCallback((field: keyof UserProfile['preferences'], value: any) => {
+    setProfile(prev => ({
+      ...prev,
+      preferences: {
+        ...prev.preferences,
+        [field]: value
+      }
+    }));
+  }, []);
+  
+  return (
+    <form className="user-profile-form">
+      <div className="form-section">
+        <h3>基本信息</h3>
+        <input
+          type="text"
+          placeholder="姓名"
+          value={profile.name}
+          onChange={(e) => updateBasicInfo('name', e.target.value)}
+        />
+        <input
+          type="email"
+          placeholder="邮箱"
+          value={profile.email}
+          onChange={(e) => updateBasicInfo('email', e.target.value)}
+        />
+        <input
+          type="number"
+          placeholder="年龄"
+          value={profile.age}
+          onChange={(e) => updateBasicInfo('age', parseInt(e.target.value) || 0)}
+        />
+      </div>
+      
+      <div className="form-section">
+        <h3>偏好设置</h3>
+        <select
+          value={profile.preferences.theme}
+          onChange={(e) => updatePreferences('theme', e.target.value)}
+        >
+          <option value="light">浅色主题</option>
+          <option value="dark">深色主题</option>
+        </select>
+        
+        <select
+          value={profile.preferences.language}
+          onChange={(e) => updatePreferences('language', e.target.value)}
+        >
+          <option value="zh-CN">中文</option>
+          <option value="en-US">English</option>
+        </select>
+        
+        <label>
+          <input
+            type="checkbox"
+            checked={profile.preferences.notifications}
+            onChange={(e) => updatePreferences('notifications', e.target.checked)}
+          />
+          接收通知
+        </label>
+      </div>
+    </form>
+  );
+};
+```
+
+</TabItem>
+<TabItem value="advanced-patterns" label="高级模式">
+
+```typescript title="useState高级使用模式"
+import React, { useState, useCallback, useMemo } from 'react';
+
+// 1. 惰性初始化
+const ExpensiveComponent: React.FC = () => {
+  const [data, setData] = useState(() => {
+    console.log('执行昂贵的初始化计算');
+    return Array.from({ length: 1000 }, (_, i) => ({
+      id: i,
+      value: Math.random() * 100
+    }));
+  });
+  
+  return (
+    <div>
+      <h3>数据量: {data.length}</h3>
+      <button onClick={() => setData(prev => [...prev, { id: prev.length, value: Math.random() * 100 }])}>
+        添加数据
+      </button>
+    </div>
+  );
+};
+
+// 2. 状态合并工具Hook
+function useStateWithMerge<T extends object>(initialState: T) {
+  const [state, setState] = useState<T>(initialState);
+  
+  const mergeState = useCallback((updates: Partial<T>) => {
+    setState(prev => ({ ...prev, ...updates }));
+  }, []);
+  
+  return [state, mergeState, setState] as const;
+}
+
+// 使用状态合并Hook
+const FormWithMerge: React.FC = () => {
+  const [formData, mergeFormData, setFormData] = useStateWithMerge({
+    username: '',
+    email: '',
+    password: '',
+    confirmPassword: ''
+  });
+  
+  const handleInputChange = useCallback((field: string, value: string) => {
+    mergeFormData({ [field]: value });
+  }, [mergeFormData]);
+  
+  const resetForm = useCallback(() => {
+    setFormData({
+      username: '',
+      email: '',
+      password: '',
+      confirmPassword: ''
+    });
+  }, [setFormData]);
+  
+  return (
+    <form className="merge-form">
+      <input
+        type="text"
+        placeholder="用户名"
+        value={formData.username}
+        onChange={(e) => handleInputChange('username', e.target.value)}
+      />
+      <input
+        type="email"
+        placeholder="邮箱"
+        value={formData.email}
+        onChange={(e) => handleInputChange('email', e.target.value)}
+      />
+      <button type="button" onClick={resetForm}>重置</button>
+    </form>
+  );
+};
+```
+
+</TabItem>
+</Tabs>
+
+## 2. useEffect - 副作用管理专家
+
+useEffect是处理副作用的核心Hook，统一了类组件中的componentDidMount、componentDidUpdate和componentWillUnmount。
+
+<Tabs>
+<TabItem value="basic-effects" label="基础副作用">
+
+```typescript title="useEffect基础用法"
+import React, { useState, useEffect, useCallback } from 'react';
+
+// 1. 基础副作用处理
+const BasicEffectExample: React.FC = () => {
+  const [count, setCount] = useState(0);
+  const [title, setTitle] = useState('React App');
+  
+  // 无依赖数组 - 每次渲染后都执行
+  useEffect(() => {
+    console.log('组件渲染完成');
+  });
+  
+  // 空依赖数组 - 只在挂载时执行一次
+  useEffect(() => {
+    console.log('组件已挂载');
+    document.title = title;
+    
+    return () => {
+      console.log('组件即将卸载');
+      document.title = 'React App';
+    };
+  }, []);
+  
+  // 有依赖数组 - 依赖变化时执行
+  useEffect(() => {
+    document.title = `计数: ${count}`;
+  }, [count]);
+  
+  return (
+    <div className="basic-effect-example">
+      <h2>{title}</h2>
+      <p>计数: {count}</p>
+      <button onClick={() => setCount(count + 1)}>增加</button>
+      <input
+        type="text"
+        value={title}
+        onChange={(e) => setTitle(e.target.value)}
+        placeholder="修改标题"
+      />
+    </div>
+  );
+};
+
+// 2. 数据获取副作用
+interface User {
+  id: number;
+  name: string;
+  email: string;
+}
+
+const DataFetchingExample: React.FC<{ userId: number }> = ({ userId }) => {
+  const [user, setUser] = useState<User | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  
+  useEffect(() => {
+    let cancelled = false;
+    
+    const fetchUser = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        
+        const response = await fetch(`/api/users/${userId}`);
+        if (!response.ok) {
+          throw new Error('获取用户信息失败');
+        }
+        
+        const userData = await response.json();
+        
+        if (!cancelled) {
+          setUser(userData);
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setError(err instanceof Error ? err.message : '未知错误');
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
+    };
+    
+    fetchUser();
+    
+    return () => {
+      cancelled = true;
+    };
+  }, [userId]);
+  
+  if (loading) return <div>加载中...</div>;
+  if (error) return <div>错误: {error}</div>;
+  if (!user) return <div>用户不存在</div>;
+  
+  return (
+    <div className="user-info">
+      <h3>{user.name}</h3>
+      <p>邮箱: {user.email}</p>
+    </div>
+  );
+};
+```
+
+</TabItem>
+<TabItem value="advanced-effects" label="高级副作用">
+
+```typescript title="useEffect高级模式"
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+
+// 1. 自定义Hook封装副作用
+function useDebounce<T>(value: T, delay: number): T {
+  const [debouncedValue, setDebouncedValue] = useState<T>(value);
+  
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedValue(value);
+    }, delay);
+    
+    return () => {
+      clearTimeout(handler);
+    };
+  }, [value, delay]);
+  
+  return debouncedValue;
+}
+
+// 使用防抖Hook
+const SearchComponent: React.FC = () => {
+  const [searchTerm, setSearchTerm] = useState('');
+  const [results, setResults] = useState<string[]>([]);
+  const [loading, setLoading] = useState(false);
+  
+  const debouncedSearchTerm = useDebounce(searchTerm, 500);
+  
+  useEffect(() => {
+    if (debouncedSearchTerm) {
+      setLoading(true);
+      
+      const searchAPI = async () => {
+        try {
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          const mockResults = [
+            `结果1: ${debouncedSearchTerm}`,
+            `结果2: ${debouncedSearchTerm}`,
+            `结果3: ${debouncedSearchTerm}`
+          ];
+          setResults(mockResults);
+        } finally {
+          setLoading(false);
+        }
+      };
+      
+      searchAPI();
+    } else {
+      setResults([]);
+    }
+  }, [debouncedSearchTerm]);
+  
+  return (
+    <div className="search-component">
+      <input
+        type="text"
+        value={searchTerm}
+        onChange={(e) => setSearchTerm(e.target.value)}
+        placeholder="搜索..."
+      />
+      
+      {loading && <div>搜索中...</div>}
+      
+      <ul>
+        {results.map((result, index) => (
+          <li key={index}>{result}</li>
+        ))}
+      </ul>
+    </div>
+  );
+};
+```
+
+</TabItem>
+</Tabs>
+
+## 3. useContext - 跨组件状态共享
+
+useContext提供了一种在组件树中传递数据的方法，避免了props drilling问题。
+
+```typescript title="useContext实现"
+import React, { createContext, useContext, useState, ReactNode } from 'react';
+
+// 1. 主题Context
+interface ThemeContextType {
+  theme: 'light' | 'dark';
+  toggleTheme: () => void;
+}
+
+const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
+
+export const ThemeProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
+  const [theme, setTheme] = useState<'light' | 'dark'>('light');
+  
+  const toggleTheme = () => {
+    setTheme(prev => prev === 'light' ? 'dark' : 'light');
+  };
+  
+  const value = {
+    theme,
+    toggleTheme
+  };
+  
+  return (
+    <ThemeContext.Provider value={value}>
+      {children}
+    </ThemeContext.Provider>
+  );
+};
+
+export const useTheme = () => {
+  const context = useContext(ThemeContext);
+  if (context === undefined) {
+    throw new Error('useTheme must be used within a ThemeProvider');
+  }
+  return context;
+};
+
+// 使用示例
+const ThemeToggle: React.FC = () => {
+  const { theme, toggleTheme } = useTheme();
+  
+  return (
+    <button onClick={toggleTheme}>
+      切换到 {theme === 'light' ? '深色' : '浅色'} 主题
+    </button>
+  );
+};
+```
+
+## 4. 自定义Hooks - 逻辑复用的艺术
+
+自定义Hook是React中实现逻辑复用的强大工具。
+
+```typescript title="自定义Hook最佳实践"
+// 1. 数据获取Hook
+function useApi<T>(url: string) {
+  const [data, setData] = useState<T | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        
+        const response = await fetch(url);
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        const result = await response.json();
+        setData(result);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'An error occurred');
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    fetchData();
+  }, [url]);
+  
+  return { data, loading, error };
+}
+
+// 2. 本地存储Hook
+function useLocalStorage<T>(key: string, initialValue: T) {
+  const [storedValue, setStoredValue] = useState<T>(() => {
+    try {
+      const item = window.localStorage.getItem(key);
+      return item ? JSON.parse(item) : initialValue;
+    } catch (error) {
+      console.error(`Error reading localStorage key "${key}":`, error);
+      return initialValue;
+    }
+  });
+  
+  const setValue = useCallback((value: T | ((val: T) => T)) => {
+    try {
+      const valueToStore = value instanceof Function ? value(storedValue) : value;
+      setStoredValue(valueToStore);
+      window.localStorage.setItem(key, JSON.stringify(valueToStore));
+    } catch (error) {
+      console.error(`Error setting localStorage key "${key}":`, error);
+    }
+  }, [key, storedValue]);
+  
+  return [storedValue, setValue] as const;
+}
+
+// 使用示例
+const UserProfile: React.FC = () => {
+  const { data: user, loading, error } = useApi<User>('/api/user/profile');
+  const [preferences, setPreferences] = useLocalStorage('userPreferences', {
+    theme: 'light',
+    language: 'en'
+  });
+  
+  if (loading) return <div>Loading...</div>;
+  if (error) return <div>Error: {error}</div>;
+  
+  return (
+    <div>
+      <h1>{user?.name}</h1>
+      <p>Theme: {preferences.theme}</p>
+      <button onClick={() => setPreferences(prev => ({ 
+        ...prev, 
+        theme: prev.theme === 'light' ? 'dark' : 'light' 
+      }))}>
+        Toggle Theme
+      </button>
+    </div>
+  );
+};
+```
+
+## 5. 性能优化Hooks
+
+React提供了多个用于性能优化的Hooks。
+
+<Tabs>
+<TabItem value="usememo" label="useMemo">
+
+```typescript title="useMemo优化昂贵计算"
+import React, { useState, useMemo } from 'react';
+
+const ExpensiveCalculation: React.FC = () => {
+  const [numbers, setNumbers] = useState<number[]>([]);
+  const [filter, setFilter] = useState('');
+  
+  // 使用useMemo缓存计算结果
+  const expensiveResult = useMemo(() => {
+    console.log('执行昂贵计算');
+    return numbers
+      .filter(n => n.toString().includes(filter))
+      .reduce((sum, n) => sum + n, 0);
+  }, [numbers, filter]);
+  
+  return (
+    <div>
+      <input
+        type="text"
+        value={filter}
+        onChange={(e) => setFilter(e.target.value)}
+        placeholder="过滤数字..."
+      />
+      <p>计算结果: {expensiveResult}</p>
+      <button onClick={() => setNumbers(prev => [...prev, Math.random() * 100])}>
+        添加随机数
+      </button>
+    </div>
+  );
+};
+```
+
+</TabItem>
+<TabItem value="usecallback" label="useCallback">
+
+```typescript title="useCallback优化事件处理"
+import React, { useState, useCallback, memo } from 'react';
+
+interface TodoItemProps {
+  todo: { id: number; text: string; completed: boolean };
+  onToggle: (id: number) => void;
+  onDelete: (id: number) => void;
+}
+
+const TodoItem = memo<TodoItemProps>(({ todo, onToggle, onDelete }) => {
+  console.log('TodoItem render:', todo.text);
+  
+  return (
+    <li>
+      <input
+        type="checkbox"
+        checked={todo.completed}
+        onChange={() => onToggle(todo.id)}
+      />
+      <span>{todo.text}</span>
+      <button onClick={() => onDelete(todo.id)}>删除</button>
+    </li>
+  );
+});
+
+const TodoList: React.FC = () => {
+  const [todos, setTodos] = useState([
+    { id: 1, text: '学习React', completed: false },
+    { id: 2, text: '学习Hooks', completed: true }
+  ]);
+  
+  // 使用useCallback优化回调函数
+  const handleToggle = useCallback((id: number) => {
+    setTodos(prev => prev.map(todo =>
+      todo.id === id ? { ...todo, completed: !todo.completed } : todo
+    ));
+  }, []);
+  
+  const handleDelete = useCallback((id: number) => {
+    setTodos(prev => prev.filter(todo => todo.id !== id));
+  }, []);
+  
+  return (
+    <ul>
+      {todos.map(todo => (
+        <TodoItem
+          key={todo.id}
+          todo={todo}
+          onToggle={handleToggle}
+          onDelete={handleDelete}
+        />
+      ))}
+    </ul>
+  );
+};
+```
+
+</TabItem>
+</Tabs>
+
+通过掌握这些React Hooks的核心概念和最佳实践，你可以构建更加高效、可维护的React应用程序。

@@ -1,101 +1,2028 @@
 ---
 sidebar_position: 3
-title: "服务熔断与降级"
-description: "微服务熔断降级解决方案"
+title: 服务熔断与降级详解
+description: 深入理解微服务熔断器的工作原理、实现方案与最佳实践
 authors: [Laby]
 last_update:
   date: 2025-08-07
   author: Laby
 ---
 
-# 服务熔断与降级
+# 服务熔断与降级详解
 
-在微服务系统中，故障会放大并级联。熔断、限流、隔离、重试与超时共同构成韧性保护网。
+在微服务系统中，服务间的依赖关系复杂，单个服务的故障可能会像雪崩一样迅速传播到整个系统。熔断器模式是解决这类问题的有效手段，它通过快速失败和降级策略来保护系统免受级联故障的影响。
 
-## Resilience4j
+:::tip 核心价值
+熔断器 = 快速失败 + 故障隔离 + 自动恢复 + 降级保护 + 系统稳定
+:::
 
-### 常用组件
-- CircuitBreaker：熔断
-- RateLimiter：限流
-- Bulkhead：舱壁隔离（线程池/信号量）
-- Retry：重试（配合退避）
-- TimeLimiter：超时
+## 1. 熔断器基础概念
 
-### 使用示例
+### 1.1 什么是熔断器？
 
-```java
-import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
-import io.github.resilience4j.ratelimiter.annotation.RateLimiter;
-import io.github.resilience4j.timelimiter.annotation.TimeLimiter;
+熔断器模式来源于电路中的保险丝概念，当电路过载时，保险丝会熔断以保护整个电路系统。在软件系统中，熔断器同样起到保护作用，当依赖的服务出现故障时，熔断器会快速失败，避免故障传播。
 
-@org.springframework.stereotype.Service
-public class ProductService {
-
-    @CircuitBreaker(name = "product", fallbackMethod = "getProductFallback")
-    @RateLimiter(name = "product")
-    @TimeLimiter(name = "product")
-    public java.util.concurrent.CompletableFuture`<String>` getProduct(String id) {
-        return java.util.concurrent.CompletableFuture.supplyAsync(() -> {
-            // 调用下游服务（可能超时/失败）
-            if (Math.random() < 0.3) throw new RuntimeException("downstream error");
-            return "OK";
-        });
+#### 熔断器的核心思想
+```java title="熔断器核心思想示例"
+public class CircuitBreakerConcept {
+    /*
+     * 熔断器的核心思想
+     * 1. 监控：持续监控依赖服务的调用结果
+     * 2. 判断：根据失败率、响应时间等指标判断服务状态
+     * 3. 保护：当服务异常时，快速失败，避免资源浪费
+     * 4. 恢复：当服务恢复时，逐步恢复正常调用
+     * 5. 降级：提供降级策略，保证系统可用性
+     */
+    
+    // 熔断器状态枚举
+    public enum CircuitBreakerState {
+        CLOSED,     // 关闭状态：正常处理请求
+        OPEN,       // 开启状态：快速失败
+        HALF_OPEN   // 半开状态：允许部分请求通过
     }
-
-    public java.util.concurrent.CompletableFuture`<String>` getProductFallback(String id, Throwable ex) {
-        return java.util.concurrent.CompletableFuture.completedFuture("FALLBACK");
+    
+    // 熔断器基本结构
+    public class CircuitBreaker {
+        private CircuitBreakerState state = CircuitBreakerState.CLOSED;
+        private int failureCount = 0;
+        private int successCount = 0;
+        private long lastFailureTime = 0;
+        
+        // 配置参数
+        private final int failureThreshold;      // 失败阈值
+        private final int successThreshold;      // 成功阈值
+        private final long timeout;              // 超时时间
+        private final long resetTimeout;         // 重置超时时间
+        
+        public CircuitBreaker(int failureThreshold, int successThreshold, 
+                             long timeout, long resetTimeout) {
+            this.failureThreshold = failureThreshold;
+            this.successThreshold = successThreshold;
+            this.timeout = timeout;
+            this.resetTimeout = resetTimeout;
+        }
+        
+        // 执行方法
+        public <T> T execute(Supplier<T> supplier) {
+            if (isOpen()) {
+                throw new CircuitBreakerOpenException("Circuit breaker is open");
+            }
+            
+            try {
+                T result = supplier.get();
+                onSuccess();
+                return result;
+            } catch (Exception e) {
+                onFailure();
+                throw e;
+            }
+        }
+        
+        // 判断是否开启
+        private boolean isOpen() {
+            if (state == CircuitBreakerState.OPEN) {
+                if (System.currentTimeMillis() - lastFailureTime > resetTimeout) {
+                    state = CircuitBreakerState.HALF_OPEN;
+                    successCount = 0;
+                    return false;
+                }
+                return true;
+            }
+            return false;
+        }
+        
+        // 成功处理
+        private void onSuccess() {
+            if (state == CircuitBreakerState.HALF_OPEN) {
+                if (++successCount >= successThreshold) {
+                    state = CircuitBreakerState.CLOSED;
+                    failureCount = 0;
+                }
+            }
+        }
+        
+        // 失败处理
+        private void onFailure() {
+            lastFailureTime = System.currentTimeMillis();
+            
+            if (state == CircuitBreakerState.CLOSED) {
+                if (++failureCount >= failureThreshold) {
+                    state = CircuitBreakerState.OPEN;
+                }
+            } else if (state == CircuitBreakerState.HALF_OPEN) {
+                state = CircuitBreakerState.OPEN;
+                successCount = 0;
+            }
+        }
+    }
+    
+    // 熔断器异常
+    public class CircuitBreakerOpenException extends RuntimeException {
+        public CircuitBreakerOpenException(String message) {
+            super(message);
+        }
     }
 }
 ```
 
-```yaml
+### 1.2 熔断器的三种状态
+
+#### 状态转换图
+```
+熔断器状态转换:
+┌─────────────┐    失败次数达到阈值    ┌─────────────┐
+│   CLOSED    │ ─────────────────────▶ │    OPEN     │
+│  (关闭状态)  │                       │  (开启状态)  │
+│             │ ◀───────────────────── │             │
+│ 正常处理请求 │    超时时间到达        │  快速失败    │
+└─────────────┘                       └─────────────┘
+       │                                       │
+       │ 成功次数达到阈值                       │
+       ▼                                       │
+┌─────────────┐                               │
+│ HALF_OPEN   │ ◀─────────────────────────────┘
+│ (半开状态)   │
+│             │
+│ 允许部分请求 │
+└─────────────┘
+```
+
+#### 状态详细说明
+```java title="熔断器状态说明"
+public class CircuitBreakerStates {
+    /*
+     * 熔断器三种状态详解
+     * 
+     * 1. CLOSED（关闭状态）
+     *    - 正常状态，所有请求都会正常处理
+     *    - 持续监控失败率，当失败次数达到阈值时转换为OPEN状态
+     *    - 失败计数器会记录每次失败
+     * 
+     * 2. OPEN（开启状态）
+     *    - 保护状态，所有请求都会快速失败
+     *    - 避免对故障服务的无效调用，节省资源
+     *    - 经过一定时间后自动转换为HALF_OPEN状态
+     * 
+     * 3. HALF_OPEN（半开状态）
+     *    - 试探状态，允许少量请求通过
+     *    - 如果这些请求成功，则转换为CLOSED状态
+     *    - 如果这些请求失败，则转换回OPEN状态
+     */
+    
+    // 关闭状态处理
+    public class ClosedStateHandler {
+        public <T> T handle(Supplier<T> supplier) {
+            try {
+                T result = supplier.get();
+                // 成功，重置失败计数
+                resetFailureCount();
+                return result;
+            } catch (Exception e) {
+                // 失败，增加失败计数
+                incrementFailureCount();
+                
+                // 检查是否达到失败阈值
+                if (getFailureCount() >= getFailureThreshold()) {
+                    transitionToOpenState();
+                }
+                
+                throw e;
+            }
+        }
+    }
+    
+    // 开启状态处理
+    public class OpenStateHandler {
+        public <T> T handle(Supplier<T> supplier) {
+            // 直接抛出异常，不调用实际服务
+            throw new CircuitBreakerOpenException("Circuit breaker is open");
+        }
+        
+        // 检查是否可以转换为半开状态
+        public boolean canTransitionToHalfOpen() {
+            return System.currentTimeMillis() - getLastFailureTime() > getResetTimeout();
+        }
+    }
+    
+    // 半开状态处理
+    public class HalfOpenStateHandler {
+        public <T> T handle(Supplier<T> supplier) {
+            try {
+                T result = supplier.get();
+                // 成功，增加成功计数
+                incrementSuccessCount();
+                
+                // 检查是否达到成功阈值
+                if (getSuccessCount() >= getSuccessThreshold()) {
+                    transitionToClosedState();
+                }
+                
+                return result;
+            } catch (Exception e) {
+                // 失败，立即转换回开启状态
+                transitionToOpenState();
+                throw e;
+            }
+        }
+    }
+}
+```
+
+### 1.3 熔断器的优势与挑战
+
+#### 核心优势
+```java title="熔断器优势示例"
+public class CircuitBreakerAdvantages {
+    /*
+     * 熔断器的核心优势
+     * 1. 快速失败：避免长时间等待故障服务响应
+     * 2. 故障隔离：防止故障在服务间传播
+     * 3. 自动恢复：服务恢复后自动恢复正常调用
+     * 4. 资源保护：避免资源浪费在无效调用上
+     * 5. 系统稳定：提高整体系统的可用性和稳定性
+     */
+    
+    // 快速失败示例
+    public class FastFailureExample {
+        private final CircuitBreaker circuitBreaker;
+        
+        public FastFailureExample() {
+            this.circuitBreaker = new CircuitBreaker(5, 3, 5000, 30000);
+        }
+        
+        public String callService() {
+            return circuitBreaker.execute(() -> {
+                // 模拟调用可能失败的服务
+                if (Math.random() < 0.3) {
+                    throw new RuntimeException("Service unavailable");
+                }
+                return "Service response";
+            });
+        }
+        
+        // 当服务故障时，熔断器会快速失败，避免长时间等待
+        public void demonstrateFastFailure() {
+            try {
+                String result = callService();
+                System.out.println("Success: " + result);
+            } catch (CircuitBreakerOpenException e) {
+                System.out.println("Fast failure: " + e.getMessage());
+                // 可以立即返回降级结果，而不是等待超时
+            }
+        }
+    }
+    
+    // 故障隔离示例
+    public class FaultIsolationExample {
+        private final Map<String, CircuitBreaker> circuitBreakers = new HashMap<>();
+        
+        public void callMultipleServices() {
+            // 每个服务都有独立的熔断器
+            String userResult = callServiceWithCircuitBreaker("user-service", this::callUserService);
+            String orderResult = callServiceWithCircuitBreaker("order-service", this::callOrderService);
+            String paymentResult = callServiceWithCircuitBreaker("payment-service", this::callPaymentService);
+            
+            // 即使某个服务故障，其他服务仍能正常工作
+            System.out.println("User: " + userResult);
+            System.out.println("Order: " + orderResult);
+            System.out.println("Payment: " + paymentResult);
+        }
+        
+        private <T> T callServiceWithCircuitBreaker(String serviceName, Supplier<T> serviceCall) {
+            CircuitBreaker circuitBreaker = circuitBreakers.computeIfAbsent(serviceName, 
+                k -> new CircuitBreaker(5, 3, 5000, 30000));
+            
+            try {
+                return circuitBreaker.execute(serviceCall);
+            } catch (CircuitBreakerOpenException e) {
+                return getFallbackResult(serviceName);
+            }
+        }
+        
+        private String getFallbackResult(String serviceName) {
+            // 返回降级结果
+            return "Fallback result for " + serviceName;
+        }
+    }
+}
+```
+
+#### 主要挑战
+```java title="熔断器挑战示例"
+public class CircuitBreakerChallenges {
+    /*
+     * 熔断器面临的主要挑战
+     * 1. 配置复杂：需要合理设置各种阈值参数
+     * 2. 状态管理：需要正确管理熔断器状态转换
+     * 3. 监控困难：需要监控熔断器的状态和性能
+     * 4. 降级策略：需要设计合适的降级策略
+     * 5. 测试困难：难以模拟各种故障场景
+     */
+    
+    // 配置复杂性
+    public class ConfigurationComplexity {
+        /*
+         * 熔断器配置参数众多，需要根据实际情况调整
+         * - failureThreshold: 失败阈值，设置过低容易误触发，设置过高响应慢
+         * - successThreshold: 成功阈值，影响恢复速度
+         * - timeout: 超时时间，影响用户体验
+         * - resetTimeout: 重置超时时间，影响故障恢复
+         */
+        
+        public CircuitBreaker createOptimizedCircuitBreaker(String serviceName) {
+            // 根据服务特点设置不同的配置
+            switch (serviceName) {
+                case "user-service":
+                    // 用户服务，对可用性要求高，设置较低的失败阈值
+                    return new CircuitBreaker(3, 2, 3000, 20000);
+                case "order-service":
+                    // 订单服务，对一致性要求高，设置较高的失败阈值
+                    return new CircuitBreaker(5, 3, 5000, 30000);
+                case "payment-service":
+                    // 支付服务，对安全性要求高，设置严格的配置
+                    return new CircuitBreaker(2, 1, 2000, 15000);
+                default:
+                    return new CircuitBreaker(5, 3, 5000, 30000);
+            }
+        }
+    }
+    
+    // 状态管理复杂性
+    public class StateManagementComplexity {
+        /*
+         * 熔断器状态管理需要考虑的问题
+         * 1. 并发安全：多线程环境下的状态转换
+         * 2. 状态持久化：重启后状态恢复
+         * 3. 分布式环境：多实例间的状态同步
+         * 4. 监控告警：状态变化的及时通知
+         */
+        
+        // 线程安全的熔断器
+        public class ThreadSafeCircuitBreaker {
+            private volatile CircuitBreakerState state = CircuitBreakerState.CLOSED;
+            private final AtomicInteger failureCount = new AtomicInteger(0);
+            private final AtomicInteger successCount = new AtomicInteger(0);
+            private volatile long lastFailureTime = 0;
+            
+            public synchronized void transitionToOpenState() {
+                state = CircuitBreakerState.OPEN;
+                lastFailureTime = System.currentTimeMillis();
+                // 通知监控系统
+                notifyStateChange("OPEN");
+            }
+            
+            public synchronized void transitionToClosedState() {
+                state = CircuitBreakerState.CLOSED;
+                failureCount.set(0);
+                // 通知监控系统
+                notifyStateChange("CLOSED");
+            }
+            
+            private void notifyStateChange(String newState) {
+                // 发送状态变化通知
+                System.out.println("Circuit breaker state changed to: " + newState);
+            }
+        }
+    }
+}
+```
+
+:::info 熔断器设计原则
+1. **快速失败**：当依赖服务故障时，应该快速失败而不是等待超时
+2. **自动恢复**：当依赖服务恢复时，应该自动恢复正常调用
+3. **降级保护**：提供合适的降级策略，保证系统可用性
+4. **监控告警**：建立完善的监控体系，及时发现和处理问题
+5. **配置灵活**：支持动态配置，适应不同的业务场景
+::: 
+
+## 2. Resilience4j 框架详解
+
+### 2.1 Resilience4j 核心组件
+
+Resilience4j是一个轻量级的容错库，专为Java 8和函数式编程设计。它提供了多种容错模式，包括熔断器、限流器、重试、超时等。
+
+#### 核心组件架构
+```java title="Resilience4j核心组件"
+public class Resilience4jComponents {
+    /*
+     * Resilience4j核心组件
+     * 1. CircuitBreaker：熔断器，防止级联故障
+     * 2. RateLimiter：限流器，控制请求速率
+     * 3. Bulkhead：舱壁隔离，限制并发调用
+     * 4. Retry：重试机制，处理临时故障
+     * 5. TimeLimiter：超时控制，避免长时间等待
+     * 6. Cache：缓存机制，提高响应速度
+     */
+    
+    // 熔断器配置
+    public class CircuitBreakerConfig {
+        private final int slidingWindowSize;           // 滑动窗口大小
+        private final double failureRateThreshold;     // 失败率阈值
+        private final Duration waitDurationInOpenState; // 开启状态等待时间
+        private final int permittedNumberOfCallsInHalfOpenState; // 半开状态允许调用数
+        private final boolean automaticTransitionFromOpenToHalfOpenEnabled; // 自动转换
+        
+        public CircuitBreakerConfig(int slidingWindowSize, double failureRateThreshold,
+                                   Duration waitDurationInOpenState,
+                                   int permittedNumberOfCallsInHalfOpenState) {
+            this.slidingWindowSize = slidingWindowSize;
+            this.failureRateThreshold = failureRateThreshold;
+            this.waitDurationInOpenState = waitDurationInOpenState;
+            this.permittedNumberOfCallsInHalfOpenState = permittedNumberOfCallsInHalfOpenState;
+            this.automaticTransitionFromOpenToHalfOpenEnabled = true;
+        }
+    }
+    
+    // 限流器配置
+    public class RateLimiterConfig {
+        private final int limitForPeriod;              // 周期内限制
+        private final Duration limitRefreshPeriod;     // 限制刷新周期
+        private final Duration timeoutDuration;        // 超时时间
+        
+        public RateLimiterConfig(int limitForPeriod, Duration limitRefreshPeriod,
+                                Duration timeoutDuration) {
+            this.limitForPeriod = limitForPeriod;
+            this.limitRefreshPeriod = limitRefreshPeriod;
+            this.timeoutDuration = timeoutDuration;
+        }
+    }
+    
+    // 舱壁隔离配置
+    public class BulkheadConfig {
+        private final int maxConcurrentCalls;          // 最大并发调用数
+        private final Duration maxWaitDuration;        // 最大等待时间
+        
+        public BulkheadConfig(int maxConcurrentCalls, Duration maxWaitDuration) {
+            this.maxConcurrentCalls = maxConcurrentCalls;
+            this.maxWaitDuration = maxWaitDuration;
+        }
+    }
+    
+    // 重试配置
+    public class RetryConfig {
+        private final int maxAttempts;                 // 最大重试次数
+        private final Duration waitDuration;           // 等待时间
+        private final List<Class<? extends Throwable>> retryExceptions; // 重试异常类型
+        
+        public RetryConfig(int maxAttempts, Duration waitDuration,
+                          List<Class<? extends Throwable>> retryExceptions) {
+            this.maxAttempts = maxAttempts;
+            this.waitDuration = waitDuration;
+            this.retryExceptions = retryExceptions;
+        }
+    }
+}
+```
+
+### 2.2 Resilience4j 使用示例
+
+#### 基础使用示例
+```java title="Resilience4j基础使用"
+@Service
+public class ProductService {
+    
+    private final CircuitBreaker circuitBreaker;
+    private final RateLimiter rateLimiter;
+    private final Bulkhead bulkhead;
+    private final Retry retry;
+    private final TimeLimiter timeLimiter;
+    
+    public ProductService() {
+        // 创建熔断器
+        CircuitBreakerConfig circuitBreakerConfig = CircuitBreakerConfig.custom()
+            .slidingWindowSize(10)
+            .failureRateThreshold(50.0f)
+            .waitDurationInOpenState(Duration.ofSeconds(30))
+            .permittedNumberOfCallsInHalfOpenState(3)
+            .build();
+        
+        this.circuitBreaker = CircuitBreaker.of("product-service", circuitBreakerConfig);
+        
+        // 创建限流器
+        RateLimiterConfig rateLimiterConfig = RateLimiterConfig.custom()
+            .limitForPeriod(10)
+            .limitRefreshPeriod(Duration.ofSeconds(1))
+            .timeoutDuration(Duration.ofSeconds(5))
+            .build();
+        
+        this.rateLimiter = RateLimiter.of("product-service", rateLimiterConfig);
+        
+        // 创建舱壁隔离
+        BulkheadConfig bulkheadConfig = BulkheadConfig.custom()
+            .maxConcurrentCalls(20)
+            .maxWaitDuration(Duration.ofSeconds(5))
+            .build();
+        
+        this.bulkhead = Bulkhead.of("product-service", bulkheadConfig);
+        
+        // 创建重试
+        RetryConfig retryConfig = RetryConfig.custom()
+            .maxAttempts(3)
+            .waitDuration(Duration.ofSeconds(1))
+            .retryExceptions(Arrays.asList(RuntimeException.class))
+            .build();
+        
+        this.retry = Retry.of("product-service", retryConfig);
+        
+        // 创建超时控制
+        this.timeLimiter = TimeLimiter.of("product-service", 
+            TimeLimiterConfig.custom().timeoutDuration(Duration.ofSeconds(5)).build());
+    }
+    
+    // 使用熔断器
+    public Product getProduct(String id) {
+        return circuitBreaker.executeSupplier(() -> {
+            // 调用下游服务
+            return callProductService(id);
+        });
+    }
+    
+    // 使用限流器
+    public List<Product> searchProducts(String keyword) {
+        return rateLimiter.executeSupplier(() -> {
+            // 搜索商品
+            return searchProductService(keyword);
+        });
+    }
+    
+    // 使用舱壁隔离
+    public void updateProduct(String id, Product product) {
+        bulkhead.executeRunnable(() -> {
+            // 更新商品
+            updateProductService(id, product);
+        });
+    }
+    
+    // 使用重试
+    public void createProduct(Product product) {
+        retry.executeRunnable(() -> {
+            // 创建商品
+            createProductService(product);
+        });
+    }
+    
+    // 使用超时控制
+    public CompletableFuture<Product> getProductAsync(String id) {
+        return timeLimiter.executeCompletionStage(
+            () -> CompletableFuture.supplyAsync(() -> callProductService(id))
+        );
+    }
+    
+    // 组合使用多个组件
+    public Product getProductWithAllProtection(String id) {
+        return circuitBreaker.executeSupplier(() ->
+            rateLimiter.executeSupplier(() ->
+                bulkhead.executeSupplier(() ->
+                    retry.executeSupplier(() -> callProductService(id))
+                )
+            )
+        );
+    }
+    
+    // 模拟服务调用
+    private Product callProductService(String id) {
+        // 模拟网络调用
+        if (Math.random() < 0.3) {
+            throw new RuntimeException("Service unavailable");
+        }
+        return new Product(id, "Product " + id, 100.0);
+    }
+    
+    private List<Product> searchProductService(String keyword) {
+        // 模拟搜索服务
+        return Arrays.asList(
+            new Product("1", "Product 1", 100.0),
+            new Product("2", "Product 2", 200.0)
+        );
+    }
+    
+    private void updateProductService(String id, Product product) {
+        // 模拟更新服务
+        System.out.println("Updating product: " + id);
+    }
+    
+    private void createProductService(Product product) {
+        // 模拟创建服务
+        System.out.println("Creating product: " + product.getName());
+    }
+}
+```
+
+#### 注解方式使用
+```java title="Resilience4j注解使用"
+@Service
+public class AnnotatedProductService {
+    
+    @CircuitBreaker(name = "product-service", fallbackMethod = "getProductFallback")
+    @RateLimiter(name = "product-service")
+    @Bulkhead(name = "product-service")
+    @Retry(name = "product-service", fallbackMethod = "getProductFallback")
+    @TimeLimiter(name = "product-service")
+    public CompletableFuture<Product> getProduct(String id) {
+        return CompletableFuture.supplyAsync(() -> {
+            // 模拟调用下游服务
+            if (Math.random() < 0.3) {
+                throw new RuntimeException("Service unavailable");
+            }
+            return new Product(id, "Product " + id, 100.0);
+        });
+    }
+    
+    // 熔断器降级方法
+    public CompletableFuture<Product> getProductFallback(String id, Throwable ex) {
+        return CompletableFuture.completedFuture(
+            new Product(id, "Fallback Product", 0.0)
+        );
+    }
+    
+    // 重试降级方法
+    public Product getProductFallback(String id, RuntimeException ex) {
+        return new Product(id, "Retry Fallback Product", 0.0);
+    }
+    
+    // 组合使用多个注解
+    @CircuitBreaker(name = "order-service", fallbackMethod = "createOrderFallback")
+    @RateLimiter(name = "order-service")
+    @Bulkhead(name = "order-service")
+    public Order createOrder(OrderRequest request) {
+        // 创建订单逻辑
+        if (Math.random() < 0.2) {
+            throw new RuntimeException("Order service unavailable");
+        }
+        return new Order(UUID.randomUUID().toString(), request.getProductId(), 
+                        request.getQuantity(), 100.0);
+    }
+    
+    public Order createOrderFallback(OrderRequest request, Throwable ex) {
+        // 降级逻辑：返回默认订单
+        return new Order("fallback-order", request.getProductId(), 
+                        request.getQuantity(), 0.0);
+    }
+}
+```
+
+### 2.3 Resilience4j 配置详解
+
+#### 配置文件
+```yaml title="application.yml"
 resilience4j:
   circuitbreaker:
     instances:
-      product:
-        slidingWindowType: COUNT_BASED
-        slidingWindowSize: 20
-        failureRateThreshold: 50
-        waitDurationInOpenState: 30s
-        permittedNumberOfCallsInHalfOpenState: 3
+      product-service:
+        sliding-window-size: 20
+        failure-rate-threshold: 50
+        wait-duration-in-open-state: 30s
+        permitted-number-of-calls-in-half-open-state: 3
+        automatic-transition-from-open-to-half-open-enabled: true
+        record-exceptions:
+          - java.lang.RuntimeException
+          - java.io.IOException
+        ignore-exceptions:
+          - java.lang.IllegalArgumentException
+        sliding-window-type: COUNT_BASED
+        minimum-number-of-calls: 10
+        slow-call-rate-threshold: 100
+        slow-call-duration-threshold: 2s
+        
+      order-service:
+        sliding-window-size: 10
+        failure-rate-threshold: 30
+        wait-duration-in-open-state: 60s
+        permitted-number-of-calls-in-half-open-state: 2
+        record-exceptions:
+          - java.lang.RuntimeException
+        sliding-window-type: TIME_BASED
+        minimum-number-of-calls: 5
+        slow-call-rate-threshold: 50
+        slow-call-duration-threshold: 1s
+        
+      payment-service:
+        sliding-window-size: 5
+        failure-rate-threshold: 20
+        wait-duration-in-open-state: 120s
+        permitted-number-of-calls-in-half-open-state: 1
+        record-exceptions:
+          - java.lang.RuntimeException
+        sliding-window-type: COUNT_BASED
+        minimum-number-of-calls: 3
+        slow-call-rate-threshold: 30
+        slow-call-duration-threshold: 500ms
+  
   ratelimiter:
     instances:
-      product:
+      product-service:
         limit-for-period: 10
         limit-refresh-period: 1s
+        timeout-duration: 5s
+        register-health-indicator: true
+        
+      order-service:
+        limit-for-period: 5
+        limit-refresh-period: 1s
+        timeout-duration: 10s
+        register-health-indicator: true
+        
+      payment-service:
+        limit-for-period: 2
+        limit-refresh-period: 1s
+        timeout-duration: 15s
+        register-health-indicator: true
+  
+  bulkhead:
+    instances:
+      product-service:
+        max-concurrent-calls: 20
+        max-wait-duration: 5s
+        register-health-indicator: true
+        
+      order-service:
+        max-concurrent-calls: 10
+        max-wait-duration: 10s
+        register-health-indicator: true
+        
+      payment-service:
+        max-concurrent-calls: 5
+        max-wait-duration: 15s
+        register-health-indicator: true
+  
+  retry:
+    instances:
+      product-service:
+        max-attempts: 3
+        wait-duration: 1s
+        enable-exponential-backoff: true
+        exponential-backoff-multiplier: 2
+        retry-exceptions:
+          - java.lang.RuntimeException
+          - java.io.IOException
+        ignore-exceptions:
+          - java.lang.IllegalArgumentException
+        
+      order-service:
+        max-attempts: 2
+        wait-duration: 2s
+        enable-exponential-backoff: true
+        exponential-backoff-multiplier: 1.5
+        retry-exceptions:
+          - java.lang.RuntimeException
+        
+      payment-service:
+        max-attempts: 1
+        wait-duration: 5s
+        enable-exponential-backoff: false
+        retry-exceptions:
+          - java.lang.RuntimeException
+  
   timelimiter:
     instances:
-      product:
-        timeout-duration: 2s
+      product-service:
+        timeout-duration: 5s
+        cancel-running-future: true
+        
+      order-service:
+        timeout-duration: 10s
+        cancel-running-future: true
+        
+      payment-service:
+        timeout-duration: 15s
+        cancel-running-future: true
+
+# 监控配置
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,metrics,circuitbreakers,ratelimiters,bulkheads,retries
+  endpoint:
+    health:
+      show-details: always
+  metrics:
+    export:
+      prometheus:
+        enabled: true
 ```
 
-注意：
-- Fallback方法签名需与原方法匹配并追加`Throwable`
-- 与线程池隔离结合，避免调用方被阻塞
+#### 配置类
+```java title="Resilience4j配置类"
+@Configuration
+public class Resilience4jConfiguration {
+    
+    // 熔断器配置
+    @Bean
+    public Customizer<Resilience4JCircuitBreakerFactory> defaultCustomizer() {
+        return factory -> factory.configureDefault(id -> new CircuitBreakerConfig.Builder()
+            .slidingWindowSize(10)
+            .failureRateThreshold(50)
+            .waitDurationInOpenState(Duration.ofSeconds(10))
+            .permittedNumberOfCallsInHalfOpenState(5)
+            .recordExceptions(RuntimeException.class, IOException.class)
+            .ignoreExceptions(IllegalArgumentException.class)
+            .slidingWindowType(CircuitBreakerConfig.SlidingWindowType.COUNT_BASED)
+            .minimumNumberOfCalls(5)
+            .slowCallRateThreshold(100)
+            .slowCallDurationThreshold(Duration.ofSeconds(2))
+            .build());
+    }
+    
+    // 限流器配置
+    @Bean
+    public Customizer<Resilience4JRateLimiterFactory> rateLimiterCustomizer() {
+        return factory -> factory.configureDefault(id -> RateLimiterConfig.custom()
+            .limitForPeriod(10)
+            .limitRefreshPeriod(Duration.ofSeconds(1))
+            .timeoutDuration(Duration.ofSeconds(5))
+            .build());
+    }
+    
+    // 舱壁隔离配置
+    @Bean
+    public Customizer<Resilience4JBulkheadFactory> bulkheadCustomizer() {
+        return factory -> factory.configureDefault(id -> BulkheadConfig.custom()
+            .maxConcurrentCalls(20)
+            .maxWaitDuration(Duration.ofSeconds(5))
+            .build());
+    }
+    
+    // 重试配置
+    @Bean
+    public Customizer<Resilience4JRetryFactory> retryCustomizer() {
+        return factory -> factory.configureDefault(id -> RetryConfig.custom()
+            .maxAttempts(3)
+            .waitDuration(Duration.ofSeconds(1))
+            .enableExponentialBackoff()
+            .exponentialBackoffMultiplier(2)
+            .retryExceptions(RuntimeException.class, IOException.class)
+            .ignoreExceptions(IllegalArgumentException.class)
+            .build());
+    }
+    
+    // 超时控制配置
+    @Bean
+    public Customizer<Resilience4JTimeLimiterFactory> timeLimiterCustomizer() {
+        return factory -> factory.configureDefault(id -> TimeLimiterConfig.custom()
+            .timeoutDuration(Duration.ofSeconds(5))
+            .cancelRunningFuture(true)
+            .build());
+    }
+    
+    // 事件监听器
+    @Bean
+    public CircuitBreakerRegistryCustomizer circuitBreakerRegistryCustomizer() {
+        return registry -> {
+            registry.getEventPublisher()
+                .onEntryAdded(entryAddedEvent -> {
+                    CircuitBreaker addedCircuitBreaker = entryAddedEvent.getAddedEntry();
+                    addedCircuitBreaker.getEventPublisher()
+                        .onStateTransition(event -> {
+                            log.info("Circuit breaker {} state changed from {} to {}",
+                                addedCircuitBreaker.getName(),
+                                event.getStateTransition().getFromState(),
+                                event.getStateTransition().getToState());
+                        })
+                        .onFailureRateExceeded(event -> {
+                            log.warn("Circuit breaker {} failure rate exceeded: {}%",
+                                addedCircuitBreaker.getName(),
+                                event.getFailureRate());
+                        })
+                        .onSlowCallRateExceeded(event -> {
+                            log.warn("Circuit breaker {} slow call rate exceeded: {}%",
+                                addedCircuitBreaker.getName(),
+                                event.getSlowCallRate());
+                        });
+                });
+        };
+    }
+}
+```
 
-## Sentinel（简述）
+:::tip Resilience4j最佳实践
+1. **合理配置**：根据服务特点设置合适的阈值和超时时间
+2. **监控告警**：建立完善的监控体系，及时发现和处理问题
+3. **降级策略**：为每个服务设计合适的降级策略
+4. **测试验证**：通过压力测试验证配置的有效性
+5. **文档维护**：维护完整的配置文档，便于团队协作
+::: 
 
-- 流量控制（QPS/并发）、熔断降级（慢调用/异常比率）、系统自适应保护
-- 控制台动态规则下发，实时监控
+## 3. 监控观测与最佳实践
 
-## 常见策略
+### 3.1 监控观测体系
 
-- 超时设置：上游超时 < 下游超时
-- 重试：指数退避 + 抖动，限定最大重试
-- 舱壁隔离：线程池限额，避免排队堆积
-- 失败快速返回：熔断打开时直接降级
-- 灰度与熔断联动：针对灰度流量单独阈值
+#### 监控指标收集
+```java title="监控指标收集示例"
+public class MonitoringAndObservability {
+    
+    // 熔断器监控指标
+    @Component
+    public class CircuitBreakerMetrics {
+        
+        private final MeterRegistry meterRegistry;
+        private final Counter totalCalls;
+        private final Counter successfulCalls;
+        private final Counter failedCalls;
+        private final Counter notPermittedCalls;
+        private final Timer callDuration;
+        private final Gauge failureRate;
+        private final Gauge slowCallRate;
+        
+        public CircuitBreakerMetrics(MeterRegistry meterRegistry) {
+            this.meterRegistry = meterRegistry;
+            this.totalCalls = Counter.builder("circuitbreaker.calls.total")
+                .description("Total number of calls")
+                .register(meterRegistry);
+            this.successfulCalls = Counter.builder("circuitbreaker.calls.successful")
+                .description("Number of successful calls")
+                .register(meterRegistry);
+            this.failedCalls = Counter.builder("circuitbreaker.calls.failed")
+                .description("Number of failed calls")
+                .register(meterRegistry);
+            this.notPermittedCalls = Counter.builder("circuitbreaker.calls.not_permitted")
+                .description("Number of calls not permitted")
+                .register(meterRegistry);
+            this.callDuration = Timer.builder("circuitbreaker.calls.duration")
+                .description("Call duration")
+                .register(meterRegistry);
+            this.failureRate = Gauge.builder("circuitbreaker.failure_rate")
+                .description("Failure rate percentage")
+                .register(meterRegistry, this, CircuitBreakerMetrics::getFailureRate);
+            this.slowCallRate = Gauge.builder("circuitbreaker.slow_call_rate")
+                .description("Slow call rate percentage")
+                .register(meterRegistry, this, CircuitBreakerMetrics::getSlowCallRate);
+        }
+        
+        public void recordCall(String serviceName, boolean success, long duration, boolean permitted) {
+            totalCalls.increment(Tags.of("service", serviceName));
+            
+            if (permitted) {
+                if (success) {
+                    successfulCalls.increment(Tags.of("service", serviceName));
+                } else {
+                    failedCalls.increment(Tags.of("service", serviceName));
+                }
+                callDuration.record(duration, TimeUnit.MILLISECONDS, Tags.of("service", serviceName));
+            } else {
+                notPermittedCalls.increment(Tags.of("service", serviceName));
+            }
+        }
+        
+        private double getFailureRate() {
+            // 计算失败率
+            return 0.0; // 实际实现中需要计算
+        }
+        
+        private double getSlowCallRate() {
+            // 计算慢调用率
+            return 0.0; // 实际实现中需要计算
+        }
+    }
+    
+    // 限流器监控指标
+    @Component
+    public class RateLimiterMetrics {
+        
+        private final MeterRegistry meterRegistry;
+        private final Counter permittedCalls;
+        private final Counter refusedCalls;
+        private final Timer waitDuration;
+        
+        public RateLimiterMetrics(MeterRegistry meterRegistry) {
+            this.meterRegistry = meterRegistry;
+            this.permittedCalls = Counter.builder("ratelimiter.calls.permitted")
+                .description("Number of permitted calls")
+                .register(meterRegistry);
+            this.refusedCalls = Counter.builder("ratelimiter.calls.refused")
+                .description("Number of refused calls")
+                .register(meterRegistry);
+            this.waitDuration = Timer.builder("ratelimiter.wait.duration")
+                .description("Wait duration for permission")
+                .register(meterRegistry);
+        }
+        
+        public void recordCall(String serviceName, boolean permitted, long waitTime) {
+            if (permitted) {
+                permittedCalls.increment(Tags.of("service", serviceName));
+            } else {
+                refusedCalls.increment(Tags.of("service", serviceName));
+            }
+            waitDuration.record(waitTime, TimeUnit.MILLISECONDS, Tags.of("service", serviceName));
+        }
+    }
+    
+    // 舱壁隔离监控指标
+    @Component
+    public class BulkheadMetrics {
+        
+        private final MeterRegistry meterRegistry;
+        private final Counter permittedCalls;
+        private final Counter rejectedCalls;
+        private final Timer callDuration;
+        private final Gauge availableConcurrentCalls;
+        
+        public BulkheadMetrics(MeterRegistry meterRegistry) {
+            this.meterRegistry = meterRegistry;
+            this.permittedCalls = Counter.builder("bulkhead.calls.permitted")
+                .description("Number of permitted calls")
+                .register(meterRegistry);
+            this.rejectedCalls = Counter.builder("bulkhead.calls.rejected")
+                .description("Number of rejected calls")
+                .register(meterRegistry);
+            this.callDuration = Timer.builder("bulkhead.calls.duration")
+                .description("Call duration")
+                .register(meterRegistry);
+            this.availableConcurrentCalls = Gauge.builder("bulkhead.available_concurrent_calls")
+                .description("Available concurrent calls")
+                .register(meterRegistry, this, BulkheadMetrics::getAvailableConcurrentCalls);
+        }
+        
+        public void recordCall(String serviceName, boolean permitted, long duration) {
+            if (permitted) {
+                permittedCalls.increment(Tags.of("service", serviceName));
+                callDuration.record(duration, TimeUnit.MILLISECONDS, Tags.of("service", serviceName));
+            } else {
+                rejectedCalls.increment(Tags.of("service", serviceName));
+            }
+        }
+        
+        private double getAvailableConcurrentCalls() {
+            // 获取可用并发调用数
+            return 0.0; // 实际实现中需要计算
+        }
+    }
+    
+    // 重试监控指标
+    @Component
+    public class RetryMetrics {
+        
+        private final MeterRegistry meterRegistry;
+        private final Counter totalCalls;
+        private final Counter successfulCalls;
+        private final Counter failedCalls;
+        private final Counter retryAttempts;
+        private final Timer callDuration;
+        
+        public RetryMetrics(MeterRegistry meterRegistry) {
+            this.meterRegistry = meterRegistry;
+            this.totalCalls = Counter.builder("retry.calls.total")
+                .description("Total number of calls")
+                .register(meterRegistry);
+            this.successfulCalls = Counter.builder("retry.calls.successful")
+                .description("Number of successful calls")
+                .register(meterRegistry);
+            this.failedCalls = Counter.builder("retry.calls.failed")
+                .description("Number of failed calls")
+                .register(meterRegistry);
+            this.retryAttempts = Counter.builder("retry.attempts")
+                .description("Number of retry attempts")
+                .register(meterRegistry);
+            this.callDuration = Timer.builder("retry.calls.duration")
+                .description("Call duration")
+                .register(meterRegistry);
+        }
+        
+        public void recordCall(String serviceName, boolean success, int attempts, long duration) {
+            totalCalls.increment(Tags.of("service", serviceName));
+            
+            if (success) {
+                successfulCalls.increment(Tags.of("service", serviceName));
+            } else {
+                failedCalls.increment(Tags.of("service", serviceName));
+            }
+            
+            if (attempts > 1) {
+                retryAttempts.increment(Tags.of("service", serviceName), attempts - 1);
+            }
+            
+            callDuration.record(duration, TimeUnit.MILLISECONDS, Tags.of("service", serviceName));
+        }
+    }
+}
+```
 
-## 指标与观测
+#### Prometheus监控配置
+```yaml title="Prometheus监控配置"
+# prometheus.yml
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
 
-- 指标：成功率、P95/P99、拒绝数、半开通过数
-- 日志：慢调用、拒绝、Fallback触发
-- 链路：TraceId关联端到端延迟
+scrape_configs:
+  - job_name: 'resilience4j-metrics'
+    static_configs:
+      - targets: ['localhost:8080']
+    metrics_path: '/actuator/prometheus'
+    scrape_interval: 5s
 
-## 面试题
+# 告警规则
+rule_files:
+  - 'resilience4j-alerts.yml'
+```
 
-1. 熔断器的三种状态与切换条件
-2. 限流的几种算法（令牌桶、漏桶）与差异
-3. 舱壁隔离如何避免线程池饥饿
-4. Resilience4j与Sentinel的差异
-5. 网关与服务侧熔断如何配合 
+```yaml title="resilience4j-alerts.yml"
+groups:
+  - name: resilience4j
+    rules:
+      - alert: CircuitBreakerOpen
+        expr: circuitbreaker_state == 1
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Circuit breaker is open"
+          description: "Circuit breaker for service {{ $labels.service }} is open"
+
+      - alert: HighFailureRate
+        expr: circuitbreaker_failure_rate > 50
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High failure rate detected"
+          description: "Failure rate for service {{ $labels.service }} is {{ $value }}%"
+
+      - alert: HighSlowCallRate
+        expr: circuitbreaker_slow_call_rate > 30
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High slow call rate detected"
+          description: "Slow call rate for service {{ $labels.service }} is {{ $value }}%"
+
+      - alert: RateLimiterRefused
+        expr: rate(ratelimiter_calls_refused_total[5m]) > 10
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Rate limiter refusing calls"
+          description: "Rate limiter for service {{ $labels.service }} is refusing calls"
+
+      - alert: BulkheadRejected
+        expr: rate(bulkhead_calls_rejected_total[5m]) > 5
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Bulkhead rejecting calls"
+          description: "Bulkhead for service {{ $labels.service }} is rejecting calls"
+
+      - alert: HighRetryAttempts
+        expr: rate(retry_attempts_total[5m]) > 20
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High retry attempts detected"
+          description: "Retry attempts for service {{ $labels.service }} is high"
+```
+
+### 3.2 最佳实践与设计模式
+
+#### 降级策略设计
+```java title="降级策略设计示例"
+public class FallbackStrategies {
+    
+    // 静态降级：返回预定义的默认值
+    public class StaticFallback {
+        
+        @CircuitBreaker(name = "user-service", fallbackMethod = "getUserFallback")
+        public User getUser(String id) {
+            return userService.getUser(id);
+        }
+        
+        public User getUserFallback(String id, Throwable ex) {
+            // 返回静态默认用户
+            return new User(id, "Default User", "default@example.com");
+        }
+    }
+    
+    // 缓存降级：从缓存中获取数据
+    public class CacheFallback {
+        
+        private final Cache<String, User> userCache;
+        
+        public CacheFallback() {
+            this.userCache = Caffeine.newBuilder()
+                .maximumSize(1000)
+                .expireAfterWrite(Duration.ofMinutes(30))
+                .build();
+        }
+        
+        @CircuitBreaker(name = "user-service", fallbackMethod = "getUserFromCache")
+        public User getUser(String id) {
+            User user = userService.getUser(id);
+            // 更新缓存
+            userCache.put(id, user);
+            return user;
+        }
+        
+        public User getUserFromCache(String id, Throwable ex) {
+            // 从缓存中获取用户
+            User cachedUser = userCache.getIfPresent(id);
+            if (cachedUser != null) {
+                return cachedUser;
+            }
+            // 缓存中没有，返回默认用户
+            return new User(id, "Cached User", "cached@example.com");
+        }
+    }
+    
+    // 异步降级：异步获取数据
+    public class AsyncFallback {
+        
+        @CircuitBreaker(name = "user-service", fallbackMethod = "getUserAsyncFallback")
+        @TimeLimiter(name = "user-service")
+        public CompletableFuture<User> getUserAsync(String id) {
+            return CompletableFuture.supplyAsync(() -> userService.getUser(id));
+        }
+        
+        public CompletableFuture<User> getUserAsyncFallback(String id, Throwable ex) {
+            return CompletableFuture.supplyAsync(() -> {
+                // 异步获取备用数据
+                return getBackupUserData(id);
+            });
+        }
+        
+        private User getBackupUserData(String id) {
+            // 从备用数据源获取用户信息
+            return new User(id, "Backup User", "backup@example.com");
+        }
+    }
+    
+    // 组合降级：多种降级策略组合
+    public class CompositeFallback {
+        
+        private final Cache<String, User> userCache;
+        private final UserService backupUserService;
+        
+        public CompositeFallback() {
+            this.userCache = Caffeine.newBuilder()
+                .maximumSize(1000)
+                .expireAfterWrite(Duration.ofMinutes(30))
+                .build();
+            this.backupUserService = new BackupUserService();
+        }
+        
+        @CircuitBreaker(name = "user-service", fallbackMethod = "getUserCompositeFallback")
+        public User getUser(String id) {
+            User user = userService.getUser(id);
+            userCache.put(id, user);
+            return user;
+        }
+        
+        public User getUserCompositeFallback(String id, Throwable ex) {
+            // 策略1：从缓存获取
+            User cachedUser = userCache.getIfPresent(id);
+            if (cachedUser != null) {
+                return cachedUser;
+            }
+            
+            // 策略2：从备用服务获取
+            try {
+                User backupUser = backupUserService.getUser(id);
+                if (backupUser != null) {
+                    return backupUser;
+                }
+            } catch (Exception e) {
+                log.warn("Backup service also failed for user: {}", id, e);
+            }
+            
+            // 策略3：返回静态默认值
+            return new User(id, "Default User", "default@example.com");
+        }
+    }
+    
+    // 智能降级：根据异常类型选择不同的降级策略
+    public class IntelligentFallback {
+        
+        @CircuitBreaker(name = "user-service", fallbackMethod = "getUserIntelligentFallback")
+        public User getUser(String id) {
+            return userService.getUser(id);
+        }
+        
+        public User getUserIntelligentFallback(String id, Throwable ex) {
+            if (ex instanceof TimeoutException) {
+                // 超时异常，从缓存获取
+                return getUserFromCache(id);
+            } else if (ex instanceof ServiceUnavailableException) {
+                // 服务不可用，从备用服务获取
+                return getUserFromBackup(id);
+            } else if (ex instanceof ValidationException) {
+                // 验证异常，返回默认值
+                return getDefaultUser(id);
+            } else {
+                // 其他异常，返回静态默认值
+                return new User(id, "Fallback User", "fallback@example.com");
+            }
+        }
+        
+        private User getUserFromCache(String id) {
+            // 从缓存获取用户
+            return new User(id, "Cached User", "cached@example.com");
+        }
+        
+        private User getUserFromBackup(String id) {
+            // 从备用服务获取用户
+            return new User(id, "Backup User", "backup@example.com");
+        }
+        
+        private User getDefaultUser(String id) {
+            // 返回默认用户
+            return new User(id, "Default User", "default@example.com");
+        }
+    }
+}
+```
+
+#### 配置最佳实践
+```java title="配置最佳实践示例"
+public class ConfigurationBestPractices {
+    
+    // 服务级别配置
+    public class ServiceLevelConfiguration {
+        
+        // 用户服务配置：对可用性要求高
+        public CircuitBreakerConfig getUserServiceConfig() {
+            return CircuitBreakerConfig.custom()
+                .slidingWindowSize(20)                    // 较大的窗口，更稳定
+                .failureRateThreshold(30.0f)              // 较低的失败率阈值
+                .waitDurationInOpenState(Duration.ofSeconds(30))  // 较短的恢复时间
+                .permittedNumberOfCallsInHalfOpenState(5) // 较多的试探调用
+                .recordExceptions(RuntimeException.class, IOException.class)
+                .ignoreExceptions(IllegalArgumentException.class)
+                .slidingWindowType(CircuitBreakerConfig.SlidingWindowType.COUNT_BASED)
+                .minimumNumberOfCalls(10)                 // 最小调用数
+                .slowCallRateThreshold(50)                // 慢调用率阈值
+                .slowCallDurationThreshold(Duration.ofSeconds(1)) // 慢调用时间阈值
+                .build();
+        }
+        
+        // 订单服务配置：对一致性要求高
+        public CircuitBreakerConfig getOrderServiceConfig() {
+            return CircuitBreakerConfig.custom()
+                .slidingWindowSize(10)                    // 较小的窗口，更敏感
+                .failureRateThreshold(20.0f)              // 更低的失败率阈值
+                .waitDurationInOpenState(Duration.ofSeconds(60))  // 较长的恢复时间
+                .permittedNumberOfCallsInHalfOpenState(2) // 较少的试探调用
+                .recordExceptions(RuntimeException.class)
+                .slidingWindowType(CircuitBreakerConfig.SlidingWindowType.TIME_BASED)
+                .minimumNumberOfCalls(5)                  // 最小调用数
+                .slowCallRateThreshold(30)                // 慢调用率阈值
+                .slowCallDurationThreshold(Duration.ofSeconds(2)) // 慢调用时间阈值
+                .build();
+        }
+        
+        // 支付服务配置：对安全性要求高
+        public CircuitBreakerConfig getPaymentServiceConfig() {
+            return CircuitBreakerConfig.custom()
+                .slidingWindowSize(5)                     // 最小的窗口，最敏感
+                .failureRateThreshold(10.0f)              // 最低的失败率阈值
+                .waitDurationInOpenState(Duration.ofSeconds(120)) // 最长的恢复时间
+                .permittedNumberOfCallsInHalfOpenState(1) // 最少的试探调用
+                .recordExceptions(RuntimeException.class)
+                .slidingWindowType(CircuitBreakerConfig.SlidingWindowType.COUNT_BASED)
+                .minimumNumberOfCalls(3)                  // 最小调用数
+                .slowCallRateThreshold(20)                // 慢调用率阈值
+                .slowCallDurationThreshold(Duration.ofSeconds(500, ChronoUnit.MILLIS)) // 慢调用时间阈值
+                .build();
+        }
+    }
+    
+    // 环境级别配置
+    public class EnvironmentLevelConfiguration {
+        
+        // 开发环境配置：宽松的配置
+        public CircuitBreakerConfig getDevelopmentConfig() {
+            return CircuitBreakerConfig.custom()
+                .slidingWindowSize(5)
+                .failureRateThreshold(80.0f)              // 较高的失败率阈值
+                .waitDurationInOpenState(Duration.ofSeconds(10))  // 较短的恢复时间
+                .permittedNumberOfCallsInHalfOpenState(3)
+                .recordExceptions(RuntimeException.class)
+                .slidingWindowType(CircuitBreakerConfig.SlidingWindowType.COUNT_BASED)
+                .minimumNumberOfCalls(3)
+                .build();
+        }
+        
+        // 测试环境配置：中等严格度
+        public CircuitBreakerConfig getTestConfig() {
+            return CircuitBreakerConfig.custom()
+                .slidingWindowSize(10)
+                .failureRateThreshold(50.0f)              // 中等的失败率阈值
+                .waitDurationInOpenState(Duration.ofSeconds(30))  // 中等的恢复时间
+                .permittedNumberOfCallsInHalfOpenState(3)
+                .recordExceptions(RuntimeException.class)
+                .slidingWindowType(CircuitBreakerConfig.SlidingWindowType.COUNT_BASED)
+                .minimumNumberOfCalls(5)
+                .build();
+        }
+        
+        // 生产环境配置：严格的配置
+        public CircuitBreakerConfig getProductionConfig() {
+            return CircuitBreakerConfig.custom()
+                .slidingWindowSize(20)
+                .failureRateThreshold(30.0f)              // 较低的失败率阈值
+                .waitDurationInOpenState(Duration.ofSeconds(60))  // 较长的恢复时间
+                .permittedNumberOfCallsInHalfOpenState(2)
+                .recordExceptions(RuntimeException.class, IOException.class)
+                .slidingWindowType(CircuitBreakerConfig.SlidingWindowType.TIME_BASED)
+                .minimumNumberOfCalls(10)
+                .slowCallRateThreshold(50)
+                .slowCallDurationThreshold(Duration.ofSeconds(1))
+                .build();
+        }
+    }
+    
+    // 动态配置
+    public class DynamicConfiguration {
+        
+        private final CircuitBreakerRegistry circuitBreakerRegistry;
+        
+        public DynamicConfiguration(CircuitBreakerRegistry circuitBreakerRegistry) {
+            this.circuitBreakerRegistry = circuitBreakerRegistry;
+        }
+        
+        // 动态更新熔断器配置
+        public void updateCircuitBreakerConfig(String name, CircuitBreakerConfig config) {
+            CircuitBreaker circuitBreaker = circuitBreakerRegistry.circuitBreaker(name);
+            circuitBreaker.updateConfiguration(config);
+        }
+        
+        // 根据负载动态调整配置
+        public void adjustConfigByLoad(String serviceName, double currentLoad) {
+            CircuitBreaker circuitBreaker = circuitBreakerRegistry.circuitBreaker(serviceName);
+            CircuitBreakerConfig currentConfig = circuitBreaker.getCircuitBreakerConfig();
+            
+            CircuitBreakerConfig newConfig;
+            if (currentLoad > 0.8) {
+                // 高负载，使用更严格的配置
+                newConfig = CircuitBreakerConfig.custom()
+                    .slidingWindowSize(currentConfig.getSlidingWindowSize())
+                    .failureRateThreshold(currentConfig.getFailureRateThreshold() * 0.8) // 降低失败率阈值
+                    .waitDurationInOpenState(currentConfig.getWaitDurationInOpenState().multipliedBy(2)) // 增加恢复时间
+                    .permittedNumberOfCallsInHalfOpenState(Math.max(1, currentConfig.getPermittedNumberOfCallsInHalfOpenState() - 1)) // 减少试探调用
+                    .build();
+            } else if (currentLoad < 0.3) {
+                // 低负载，使用更宽松的配置
+                newConfig = CircuitBreakerConfig.custom()
+                    .slidingWindowSize(currentConfig.getSlidingWindowSize())
+                    .failureRateThreshold(currentConfig.getFailureRateThreshold() * 1.2) // 提高失败率阈值
+                    .waitDurationInOpenState(currentConfig.getWaitDurationInOpenState().dividedBy(2)) // 减少恢复时间
+                    .permittedNumberOfCallsInHalfOpenState(currentConfig.getPermittedNumberOfCallsInHalfOpenState() + 1) // 增加试探调用
+                    .build();
+            } else {
+                // 正常负载，保持当前配置
+                return;
+            }
+            
+            updateCircuitBreakerConfig(serviceName, newConfig);
+        }
+    }
+}
+```
+
+### 3.3 常见问题与解决方案
+
+#### 问题诊断与解决
+```java title="问题诊断与解决方案"
+public class TroubleshootingGuide {
+    
+    // 问题1：熔断器频繁开启
+    public class FrequentCircuitBreakerOpen {
+        
+        /*
+         * 问题描述：熔断器频繁在开启和关闭状态之间切换
+         * 可能原因：
+         * 1. 失败率阈值设置过低
+         * 2. 滑动窗口大小设置过小
+         * 3. 最小调用数设置过小
+         * 4. 下游服务确实存在问题
+         */
+        
+        public CircuitBreakerConfig fixFrequentOpen() {
+            return CircuitBreakerConfig.custom()
+                .slidingWindowSize(50)                    // 增加滑动窗口大小
+                .failureRateThreshold(70.0f)              // 提高失败率阈值
+                .waitDurationInOpenState(Duration.ofSeconds(120)) // 增加恢复时间
+                .permittedNumberOfCallsInHalfOpenState(5) // 增加试探调用数
+                .minimumNumberOfCalls(20)                 // 增加最小调用数
+                .slidingWindowType(CircuitBreakerConfig.SlidingWindowType.TIME_BASED) // 使用时间窗口
+                .build();
+        }
+    }
+    
+    // 问题2：熔断器恢复过慢
+    public class SlowCircuitBreakerRecovery {
+        
+        /*
+         * 问题描述：熔断器开启后恢复时间过长
+         * 可能原因：
+         * 1. 恢复时间设置过长
+         * 2. 试探调用数设置过少
+         * 3. 下游服务恢复较慢
+         */
+        
+        public CircuitBreakerConfig fixSlowRecovery() {
+            return CircuitBreakerConfig.custom()
+                .slidingWindowSize(20)
+                .failureRateThreshold(50.0f)
+                .waitDurationInOpenState(Duration.ofSeconds(30))  // 减少恢复时间
+                .permittedNumberOfCallsInHalfOpenState(10)       // 增加试探调用数
+                .automaticTransitionFromOpenToHalfOpenEnabled(true) // 启用自动转换
+                .build();
+        }
+    }
+    
+    // 问题3：误触发熔断器
+    public class FalsePositiveCircuitBreaker {
+        
+        /*
+         * 问题描述：熔断器在服务正常时被误触发
+         * 可能原因：
+         * 1. 异常类型配置不当
+         * 2. 慢调用阈值设置过低
+         * 3. 网络抖动导致临时故障
+         */
+        
+        public CircuitBreakerConfig fixFalsePositive() {
+            return CircuitBreakerConfig.custom()
+                .slidingWindowSize(30)
+                .failureRateThreshold(50.0f)
+                .waitDurationInOpenState(Duration.ofSeconds(60))
+                .permittedNumberOfCallsInHalfOpenState(5)
+                .recordExceptions(RuntimeException.class)        // 只记录运行时异常
+                .ignoreExceptions(IllegalArgumentException.class, // 忽略参数异常
+                                 ValidationException.class)      // 忽略验证异常
+                .slowCallRateThreshold(100)                     // 提高慢调用率阈值
+                .slowCallDurationThreshold(Duration.ofSeconds(3)) // 提高慢调用时间阈值
+                .build();
+        }
+    }
+    
+    // 问题4：降级策略不当
+    public class InappropriateFallbackStrategy {
+        
+        /*
+         * 问题描述：降级策略导致用户体验差或业务逻辑错误
+         * 可能原因：
+         * 1. 降级数据不准确
+         * 2. 降级逻辑过于简单
+         * 3. 没有考虑业务场景
+         */
+        
+        public class ImprovedFallbackStrategy {
+            
+            @CircuitBreaker(name = "user-service", fallbackMethod = "getUserWithContext")
+            public User getUser(String id, String context) {
+                return userService.getUser(id);
+            }
+            
+            public User getUserWithContext(String id, String context, Throwable ex) {
+                // 根据上下文选择不同的降级策略
+                if ("critical".equals(context)) {
+                    // 关键业务，尝试从备用服务获取
+                    return getUserFromBackupService(id);
+                } else if ("normal".equals(context)) {
+                    // 普通业务，从缓存获取
+                    return getUserFromCache(id);
+                } else {
+                    // 非关键业务，返回默认值
+                    return getDefaultUser(id);
+                }
+            }
+            
+            private User getUserFromBackupService(String id) {
+                try {
+                    return backupUserService.getUser(id);
+                } catch (Exception e) {
+                    log.warn("Backup service also failed for user: {}", id, e);
+                    return getDefaultUser(id);
+                }
+            }
+            
+            private User getUserFromCache(String id) {
+                User cachedUser = userCache.getIfPresent(id);
+                return cachedUser != null ? cachedUser : getDefaultUser(id);
+            }
+            
+            private User getDefaultUser(String id) {
+                return new User(id, "Default User", "default@example.com");
+            }
+        }
+    }
+}
+```
+
+:::caution 熔断器使用注意事项
+1. **合理配置**：根据服务特点和业务需求设置合适的参数
+2. **监控告警**：建立完善的监控体系，及时发现和处理问题
+3. **降级策略**：设计合适的降级策略，保证系统可用性
+4. **测试验证**：通过压力测试验证配置的有效性
+5. **文档维护**：维护完整的配置文档，便于团队协作
+6. **定期评估**：定期评估和调整配置参数
+::: 
+
+## 4. 面试题精选
+
+### 4.1 基础概念题
+
+#### Q1: 什么是熔断器模式？它的核心思想是什么？
+
+**答**: 熔断器模式是一种容错设计模式，用于防止级联故障。其核心思想包括：
+
+1. **监控状态**：持续监控依赖服务的调用结果
+2. **快速失败**：当服务异常时，快速失败而不是等待超时
+3. **自动恢复**：当服务恢复时，自动恢复正常调用
+4. **降级保护**：提供降级策略，保证系统可用性
+
+**核心组件**：
+- **CLOSED状态**：正常状态，所有请求都会正常处理
+- **OPEN状态**：保护状态，所有请求都会快速失败
+- **HALF_OPEN状态**：试探状态，允许少量请求通过
+
+#### Q2: 熔断器的三种状态是如何转换的？
+
+**答**: 熔断器状态转换规则如下：
+
+```
+CLOSED → OPEN: 失败次数达到阈值
+OPEN → HALF_OPEN: 经过恢复时间后自动转换
+HALF_OPEN → CLOSED: 成功次数达到阈值
+HALF_OPEN → OPEN: 任何一次失败
+```
+
+**详细转换条件**：
+- **CLOSED → OPEN**：在滑动窗口内，失败率超过阈值
+- **OPEN → HALF_OPEN**：经过`waitDurationInOpenState`时间后
+- **HALF_OPEN → CLOSED**：在`permittedNumberOfCallsInHalfOpenState`次调用中，成功次数达到阈值
+- **HALF_OPEN → OPEN**：在试探期间任何一次调用失败
+
+#### Q3: Resilience4j与Hystrix的区别是什么？
+
+**答**: 主要区别如下：
+
+**Resilience4j**：
+- 基于Java 8和函数式编程设计
+- 轻量级，无外部依赖
+- 支持多种容错模式（熔断器、限流器、舱壁隔离、重试、超时）
+- 提供丰富的监控指标
+- 活跃维护，持续更新
+
+**Hystrix**：
+- 基于RxJava设计
+- 较重，有外部依赖
+- 主要关注熔断器模式
+- 监控功能相对简单
+- 已进入维护模式，不再积极开发
+
+### 4.2 实践题
+
+#### Q4: 如何设计一个合适的降级策略？
+
+**答**: 降级策略设计需要考虑以下几个方面：
+
+1. **静态降级**：返回预定义的默认值
+```java
+public User getUserFallback(String id, Throwable ex) {
+    return new User(id, "Default User", "default@example.com");
+}
+```
+
+2. **缓存降级**：从缓存中获取数据
+```java
+public User getUserFromCache(String id, Throwable ex) {
+    User cachedUser = userCache.getIfPresent(id);
+    return cachedUser != null ? cachedUser : getDefaultUser(id);
+}
+```
+
+3. **备用服务降级**：从备用服务获取数据
+```java
+public User getUserFromBackup(String id, Throwable ex) {
+    try {
+        return backupUserService.getUser(id);
+    } catch (Exception e) {
+        return getDefaultUser(id);
+    }
+}
+```
+
+4. **智能降级**：根据异常类型选择不同策略
+```java
+public User getUserIntelligentFallback(String id, Throwable ex) {
+    if (ex instanceof TimeoutException) {
+        return getUserFromCache(id);
+    } else if (ex instanceof ServiceUnavailableException) {
+        return getUserFromBackup(id);
+    } else {
+        return getDefaultUser(id);
+    }
+}
+```
+
+#### Q5: 如何配置熔断器参数？
+
+**答**: 熔断器参数配置需要考虑服务特点：
+
+```java
+// 用户服务：对可用性要求高
+CircuitBreakerConfig userServiceConfig = CircuitBreakerConfig.custom()
+    .slidingWindowSize(20)                    // 较大的窗口，更稳定
+    .failureRateThreshold(30.0f)              // 较低的失败率阈值
+    .waitDurationInOpenState(Duration.ofSeconds(30))  // 较短的恢复时间
+    .permittedNumberOfCallsInHalfOpenState(5) // 较多的试探调用
+    .build();
+
+// 支付服务：对安全性要求高
+CircuitBreakerConfig paymentServiceConfig = CircuitBreakerConfig.custom()
+    .slidingWindowSize(5)                     // 较小的窗口，更敏感
+    .failureRateThreshold(10.0f)              // 较低的失败率阈值
+    .waitDurationInOpenState(Duration.ofSeconds(120)) // 较长的恢复时间
+    .permittedNumberOfCallsInHalfOpenState(1) // 较少的试探调用
+    .build();
+```
+
+### 4.3 性能优化题
+
+#### Q6: 如何优化熔断器的性能？
+
+**答**: 熔断器性能优化可以从以下几个方面考虑：
+
+1. **合理配置参数**：
+```java
+CircuitBreakerConfig optimizedConfig = CircuitBreakerConfig.custom()
+    .slidingWindowSize(50)                    // 增加窗口大小，减少状态切换
+    .failureRateThreshold(50.0f)              // 设置合理的失败率阈值
+    .waitDurationInOpenState(Duration.ofSeconds(60))  // 设置合理的恢复时间
+    .permittedNumberOfCallsInHalfOpenState(3) // 设置合理的试探调用数
+    .slidingWindowType(CircuitBreakerConfig.SlidingWindowType.TIME_BASED) // 使用时间窗口
+    .build();
+```
+
+2. **使用缓存降级**：
+```java
+@CircuitBreaker(name = "user-service", fallbackMethod = "getUserFromCache")
+public User getUser(String id) {
+    User user = userService.getUser(id);
+    userCache.put(id, user); // 更新缓存
+    return user;
+}
+
+public User getUserFromCache(String id, Throwable ex) {
+    return userCache.getIfPresent(id);
+}
+```
+
+3. **异步处理**：
+```java
+@CircuitBreaker(name = "user-service", fallbackMethod = "getUserAsyncFallback")
+@TimeLimiter(name = "user-service")
+public CompletableFuture<User> getUserAsync(String id) {
+    return CompletableFuture.supplyAsync(() -> userService.getUser(id));
+}
+```
+
+#### Q7: 如何处理熔断器的误触发问题？
+
+**答**: 误触发问题可以通过以下方式解决：
+
+1. **调整配置参数**：
+```java
+CircuitBreakerConfig antiFalsePositiveConfig = CircuitBreakerConfig.custom()
+    .slidingWindowSize(30)                    // 增加窗口大小
+    .failureRateThreshold(70.0f)              // 提高失败率阈值
+    .minimumNumberOfCalls(20)                 // 增加最小调用数
+    .recordExceptions(RuntimeException.class) // 只记录特定异常
+    .ignoreExceptions(IllegalArgumentException.class) // 忽略参数异常
+    .slowCallRateThreshold(100)               // 提高慢调用率阈值
+    .slowCallDurationThreshold(Duration.ofSeconds(3)) // 提高慢调用时间阈值
+    .build();
+```
+
+2. **使用重试机制**：
+```java
+@Retry(name = "user-service", fallbackMethod = "getUserFallback")
+@CircuitBreaker(name = "user-service", fallbackMethod = "getUserFallback")
+public User getUser(String id) {
+    return userService.getUser(id);
+}
+```
+
+3. **监控和告警**：
+```java
+@Bean
+public CircuitBreakerRegistryCustomizer circuitBreakerRegistryCustomizer() {
+    return registry -> {
+        registry.getEventPublisher()
+            .onEntryAdded(entryAddedEvent -> {
+                CircuitBreaker circuitBreaker = entryAddedEvent.getAddedEntry();
+                circuitBreaker.getEventPublisher()
+                    .onStateTransition(event -> {
+                        log.warn("Circuit breaker {} state changed from {} to {}",
+                            circuitBreaker.getName(),
+                            event.getStateTransition().getFromState(),
+                            event.getStateTransition().getToState());
+                    });
+            });
+    };
+}
+```
+
+### 4.4 架构设计题
+
+#### Q8: 如何设计一个高可用的熔断器系统？
+
+**答**: 高可用熔断器系统设计包括以下几个方面：
+
+1. **多级熔断器**：
+```java
+public class MultiLevelCircuitBreaker {
+    
+    @CircuitBreaker(name = "user-service", fallbackMethod = "getUserFromCache")
+    public User getUser(String id) {
+        return userService.getUser(id);
+    }
+    
+    @CircuitBreaker(name = "cache-service", fallbackMethod = "getUserFromBackup")
+    public User getUserFromCache(String id, Throwable ex) {
+        return cacheService.getUser(id);
+    }
+    
+    @CircuitBreaker(name = "backup-service", fallbackMethod = "getDefaultUser")
+    public User getUserFromBackup(String id, Throwable ex) {
+        return backupService.getUser(id);
+    }
+    
+    public User getDefaultUser(String id, Throwable ex) {
+        return new User(id, "Default User", "default@example.com");
+    }
+}
+```
+
+2. **分布式熔断器**：
+```java
+@Component
+public class DistributedCircuitBreaker {
+    
+    private final RedisTemplate<String, String> redisTemplate;
+    
+    public boolean isCircuitBreakerOpen(String serviceName) {
+        String key = "circuitbreaker:" + serviceName + ":state";
+        String state = redisTemplate.opsForValue().get(key);
+        return "OPEN".equals(state);
+    }
+    
+    public void setCircuitBreakerState(String serviceName, String state) {
+        String key = "circuitbreaker:" + serviceName + ":state";
+        redisTemplate.opsForValue().set(key, state, Duration.ofMinutes(10));
+    }
+}
+```
+
+3. **动态配置**：
+```java
+@Component
+public class DynamicCircuitBreakerConfig {
+    
+    private final CircuitBreakerRegistry circuitBreakerRegistry;
+    
+    public void updateConfig(String serviceName, CircuitBreakerConfig config) {
+        CircuitBreaker circuitBreaker = circuitBreakerRegistry.circuitBreaker(serviceName);
+        circuitBreaker.updateConfiguration(config);
+    }
+    
+    public void adjustConfigByLoad(String serviceName, double currentLoad) {
+        // 根据负载动态调整配置
+        if (currentLoad > 0.8) {
+            // 高负载，使用更严格的配置
+            updateConfig(serviceName, getStrictConfig());
+        } else if (currentLoad < 0.3) {
+            // 低负载，使用更宽松的配置
+            updateConfig(serviceName, getLooseConfig());
+        }
+    }
+}
+```
+
+#### Q9: 熔断器与限流器的区别是什么？
+
+**答**: 主要区别如下：
+
+**熔断器（Circuit Breaker）**：
+- **目的**：防止级联故障，保护系统免受故障服务影响
+- **触发条件**：基于失败率、响应时间等指标
+- **状态**：有CLOSED、OPEN、HALF_OPEN三种状态
+- **恢复机制**：自动恢复，支持试探性调用
+- **适用场景**：保护系统免受故障服务影响
+
+**限流器（Rate Limiter）**：
+- **目的**：控制请求速率，防止系统过载
+- **触发条件**：基于请求数量、时间窗口
+- **状态**：只有允许/拒绝两种状态
+- **恢复机制**：基于时间窗口自动恢复
+- **适用场景**：防止系统过载，保护下游服务
+
+**组合使用**：
+```java
+@CircuitBreaker(name = "user-service", fallbackMethod = "getUserFallback")
+@RateLimiter(name = "user-service")
+@Bulkhead(name = "user-service")
+public User getUser(String id) {
+    return userService.getUser(id);
+}
+```
+
+### 4.5 监控运维题
+
+#### Q10: 如何监控熔断器的健康状况？
+
+**答**: 熔断器监控可以从以下几个方面进行：
+
+1. **关键指标监控**：
+```java
+@Component
+public class CircuitBreakerHealthCheck {
+    
+    private final CircuitBreakerRegistry circuitBreakerRegistry;
+    private final MeterRegistry meterRegistry;
+    
+    public Health checkCircuitBreakerHealth() {
+        Map<String, Object> details = new HashMap<>();
+        
+        for (CircuitBreaker circuitBreaker : circuitBreakerRegistry.getAllCircuitBreakers()) {
+            CircuitBreaker.Metrics metrics = circuitBreaker.getMetrics();
+            details.put(circuitBreaker.getName() + ".state", circuitBreaker.getState());
+            details.put(circuitBreaker.getName() + ".failureRate", metrics.getFailureRate());
+            details.put(circuitBreaker.getName() + ".slowCallRate", metrics.getSlowCallRate());
+        }
+        
+        boolean isHealthy = details.values().stream()
+            .noneMatch(value -> "OPEN".equals(value) || 
+                              (value instanceof Number && ((Number) value).doubleValue() > 50));
+        
+        return isHealthy ? Health.up().withDetails(details).build() 
+                        : Health.down().withDetails(details).build();
+    }
+}
+```
+
+2. **告警规则配置**：
+```yaml
+# prometheus告警规则
+groups:
+  - name: circuitbreaker
+    rules:
+      - alert: CircuitBreakerOpen
+        expr: circuitbreaker_state == 1
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Circuit breaker is open"
+          description: "Circuit breaker for service {{ $labels.service }} is open"
+
+      - alert: HighFailureRate
+        expr: circuitbreaker_failure_rate > 50
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High failure rate detected"
+          description: "Failure rate for service {{ $labels.service }} is {{ $value }}%"
+```
+
+3. **日志监控**：
+```java
+@Component
+public class CircuitBreakerLoggingFilter {
+    
+    private static final Logger logger = LoggerFactory.getLogger(CircuitBreakerLoggingFilter.class);
+    
+    @EventListener
+    public void onCircuitBreakerEvent(CircuitBreakerOnStateTransitionEvent event) {
+        logger.warn("Circuit breaker {} state changed from {} to {}",
+            event.getCircuitBreakerName(),
+            event.getStateTransition().getFromState(),
+            event.getStateTransition().getToState());
+    }
+    
+    @EventListener
+    public void onFailureRateExceeded(CircuitBreakerOnFailureRateExceededEvent event) {
+        logger.error("Circuit breaker {} failure rate exceeded: {}%",
+            event.getCircuitBreakerName(),
+            event.getFailureRate());
+    }
+}
+```
+
+:::info 熔断器学习要点
+1. **理解原理**：掌握熔断器的核心思想和状态转换机制
+2. **掌握配置**：熟悉各种配置参数的含义和影响
+3. **实践应用**：通过实际项目练习熔断器的使用
+4. **监控运维**：学会熔断器的监控和运维管理
+5. **性能优化**：了解熔断器性能优化的方法
+6. **最佳实践**：掌握熔断器的最佳实践和设计模式
+:::
+
+---
+
+通过本章的学习，你应该已经深入理解了熔断器模式的核心概念、实现方案和最佳实践。熔断器是微服务架构中的重要容错机制，合理使用熔断器可以显著提高系统的可用性和稳定性。在实际项目中，要根据业务需求选择合适的熔断器方案，并注重监控运维和性能优化。 

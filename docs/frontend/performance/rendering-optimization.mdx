@@ -1,378 +1,813 @@
 ---
 sidebar_position: 3
-title: "渲染优化"
-description: "前端渲染性能优化策略"
+title: 前端渲染优化策略详解
+description: 深入解析DOM操作优化、重排重绘控制、虚拟滚动与React渲染性能最佳实践
 authors: [Laby]
+tags: [渲染优化, DOM操作, 重排重绘, 虚拟滚动, React性能, 防抖节流]
 last_update:
-  date: 2025-08-07
+  date: 2025-08-14
   author: Laby
 ---
 
-# 渲染优化
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+import CodeBlock from '@theme/CodeBlock';
 
-渲染优化主要关注DOM操作、重排重绘、以及JavaScript执行效率，目标是保持60fps的流畅体验。
+# 前端渲染优化策略详解
 
-## DOM操作优化
+渲染优化是前端性能优化的核心环节，直接影响用户界面的流畅度和响应性。通过系统化的渲染优化策略，可以实现60fps的丝滑体验，提升用户满意度和应用性能。
 
-### 批量DOM操作
-```javascript
-// 避免频繁的DOM操作
-function badExample() {
-  const list = document.getElementById('list');
-  for (let i = 0; i < 1000; i++) {
-    const item = document.createElement('li');
-    item.textContent = `Item ${i}`;
-    list.appendChild(item); // 每次都会触发重排
-  }
-}
+:::tip 核心价值
+**渲染优化 = DOM优化 + 重排重绘控制 + 事件优化 + 虚拟化技术**
+- 🎯 **DOM操作优化**：减少DOM操作次数，批量处理更新
+- 🔄 **重排重绘控制**：避免强制同步布局，使用GPU加速
+- ⚡ **事件优化**：防抖节流，事件委托减少内存占用
+- 📊 **虚拟化技术**：大数据列表渲染优化
+- 🧠 **React优化**：memo、useMemo、useCallback合理使用
+- 📈 **性能监控**：实时监控渲染性能指标
+:::
 
-function goodExample() {
-  const list = document.getElementById('list');
-  const fragment = document.createDocumentFragment();
-  
-  for (let i = 0; i < 1000; i++) {
-    const item = document.createElement('li');
-    item.textContent = `Item ${i}`;
-    fragment.appendChild(item);
-  }
-  
-  list.appendChild(fragment); // 只触发一次重排
-}
+## 1. 浏览器渲染机制
+
+### 1.1 渲染流水线
+
+理解浏览器渲染流水线是优化的基础，每个步骤都可能成为性能瓶颈。
+
+```mermaid
+graph LR
+    subgraph "浏览器渲染流水线"
+        A[HTML解析] --> B[DOM构建]
+        C[CSS解析] --> D[CSSOM构建]
+        B --> E[渲染树构建]
+        D --> E
+        E --> F[布局Layout]
+        F --> G[绘制Paint]
+        G --> H[合成Composite]
+        
+        subgraph "性能影响"
+            F --> F1[重排Reflow]
+            G --> G1[重绘Repaint]
+            H --> H1[合成层]
+        end
+    end
 ```
 
-### 使用DocumentFragment
-```javascript
-// 使用DocumentFragment优化大量DOM操作
-function createElements(count) {
-  const fragment = document.createDocumentFragment();
+#### 渲染性能指标对比
+
+| 操作类型 | 触发阶段 | 性能影响 | 优化策略 | 示例属性 |
+|---------|----------|----------|----------|----------|
+| **重排+重绘+合成** | Layout → Paint → Composite | 最高 | 避免或批量操作 | width, height, margin |
+| **重绘+合成** | Paint → Composite | 中等 | 使用合成层 | color, background |
+| **仅合成** | Composite | 最低 | 优先使用 | transform, opacity |
+| **无影响** | - | 无 | 理想状态 | 读取计算样式 |
+
+## 2. DOM操作优化策略
+
+### 2.1 批量DOM操作技术
+
+DOM操作是渲染性能的主要瓶颈，通过批量操作和DocumentFragment可以显著提升性能。
+
+<Tabs>
+<TabItem value="batch-operations" label="批量操作">
+
+#### DOM批量操作最佳实践
+
+```javascript title="DOM批量操作优化对比"
+// ❌ 错误示例：频繁DOM操作
+function inefficientDOMOperations() {
+  const list = document.getElementById('product-list');
+  const products = getProducts(); // 假设返回1000个产品
   
-  for (let i = 0; i < count; i++) {
-    const div = document.createElement('div');
-    div.className = 'item';
-    div.textContent = `Item ${i}`;
-    fragment.appendChild(div);
-  }
-  
-  return fragment;
-}
-
-// 一次性添加到DOM
-document.getElementById('container').appendChild(createElements(1000));
-```
-
-## 重排重绘优化
-
-### 避免强制同步布局
-```javascript
-// 避免强制同步布局
-function badExample() {
-  const elements = document.querySelectorAll('.item');
-  elements.forEach(element => {
-    const width = element.offsetWidth; // 强制同步布局
-    element.style.width = width + 100 + 'px';
+  // 每次appendChild都会触发重排重绘
+  products.forEach(product => {
+    const item = document.createElement('div');
+    item.className = 'product-item';
+    item.innerHTML = `
+      <h3>${product.name}</h3>
+      <p>¥${product.price}</p>
+      <button onclick="addToCart(${product.id})">加入购物车</button>
+    `;
+    list.appendChild(item); // 触发1000次重排！
   });
 }
 
-function goodExample() {
-  const elements = document.querySelectorAll('.item');
-  const widths = [];
+// ✅ 正确示例：批量DOM操作
+function efficientDOMOperations() {
+  const list = document.getElementById('product-list');
+  const products = getProducts();
+  const fragment = document.createDocumentFragment();
   
-  // 先读取所有值
-  elements.forEach(element => {
-    widths.push(element.offsetWidth);
+  // 在内存中构建DOM结构
+  products.forEach(product => {
+    const item = document.createElement('div');
+    item.className = 'product-item';
+    item.innerHTML = `
+      <h3>${product.name}</h3>
+      <p>¥${product.price}</p>
+      <button onclick="addToCart(${product.id})">加入购物车</button>
+    `;
+    fragment.appendChild(item); // 在内存中操作
   });
   
-  // 再批量修改
+  list.appendChild(fragment); // 只触发1次重排！
+}
+
+// 🚀 高级示例：虚拟DOM批量更新
+class DOMBatcher {
+  constructor() {
+    this.updates = [];
+    this.isScheduled = false;
+  }
+  
+  scheduleUpdate(element, property, value) {
+    this.updates.push({ element, property, value });
+    
+    if (!this.isScheduled) {
+      this.isScheduled = true;
+      requestAnimationFrame(() => this.flushUpdates());
+    }
+  }
+  
+  flushUpdates() {
+    // 批量应用所有更新
+    this.updates.forEach(({ element, property, value }) => {
+      element.style[property] = value;
+    });
+    
+    this.updates = [];
+    this.isScheduled = false;
+  }
+}
+
+// 使用批量更新器
+const batcher = new DOMBatcher();
+
+function animateElements() {
+  const elements = document.querySelectorAll('.animated-item');
+  
   elements.forEach((element, index) => {
-    element.style.width = widths[index] + 100 + 'px';
+    // 调度更新而不是立即执行
+    batcher.scheduleUpdate(element, 'transform', `translateX(${index * 10}px)`);
+    batcher.scheduleUpdate(element, 'opacity', '0.8');
   });
 }
 ```
 
-### 使用transform和opacity
-```javascript
-// 使用transform代替改变位置
-function animateWithTransform() {
-  const element = document.getElementById('animated');
+</TabItem>
+<TabItem value="fragment-usage" label="DocumentFragment">
+
+#### DocumentFragment高级用法
+
+```javascript title="DocumentFragment最佳实践"
+// 基础DocumentFragment使用
+class DOMBuilder {
+  constructor() {
+    this.fragment = document.createDocumentFragment();
+  }
   
-  // 使用transform，不会触发重排
-  element.style.transform = 'translateX(100px)';
+  // 创建产品卡片
+  createProductCard(product) {
+    const card = document.createElement('div');
+    card.className = 'product-card';
+    card.dataset.productId = product.id;
+    
+    card.innerHTML = `
+      <div class="product-image">
+        <img src="${product.image}" alt="${product.name}" loading="lazy">
+        ${!product.inStock ? '<div class="out-of-stock">缺货</div>' : ''}
+      </div>
+      <div class="product-info">
+        <h3 class="product-name">${product.name}</h3>
+        <p class="product-price">¥${product.price}</p>
+        <div class="product-rating">
+          ${this.createStarRating(product.rating)}
+        </div>
+        <button class="add-to-cart-btn" ${!product.inStock ? 'disabled' : ''}>
+          ${product.inStock ? '加入购物车' : '缺货'}
+        </button>
+      </div>
+    `;
+    
+    return card;
+  }
   
-  // 使用opacity，不会触发重排
-  element.style.opacity = '0.5';
+  // 创建星级评分
+  createStarRating(rating) {
+    const stars = [];
+    for (let i = 1; i <= 5; i++) {
+      const starClass = i <= rating ? 'star-filled' : 'star-empty';
+      stars.push(`<span class="star ${starClass}">★</span>`);
+    }
+    return stars.join('');
+  }
+  
+  // 批量创建并添加产品
+  buildProductGrid(products, container) {
+    // 清空现有内容
+    container.innerHTML = '';
+    
+    // 批量创建产品卡片
+    products.forEach(product => {
+      const card = this.createProductCard(product);
+      this.fragment.appendChild(card);
+    });
+    
+    // 一次性添加到DOM
+    container.appendChild(this.fragment);
+    
+    // 重置fragment以便重用
+    this.fragment = document.createDocumentFragment();
+  }
 }
 
-// 避免使用会触发重排的属性
-function avoidLayoutThrashing() {
-  const element = document.getElementById('element');
+// 使用示例
+const domBuilder = new DOMBuilder();
+const productContainer = document.getElementById('product-grid');
+
+// 初始加载产品
+fetch('/api/products')
+  .then(response => response.json())
+  .then(products => {
+    domBuilder.buildProductGrid(products, productContainer);
+  });
+```
+
+</TabItem>
+</Tabs>
+
+## 3. 重排重绘优化策略
+
+### 3.1 避免强制同步布局
+
+强制同步布局是性能杀手，了解如何避免是优化的关键。
+
+:::warning 性能陷阱
+读取布局属性（如offsetWidth、scrollTop）会强制浏览器立即计算布局，打断渲染流水线！
+:::
+
+<Tabs>
+<TabItem value="layout-thrashing" label="布局抖动">
+
+#### 避免布局抖动
+
+```javascript title="布局抖动优化对比"
+// ❌ 错误示例：布局抖动
+function layoutThrashing() {
+  const elements = document.querySelectorAll('.animated-item');
   
-  // 这些属性会触发重排
-  // element.style.width = '100px';
-  // element.style.height = '100px';
-  // element.style.margin = '10px';
+  elements.forEach(element => {
+    // 读取布局属性，强制同步布局
+    const width = element.offsetWidth;
+    const height = element.offsetHeight;
+    
+    // 修改样式，触发重排
+    element.style.width = width + 10 + 'px';
+    element.style.height = height + 10 + 'px';
+    
+    // 再次读取，又一次强制同步布局
+    const newWidth = element.offsetWidth;
+    console.log('New width:', newWidth);
+  });
+}
+
+// ✅ 正确示例：批量读写分离
+function optimizedLayout() {
+  const elements = document.querySelectorAll('.animated-item');
+  const measurements = [];
   
-  // 使用transform代替
-  element.style.transform = 'scale(1.1)';
+  // 第一阶段：批量读取
+  elements.forEach(element => {
+    measurements.push({
+      element,
+      width: element.offsetWidth,
+      height: element.offsetHeight
+    });
+  });
+  
+  // 第二阶段：批量写入
+  measurements.forEach(({ element, width, height }) => {
+    element.style.width = width + 10 + 'px';
+    element.style.height = height + 10 + 'px';
+  });
+  
+  // 第三阶段：批量读取新值（如果需要）
+  measurements.forEach(({ element }) => {
+    const newWidth = element.offsetWidth;
+    console.log('New width:', newWidth);
+  });
 }
 ```
 
-## 虚拟滚动
+</TabItem>
+<TabItem value="gpu-acceleration" label="GPU加速">
 
-### 实现虚拟滚动
-```javascript
+#### 利用GPU加速
+
+```javascript title="GPU加速优化策略"
+// CSS GPU加速属性
+const gpuAcceleratedProperties = {
+  // 优先使用的GPU加速属性
+  transform: 'translateX(100px) scale(1.2)',
+  opacity: '0.8',
+  filter: 'blur(2px)',
+  
+  // 避免使用的CPU密集属性
+  // left: '100px',        // 触发重排
+  // width: '200px',       // 触发重排
+  // background: 'red',    // 触发重绘
+};
+
+// 创建合成层的技巧
+class GPUAccelerator {
+  static createCompositeLayer(element) {
+    // 方法1：使用transform3d强制创建合成层
+    element.style.transform = 'translateZ(0)';
+    
+    // 方法2：使用will-change提示浏览器
+    element.style.willChange = 'transform, opacity';
+    
+    // 方法3：使用backface-visibility
+    element.style.backfaceVisibility = 'hidden';
+  }
+  
+  static optimizeAnimation(element, keyframes, options = {}) {
+    // 确保动画在合成层上运行
+    this.createCompositeLayer(element);
+    
+    // 使用Web Animations API
+    const animation = element.animate(keyframes, {
+      duration: 1000,
+      easing: 'ease-out',
+      fill: 'forwards',
+      ...options
+    });
+    
+    // 动画结束后清理will-change
+    animation.addEventListener('finish', () => {
+      element.style.willChange = 'auto';
+    });
+    
+    return animation;
+  }
+}
+```
+
+</TabItem>
+</Tabs>
+
+## 4. 虚拟滚动与大数据渲染
+
+### 4.1 虚拟滚动核心原理
+
+虚拟滚动是处理大量数据列表的核心技术，只渲染可视区域内的元素，大幅提升性能。
+
+```mermaid
+graph TB
+    subgraph "虚拟滚动原理"
+        A[总数据: 10000条] --> B[可视区域计算]
+        B --> C[渲染范围: 20-40]
+        C --> D[DOM元素: 20个]
+        
+        E[滚动事件] --> F[重新计算范围]
+        F --> G[更新DOM]
+        G --> H[回收不可见元素]
+    end
+```
+
+<Tabs>
+<TabItem value="basic-virtual-scroll" label="基础虚拟滚动">
+
+#### 基础虚拟滚动实现
+
+```javascript title="高性能虚拟滚动器"
 class VirtualScroller {
-  constructor(container, itemHeight, totalItems) {
-    this.container = container;
-    this.itemHeight = itemHeight;
-    this.totalItems = totalItems;
-    this.visibleItems = Math.ceil(container.clientHeight / itemHeight);
+  constructor(options) {
+    this.container = options.container;
+    this.itemHeight = options.itemHeight;
+    this.items = options.items || [];
+    this.renderItem = options.renderItem;
+    this.bufferSize = options.bufferSize || 5; // 缓冲区大小
+    
     this.scrollTop = 0;
+    this.containerHeight = 0;
+    this.visibleStart = 0;
+    this.visibleEnd = 0;
+    this.renderedItems = new Map();
     
     this.init();
   }
   
   init() {
+    this.setupContainer();
+    this.calculateDimensions();
+    this.bindEvents();
+    this.render();
+  }
+  
+  setupContainer() {
     this.container.style.position = 'relative';
     this.container.style.overflow = 'auto';
     
-    // 设置总高度
-    this.container.style.height = this.totalItems * this.itemHeight + 'px';
+    // 创建内容容器
+    this.content = document.createElement('div');
+    this.content.style.position = 'relative';
+    this.content.style.height = `${this.items.length * this.itemHeight}px`;
+    this.container.appendChild(this.content);
+  }
+  
+  calculateDimensions() {
+    this.containerHeight = this.container.clientHeight;
+    this.visibleCount = Math.ceil(this.containerHeight / this.itemHeight);
+  }
+  
+  bindEvents() {
+    this.container.addEventListener('scroll', this.handleScroll.bind(this), {
+      passive: true
+    });
     
-    this.container.addEventListener('scroll', this.handleScroll.bind(this));
-    this.render();
+    // 监听容器尺寸变化
+    if (window.ResizeObserver) {
+      this.resizeObserver = new ResizeObserver(() => {
+        this.calculateDimensions();
+        this.render();
+      });
+      this.resizeObserver.observe(this.container);
+    }
   }
   
   handleScroll() {
-    this.scrollTop = this.container.scrollTop;
+    const newScrollTop = this.container.scrollTop;
+    
+    // 防抖优化
+    if (Math.abs(newScrollTop - this.scrollTop) < this.itemHeight / 2) {
+      return;
+    }
+    
+    this.scrollTop = newScrollTop;
     this.render();
   }
   
-  render() {
-    const startIndex = Math.floor(this.scrollTop / this.itemHeight);
-    const endIndex = Math.min(startIndex + this.visibleItems, this.totalItems);
-    
-    // 清空容器
-    this.container.innerHTML = '';
-    
-    // 渲染可见项
-    for (let i = startIndex; i < endIndex; i++) {
-      const item = this.createItem(i);
-      item.style.position = 'absolute';
-      item.style.top = i * this.itemHeight + 'px';
-      this.container.appendChild(item);
-    }
-  }
-  
-  createItem(index) {
-    const div = document.createElement('div');
-    div.textContent = `Item ${index}`;
-    div.style.height = this.itemHeight + 'px';
-    return div;
-  }
-}
-```
-
-## React渲染优化
-
-### 使用React.memo
-```javascript
-import React, { memo } from 'react';
-
-const ExpensiveComponent = memo(({ data }) => {
-  console.log('ExpensiveComponent rendered');
-  
-  return (
-    <div>
-      {data.map(item => (
-        <div key={item.id}>{item.name}</div>
-      ))}
-    </div>
-  );
-});
-
-// 父组件
-function ParentComponent() {
-  const [count, setCount] = useState(0);
-  const [data, setData] = useState([]);
-  
-  return (
-    <div>
-      <button onClick={() => setCount(count + 1)}>
-        Count: {count}
-      </button>
-      <ExpensiveComponent data={data} />
-    </div>
-  );
-}
-```
-
-### 使用useMemo和useCallback
-```javascript
-import React, { useMemo, useCallback, useState } from 'react';
-
-function OptimizedComponent({ items, onItemClick }) {
-  const [filter, setFilter] = useState('');
-  
-  // 使用useMemo缓存计算结果
-  const filteredItems = useMemo(() => {
-    return items.filter(item => 
-      item.name.toLowerCase().includes(filter.toLowerCase())
+  calculateVisibleRange() {
+    const start = Math.floor(this.scrollTop / this.itemHeight);
+    const end = Math.min(
+      start + this.visibleCount + this.bufferSize * 2,
+      this.items.length
     );
-  }, [items, filter]);
-  
-  // 使用useCallback缓存函数
-  const handleItemClick = useCallback((item) => {
-    onItemClick(item);
-  }, [onItemClick]);
-  
-  return (
-    <div>
-      <input 
-        value={filter}
-        onChange={(e) => setFilter(e.target.value)}
-        placeholder="Filter items..."
-      />
-      <ul>
-        {filteredItems.map(item => (
-          <li key={item.id} onClick={() => handleItemClick(item)}>
-            {item.name}
-          </li>
-        ))}
-      </ul>
-    </div>
-  );
-}
-```
-
-## 防抖和节流
-
-### 防抖实现
-```javascript
-function debounce(func, wait) {
-  let timeout;
-  
-  return function executedFunction(...args) {
-    const later = () => {
-      clearTimeout(timeout);
-      func(...args);
-    };
     
-    clearTimeout(timeout);
-    timeout = setTimeout(later, wait);
-  };
-}
-
-// 使用示例
-const debouncedSearch = debounce((query) => {
-  // 执行搜索
-  console.log('Searching for:', query);
-}, 300);
-
-// 在输入框中使用
-document.getElementById('search').addEventListener('input', (e) => {
-  debouncedSearch(e.target.value);
-});
-```
-
-### 节流实现
-```javascript
-function throttle(func, limit) {
-  let inThrottle;
+    this.visibleStart = Math.max(0, start - this.bufferSize);
+    this.visibleEnd = end;
+  }
   
-  return function executedFunction(...args) {
-    if (!inThrottle) {
-      func.apply(this, args);
-      inThrottle = true;
-      setTimeout(() => inThrottle = false, limit);
-    }
-  };
-}
-
-// 使用示例
-const throttledScroll = throttle(() => {
-  // 处理滚动事件
-  console.log('Scroll event handled');
-}, 100);
-
-window.addEventListener('scroll', throttledScroll);
-```
-
-## 事件委托
-
-### 优化事件监听
-```javascript
-// 使用事件委托减少事件监听器数量
-function setupEventDelegation() {
-  const container = document.getElementById('list');
-  
-  container.addEventListener('click', (event) => {
-    if (event.target.matches('.item')) {
-      console.log('Item clicked:', event.target.textContent);
-    }
+  render() {
+    this.calculateVisibleRange();
     
-    if (event.target.matches('.delete-btn')) {
-      event.target.closest('.item').remove();
+    // 移除不在可视范围内的元素
+    this.cleanupInvisibleItems();
+    
+    // 渲染可视范围内的元素
+    for (let i = this.visibleStart; i < this.visibleEnd; i++) {
+      if (!this.renderedItems.has(i)) {
+        this.renderItemAt(i);
+      }
     }
-  });
-}
-
-// 避免为每个元素添加事件监听器
-function badExample() {
-  const items = document.querySelectorAll('.item');
-  items.forEach(item => {
-    item.addEventListener('click', handleClick);
-  });
-}
-```
-
-## 性能监控
-
-### 监控重排重绘
-```javascript
-// 监控重排重绘
-function monitorLayoutThrashing() {
-  let layoutCount = 0;
+  }
   
-  const observer = new PerformanceObserver((list) => {
-    list.getEntries().forEach((entry) => {
-      if (entry.entryType === 'measure') {
-        console.log(`${entry.name}: ${entry.duration}ms`);
+  renderItemAt(index) {
+    const item = this.items[index];
+    const element = this.renderItem(item, index);
+    
+    // 设置元素位置
+    element.style.position = 'absolute';
+    element.style.top = `${index * this.itemHeight}px`;
+    element.style.height = `${this.itemHeight}px`;
+    element.style.width = '100%';
+    element.dataset.index = index;
+    
+    this.content.appendChild(element);
+    this.renderedItems.set(index, element);
+  }
+  
+  cleanupInvisibleItems() {
+    const toRemove = [];
+    
+    this.renderedItems.forEach((element, index) => {
+      if (index < this.visibleStart || index >= this.visibleEnd) {
+        toRemove.push(index);
       }
     });
-  });
+    
+    toRemove.forEach(index => {
+      const element = this.renderedItems.get(index);
+      if (element && element.parentNode) {
+        element.parentNode.removeChild(element);
+      }
+      this.renderedItems.delete(index);
+    });
+  }
   
-  observer.observe({ entryTypes: ['measure'] });
+  // 更新数据
+  updateItems(newItems) {
+    this.items = newItems;
+    this.content.style.height = `${this.items.length * this.itemHeight}px`;
+    
+    // 清空所有渲染的元素
+    this.renderedItems.forEach(element => {
+      if (element.parentNode) {
+        element.parentNode.removeChild(element);
+      }
+    });
+    this.renderedItems.clear();
+    
+    this.render();
+  }
   
-  // 在关键操作前后添加标记
-  performance.mark('layout-start');
-  // 执行可能触发重排的操作
-  performance.mark('layout-end');
-  performance.measure('layout-time', 'layout-start', 'layout-end');
+  // 滚动到指定索引
+  scrollToIndex(index) {
+    const targetScrollTop = index * this.itemHeight;
+    this.container.scrollTop = targetScrollTop;
+  }
+  
+  // 销毁
+  destroy() {
+    if (this.resizeObserver) {
+      this.resizeObserver.disconnect();
+    }
+    this.container.removeEventListener('scroll', this.handleScroll);
+  }
 }
+
+// 使用示例
+const virtualScroller = new VirtualScroller({
+  container: document.getElementById('virtual-list'),
+  itemHeight: 50,
+  items: Array.from({ length: 10000 }, (_, i) => ({
+    id: i,
+    name: `Item ${i}`,
+    description: `Description for item ${i}`
+  })),
+  renderItem: (item, index) => {
+    const div = document.createElement('div');
+    div.className = 'virtual-item';
+    div.innerHTML = `
+      <div class="item-content">
+        <h4>${item.name}</h4>
+        <p>${item.description}</p>
+        <small>Index: ${index}</small>
+      </div>
+    `;
+    return div;
+  },
+  bufferSize: 10
+});
 ```
 
-### 监控帧率
-```javascript
-// 监控帧率
-function monitorFPS() {
-  let frameCount = 0;
-  let lastTime = performance.now();
+</TabItem>
+</Tabs>
+
+## 5. React渲染优化专题
+
+### 5.1 React.memo优化
+
+React.memo是React中用于优化函数组件渲染的重要工具。
+
+```typescript title="React.memo最佳实践"
+import React, { memo, useMemo, useCallback, useState } from 'react';
+
+// 基础memo使用
+interface UserCardProps {
+  user: {
+    id: number;
+    name: string;
+    email: string;
+    avatar?: string;
+  };
+  onEdit: (id: number) => void;
+  onDelete: (id: number) => void;
+}
+
+const UserCard = memo<UserCardProps>(({ user, onEdit, onDelete }) => {
+  console.log('UserCard render:', user.name);
   
-  function countFrames() {
-    frameCount++;
-    const currentTime = performance.now();
-    
-    if (currentTime - lastTime >= 1000) {
-      const fps = Math.round((frameCount * 1000) / (currentTime - lastTime));
-      console.log('FPS:', fps);
+  return (
+    <div className="user-card">
+      <img src={user.avatar || '/default-avatar.png'} alt={user.name} />
+      <div className="user-info">
+        <h3>{user.name}</h3>
+        <p>{user.email}</p>
+      </div>
+      <div className="user-actions">
+        <button onClick={() => onEdit(user.id)}>编辑</button>
+        <button onClick={() => onDelete(user.id)}>删除</button>
+      </div>
+    </div>
+  );
+});
+
+// 使用示例
+const App: React.FC = () => {
+  const [users, setUsers] = useState([
+    { id: 1, name: 'Alice', email: 'alice@example.com' },
+    { id: 2, name: 'Bob', email: 'bob@example.com' }
+  ]);
+  
+  const [counter, setCounter] = useState(0);
+  
+  // 使用useCallback优化回调函数
+  const handleEditUser = useCallback((id: number) => {
+    console.log('Edit user:', id);
+  }, []);
+  
+  const handleDeleteUser = useCallback((id: number) => {
+    setUsers(prev => prev.filter(user => user.id !== id));
+  }, []);
+  
+  return (
+    <div className="app">
+      <h1>React.memo优化示例</h1>
       
-      frameCount = 0;
-      lastTime = currentTime;
+      {/* 计数器不会影响UserCard的重新渲染 */}
+      <div>
+        <p>计数器: {counter}</p>
+        <button onClick={() => setCounter(c => c + 1)}>增加</button>
+      </div>
+      
+      <div className="user-list">
+        <h2>用户列表</h2>
+        {users.map(user => (
+          <UserCard
+            key={user.id}
+            user={user}
+            onEdit={handleEditUser}
+            onDelete={handleDeleteUser}
+          />
+        ))}
+      </div>
+    </div>
+  );
+};
+```
+
+## 6. 性能监控与调试
+
+### 6.1 渲染性能监控工具
+
+建立完善的性能监控体系是持续优化的基础。
+
+```typescript title="渲染性能监控系统"
+// 综合性能监控类
+class RenderingPerformanceMonitor {
+  private observers: Map<string, PerformanceObserver> = new Map();
+  private metrics: Map<string, any[]> = new Map();
+  private isMonitoring = false;
+  
+  constructor(private options: {
+    enableFPS?: boolean;
+    enableMemory?: boolean;
+    enablePaint?: boolean;
+    reportInterval?: number;
+  } = {}) {
+    this.options = {
+      enableFPS: true,
+      enableMemory: true,
+      enablePaint: true,
+      reportInterval: 5000,
+      ...options
+    };
+  }
+  
+  start() {
+    if (this.isMonitoring) return;
+    
+    this.isMonitoring = true;
+    
+    if (this.options.enableFPS) {
+      this.startFPSMonitoring();
     }
+    
+    if (this.options.enableMemory) {
+      this.startMemoryMonitoring();
+    }
+    
+    // 定期报告
+    setInterval(() => {
+      this.generateReport();
+    }, this.options.reportInterval);
+  }
+  
+  private startFPSMonitoring() {
+    let frameCount = 0;
+    let lastTime = performance.now();
+    
+    const countFrames = () => {
+      frameCount++;
+      const currentTime = performance.now();
+      
+      if (currentTime - lastTime >= 1000) {
+        const fps = Math.round((frameCount * 1000) / (currentTime - lastTime));
+        this.recordMetric('fps', { value: fps, timestamp: currentTime });
+        
+        frameCount = 0;
+        lastTime = currentTime;
+      }
+      
+      if (this.isMonitoring) {
+        requestAnimationFrame(countFrames);
+      }
+    };
     
     requestAnimationFrame(countFrames);
   }
   
-  requestAnimationFrame(countFrames);
+  private startMemoryMonitoring() {
+    if (!('memory' in performance)) return;
+    
+    const checkMemory = () => {
+      const memory = (performance as any).memory;
+      this.recordMetric('memory', {
+        used: memory.usedJSHeapSize,
+        total: memory.totalJSHeapSize,
+        limit: memory.jsHeapSizeLimit,
+        timestamp: performance.now()
+      });
+      
+      if (this.isMonitoring) {
+        setTimeout(checkMemory, 1000);
+      }
+    };
+    
+    checkMemory();
+  }
+  
+  private recordMetric(type: string, data: any) {
+    if (!this.metrics.has(type)) {
+      this.metrics.set(type, []);
+    }
+    
+    const metrics = this.metrics.get(type)!;
+    metrics.push(data);
+    
+    // 保持最近100条记录
+    if (metrics.length > 100) {
+      metrics.shift();
+    }
+  }
+  
+  generateReport() {
+    const report: any = {
+      timestamp: new Date().toISOString(),
+      metrics: {}
+    };
+    
+    this.metrics.forEach((data, type) => {
+      if (data.length === 0) return;
+      
+      switch (type) {
+        case 'fps':
+          const fpsValues = data.map(d => d.value);
+          report.metrics.fps = {
+            current: fpsValues[fpsValues.length - 1],
+            average: fpsValues.reduce((sum, v) => sum + v, 0) / fpsValues.length,
+            min: Math.min(...fpsValues),
+            max: Math.max(...fpsValues)
+          };
+          break;
+          
+        case 'memory':
+          const latestMemory = data[data.length - 1];
+          report.metrics.memory = {
+            used: Math.round(latestMemory.used / 1024 / 1024), // MB
+            total: Math.round(latestMemory.total / 1024 / 1024), // MB
+            usage: Math.round((latestMemory.used / latestMemory.total) * 100) // %
+          };
+          break;
+      }
+    });
+    
+    console.log('Performance Report:', report);
+    return report;
+  }
+  
+  stop() {
+    this.isMonitoring = false;
+    this.observers.forEach(observer => observer.disconnect());
+    this.observers.clear();
+  }
 }
-``` 
+
+// 使用示例
+const monitor = new RenderingPerformanceMonitor({
+  enableFPS: true,
+  enableMemory: true,
+  reportInterval: 10000
+});
+
+// 启动监控
+monitor.start();
+
+// 在应用卸载时停止监控
+window.addEventListener('beforeunload', () => {
+  monitor.stop();
+});
+```
+
+通过这个完整的渲染优化指南，开发者可以系统性地理解和应用各种渲染优化技术，从DOM操作优化到React组件优化，从虚拟滚动到性能监控，全面提升Web应用的渲染性能和用户体验。

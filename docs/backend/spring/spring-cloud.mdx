@@ -1,21 +1,636 @@
 ---
 sidebar_position: 6
-title: "Spring Cloud"
-description: "Spring Cloud微服务框架详解"
+title: "Spring Cloud详解"
+description: "深入理解Spring Cloud微服务架构与组件"
 authors: [Laby]
 last_update:
   date: 2025-08-07
   author: Laby
 ---
 
-# Spring Cloud
+# Spring Cloud 详解
 
-## 服务注册与发现
+Spring Cloud是构建分布式系统和微服务架构的完整解决方案，它基于Spring Boot提供了服务注册发现、配置管理、负载均衡、熔断降级等微服务核心功能。
 
-## 服务网关
+:::tip 核心价值
+Spring Cloud = 微服务架构 + 服务治理 + 配置管理 + 负载均衡 + 熔断降级
+:::
 
-## 负载均衡
+## 1. Spring Cloud基础概念
 
-## 熔断降级
+### 1.1 什么是微服务？
 
-## 面试题 
+微服务是一种软件架构风格，将应用程序拆分为一组小型、独立的服务，每个服务运行在自己的进程中，通过轻量级机制进行通信。
+
+#### 微服务架构特点
+| 特点 | 说明 | 优势 |
+|------|------|------|
+| **服务拆分** | 按业务功能拆分服务 | 职责单一，易于维护 |
+| **独立部署** | 每个服务可独立部署 | 快速迭代，降低风险 |
+| **技术异构** | 不同服务可使用不同技术栈 | 技术选型灵活 |
+| **数据隔离** | 每个服务管理自己的数据 | 数据一致性可控 |
+| **故障隔离** | 单个服务故障不影响整体 | 提高系统可用性 |
+
+### 1.2 Spring Cloud组件
+
+```xml title="Spring Cloud依赖"
+<dependencyManagement>
+    <dependencies>
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-dependencies</artifactId>
+            <version>2021.0.8</version>
+            <type>pom</type>
+            <scope>import</scope>
+        </dependency>
+    </dependencies>
+</dependencyManagement>
+```
+
+## 2. 服务注册与发现
+
+### 2.1 Eureka Server
+
+```java title="Eureka Server配置"
+@SpringBootApplication
+@EnableEurekaServer
+public class EurekaServerApplication {
+    public static void main(String[] args) {
+        SpringApplication.run(EurekaServerApplication.class, args);
+    }
+}
+```
+
+```yaml title="Eureka Server配置"
+server:
+  port: 8761
+
+spring:
+  application:
+    name: eureka-server
+
+eureka:
+  instance:
+    hostname: localhost
+  client:
+    register-with-eureka: false
+    fetch-registry: false
+    service-url:
+      defaultZone: http://localhost:8761/eureka/
+  server:
+    enable-self-preservation: false
+    eviction-interval-timer-in-ms: 1000
+```
+
+### 2.2 Eureka Client
+
+```java title="Eureka Client配置"
+@SpringBootApplication
+@EnableEurekaClient
+public class UserServiceApplication {
+    public static void main(String[] args) {
+        SpringApplication.run(UserServiceApplication.class, args);
+    }
+}
+```
+
+```yaml title="Eureka Client配置"
+spring:
+  application:
+    name: user-service
+
+eureka:
+  client:
+    service-url:
+      defaultZone: http://localhost:8761/eureka/
+    register-with-eureka: true
+    fetch-registry: true
+  instance:
+    prefer-ip-address: true
+    instance-id: ${spring.application.name}:${server.port}
+    lease-renewal-interval-in-seconds: 30
+    lease-expiration-duration-in-seconds: 90
+```
+
+### 2.3 服务注册示例
+
+```java title="服务注册示例"
+@RestController
+@RequestMapping("/users")
+public class UserController {
+    
+    @Autowired
+    private UserService userService;
+    
+    @GetMapping("/{id}")
+    public ResponseEntity<User> getUser(@PathVariable Long id) {
+        User user = userService.findById(id);
+        return ResponseEntity.ok(user);
+    }
+    
+    @PostMapping
+    public ResponseEntity<User> createUser(@RequestBody User user) {
+        User savedUser = userService.save(user);
+        return ResponseEntity.status(HttpStatus.CREATED).body(savedUser);
+    }
+}
+```
+
+## 3. 服务网关
+
+### 3.1 Gateway配置
+
+```java title="Gateway配置"
+@SpringBootApplication
+@EnableDiscoveryClient
+public class GatewayApplication {
+    public static void main(String[] args) {
+        SpringApplication.run(GatewayApplication.class, args);
+    }
+}
+```
+
+```yaml title="Gateway路由配置"
+spring:
+  cloud:
+    gateway:
+      discovery:
+        locator:
+          enabled: true
+          lower-case-service-id: true
+      routes:
+        - id: user-service
+          uri: lb://user-service
+          predicates:
+            - Path=/api/users/**
+          filters:
+            - StripPrefix=1
+            - name: RequestRateLimiter
+              args:
+                redis-rate-limiter.replenishRate: 10
+                redis-rate-limiter.burstCapacity: 20
+        
+        - id: order-service
+          uri: lb://order-service
+          predicates:
+            - Path=/api/orders/**
+          filters:
+            - StripPrefix=1
+            - name: CircuitBreaker
+              args:
+                name: orderCircuitBreaker
+                fallbackUri: forward:/fallback/order
+```
+
+### 3.2 自定义过滤器
+
+```java title="自定义过滤器"
+@Component
+public class AuthFilter implements GlobalFilter, Ordered {
+    
+    @Override
+    public Mono<Void> filter(ServerWebExchange exchange, GatewayFilterChain chain) {
+        ServerHttpRequest request = exchange.getRequest();
+        String token = request.getHeaders().getFirst("Authorization");
+        
+        if (token == null || !isValidToken(token)) {
+            ServerHttpResponse response = exchange.getResponse();
+            response.setStatusCode(HttpStatus.UNAUTHORIZED);
+            return response.setComplete();
+        }
+        
+        return chain.filter(exchange);
+    }
+    
+    @Override
+    public int getOrder() {
+        return -100;
+    }
+    
+    private boolean isValidToken(String token) {
+        // 验证token逻辑
+        return token != null && token.startsWith("Bearer ");
+    }
+}
+```
+
+### 3.3 限流配置
+
+```java title="限流配置"
+@Configuration
+public class RateLimiterConfig {
+    
+    @Bean
+    public KeyResolver userKeyResolver() {
+        return exchange -> Mono.just(
+            exchange.getRequest().getHeaders().getFirst("X-User-Id")
+        );
+    }
+    
+    @Bean
+    public KeyResolver ipKeyResolver() {
+        return exchange -> Mono.just(
+            exchange.getRequest().getRemoteAddress().getAddress().getHostAddress()
+        );
+    }
+}
+```
+
+## 4. 负载均衡
+
+### 4.1 Ribbon配置
+
+```java title="Ribbon配置"
+@Configuration
+public class RibbonConfig {
+    
+    @Bean
+    @LoadBalanced
+    public RestTemplate restTemplate() {
+        return new RestTemplate();
+    }
+    
+    @Bean
+    public IRule ribbonRule() {
+        return new RoundRobinRule(); // 轮询策略
+    }
+    
+    @Bean
+    public IPing ribbonPing() {
+        return new PingUrl();
+    }
+}
+```
+
+### 4.2 负载均衡策略
+
+```java title="负载均衡策略"
+@Service
+public class UserService {
+    
+    @Autowired
+    @LoadBalanced
+    private RestTemplate restTemplate;
+    
+    public User getUserById(Long id) {
+        // 使用服务名进行负载均衡调用
+        return restTemplate.getForObject(
+            "http://user-service/users/" + id, 
+            User.class
+        );
+    }
+    
+    public List<User> getAllUsers() {
+        return restTemplate.getForObject(
+            "http://user-service/users", 
+            List.class
+        );
+    }
+}
+```
+
+### 4.3 自定义负载均衡
+
+```java title="自定义负载均衡"
+@Component
+public class CustomLoadBalancerRule extends AbstractLoadBalancerRule {
+    
+    @Override
+    public Server choose(Object key) {
+        ILoadBalancer lb = getLoadBalancer();
+        
+        List<Server> reachableServers = lb.getReachableServers();
+        List<Server> allServers = lb.getAllServers();
+        
+        if (reachableServers.isEmpty()) {
+            return null;
+        }
+        
+        // 自定义负载均衡逻辑
+        return reachableServers.get(new Random().nextInt(reachableServers.size()));
+    }
+    
+    @Override
+    public void initWithNiwsConfig(IClientConfig clientConfig) {
+        // 初始化配置
+    }
+}
+```
+
+## 5. 熔断降级
+
+### 5.1 Hystrix配置
+
+```java title="Hystrix配置"
+@SpringBootApplication
+@EnableCircuitBreaker
+public class UserServiceApplication {
+    public static void main(String[] args) {
+        SpringApplication.run(UserServiceApplication.class, args);
+    }
+}
+```
+
+```java title="Hystrix使用示例"
+@Service
+public class UserService {
+    
+    @Autowired
+    private RestTemplate restTemplate;
+    
+    @HystrixCommand(
+        fallbackMethod = "getUserFallback",
+        commandProperties = {
+            @HystrixProperty(name = "execution.isolation.thread.timeoutInMilliseconds", value = "2000"),
+            @HystrixProperty(name = "circuitBreaker.requestVolumeThreshold", value = "10"),
+            @HystrixProperty(name = "circuitBreaker.errorThresholdPercentage", value = "50"),
+            @HystrixProperty(name = "circuitBreaker.sleepWindowInMilliseconds", value = "5000")
+        }
+    )
+    public User getUserById(Long id) {
+        return restTemplate.getForObject(
+            "http://user-service/users/" + id, 
+            User.class
+        );
+    }
+    
+    public User getUserFallback(Long id, Throwable e) {
+        // 降级逻辑
+        User fallbackUser = new User();
+        fallbackUser.setId(id);
+        fallbackUser.setName("默认用户");
+        fallbackUser.setEmail("default@example.com");
+        return fallbackUser;
+    }
+}
+```
+
+### 5.2 Sentinel配置
+
+```java title="Sentinel配置"
+@Configuration
+public class SentinelConfig {
+    
+    @PostConstruct
+    public void init() {
+        // 配置限流规则
+        List<FlowRule> rules = new ArrayList<>();
+        FlowRule rule = new FlowRule();
+        rule.setResource("getUser");
+        rule.setGrade(RuleConstant.FLOW_GRADE_QPS);
+        rule.setCount(10);
+        rules.add(rule);
+        FlowRuleManager.loadRules(rules);
+    }
+}
+```
+
+```java title="Sentinel使用示例"
+@Service
+public class UserService {
+    
+    @SentinelResource(
+        value = "getUser",
+        blockHandler = "getUserBlockHandler",
+        fallback = "getUserFallback"
+    )
+    public User getUserById(Long id) {
+        return userRepository.findById(id).orElse(null);
+    }
+    
+    public User getUserBlockHandler(Long id, BlockException ex) {
+        // 限流处理
+        return new User();
+    }
+    
+    public User getUserFallback(Long id, Throwable e) {
+        // 降级处理
+        return new User();
+    }
+}
+```
+
+## 6. 配置管理
+
+### 6.1 Config Server
+
+```java title="Config Server配置"
+@SpringBootApplication
+@EnableConfigServer
+public class ConfigServerApplication {
+    public static void main(String[] args) {
+        SpringApplication.run(ConfigServerApplication.class, args);
+    }
+}
+```
+
+```yaml title="Config Server配置"
+server:
+  port: 8888
+
+spring:
+  application:
+    name: config-server
+  cloud:
+    config:
+      server:
+        git:
+          uri: https://github.com/example/config-repo
+          default-label: main
+          search-paths: config
+          username: ${GIT_USERNAME}
+          password: ${GIT_PASSWORD}
+```
+
+### 6.2 Config Client
+
+```java title="Config Client配置"
+@SpringBootApplication
+@EnableDiscoveryClient
+@RefreshScope
+public class UserServiceApplication {
+    public static void main(String[] args) {
+        SpringApplication.run(UserServiceApplication.class, args);
+    }
+}
+```
+
+```yaml title="Config Client配置"
+spring:
+  application:
+    name: user-service
+  cloud:
+    config:
+      uri: http://localhost:8888
+      fail-fast: true
+      retry:
+        initial-interval: 1000
+        max-interval: 2000
+        max-attempts: 6
+```
+
+```java title="配置使用示例"
+@RestController
+@RefreshScope
+public class ConfigController {
+    
+    @Value("${app.feature.enabled:false}")
+    private boolean featureEnabled;
+    
+    @Value("${app.max.users:100}")
+    private int maxUsers;
+    
+    @GetMapping("/config")
+    public Map<String, Object> getConfig() {
+        Map<String, Object> config = new HashMap<>();
+        config.put("featureEnabled", featureEnabled);
+        config.put("maxUsers", maxUsers);
+        return config;
+    }
+}
+```
+
+## 7. 分布式链路追踪
+
+### 7.1 Sleuth配置
+
+```xml title="Sleuth依赖"
+<dependency>
+    <groupId>org.springframework.cloud</groupId>
+    <artifactId>spring-cloud-starter-sleuth</artifactId>
+</dependency>
+```
+
+```yaml title="Sleuth配置"
+spring:
+  sleuth:
+    sampler:
+      probability: 1.0
+    web:
+      client:
+        enabled: true
+    messaging:
+      enabled: true
+```
+
+```java title="Sleuth使用示例"
+@Service
+public class UserService {
+    
+    private static final Logger logger = LoggerFactory.getLogger(UserService.class);
+    
+    @Autowired
+    private RestTemplate restTemplate;
+    
+    public User getUserById(Long id) {
+        logger.info("开始获取用户信息，用户ID: {}", id);
+        
+        User user = restTemplate.getForObject(
+            "http://user-service/users/" + id, 
+            User.class
+        );
+        
+        logger.info("获取用户信息成功，用户: {}", user);
+        return user;
+    }
+}
+```
+
+### 7.2 Zipkin配置
+
+```java title="Zipkin配置"
+@SpringBootApplication
+@EnableDiscoveryClient
+public class ZipkinServerApplication {
+    public static void main(String[] args) {
+        SpringApplication.run(ZipkinServerApplication.class, args);
+    }
+}
+```
+
+```yaml title="Zipkin配置"
+spring:
+  application:
+    name: zipkin-server
+  sleuth:
+    zipkin:
+      base-url: http://localhost:9411
+```
+
+## 8. 面试题精选
+
+### 8.1 基础概念题
+
+**Q: 什么是微服务架构？它的优势和挑战是什么？**
+
+A: 微服务架构是一种将应用程序拆分为小型、独立服务的架构风格。优势包括：
+- **服务拆分**：按业务功能拆分，职责单一
+- **独立部署**：每个服务可独立部署和扩展
+- **技术异构**：不同服务可使用不同技术栈
+- **故障隔离**：单个服务故障不影响整体
+
+挑战包括：
+- **分布式复杂性**：网络通信、数据一致性等
+- **服务治理**：服务发现、负载均衡、熔断降级
+- **数据管理**：分布式事务、数据一致性
+- **运维复杂度**：监控、日志、部署等
+
+**Q: Spring Cloud的核心组件有哪些？**
+
+A: Spring Cloud的核心组件包括：
+- **Eureka**：服务注册与发现
+- **Gateway**：API网关
+- **Ribbon**：客户端负载均衡
+- **Hystrix/Sentinel**：熔断降级
+- **Config**：配置管理
+- **Sleuth**：分布式链路追踪
+- **Bus**：消息总线
+
+### 8.2 实践题
+
+**Q: 如何实现服务注册与发现？**
+
+A: 实现服务注册与发现的步骤：
+1. **配置Eureka Server**：创建注册中心
+2. **配置Eureka Client**：服务注册到注册中心
+3. **服务调用**：通过服务名进行调用
+4. **负载均衡**：使用Ribbon实现负载均衡
+
+**Q: 如何实现API网关？**
+
+A: 实现API网关的方法：
+1. **配置Gateway**：设置路由规则
+2. **过滤器链**：实现认证、限流、日志等
+3. **服务发现**：集成Eureka进行服务发现
+4. **负载均衡**：使用LoadBalancer进行负载均衡
+
+### 8.3 高级题
+
+**Q: 如何实现分布式事务？**
+
+A: 实现分布式事务的方法：
+- **2PC/3PC**：两阶段/三阶段提交协议
+- **TCC模式**：Try-Confirm-Cancel模式
+- **Saga模式**：长事务的补偿模式
+- **消息事务**：基于消息的最终一致性
+- **Seata**：分布式事务框架
+
+**Q: 如何实现服务熔断降级？**
+
+A: 实现服务熔断降级的方法：
+- **Hystrix**：Netflix开源的熔断器
+- **Sentinel**：阿里巴巴开源的流量控制组件
+- **Resilience4j**：新一代熔断器
+- **自定义熔断**：基于计数器和时间窗口实现
+
+:::tip Spring Cloud学习要点
+1. **理解微服务架构**：掌握微服务的设计原则和最佳实践
+2. **熟悉核心组件**：了解Eureka、Gateway、Ribbon等组件
+3. **掌握服务治理**：学会服务注册发现、负载均衡、熔断降级
+4. **学会配置管理**：掌握分布式配置和配置中心
+5. **了解监控追踪**：学会分布式链路追踪和监控
+:::
+
+---
+
+通过本章的学习，你应该已经掌握了Spring Cloud的核心概念、组件使用和微服务架构设计。Spring Cloud是构建分布式系统的重要框架，掌握Spring Cloud对于构建高可用、可扩展的微服务应用至关重要。 

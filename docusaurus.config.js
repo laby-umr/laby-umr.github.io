@@ -16,6 +16,7 @@ const config = {
   // Future flags, see https://docusaurus.io/docs/api/docusaurus-config#future
   future: {
     v4: true, // Improve compatibility with the upcoming Docusaurus v4
+    experimental_faster: true, // Build acceleration
   },
 
   // Set the production url of your site here
@@ -75,6 +76,11 @@ const config = {
     ],
   ],
 
+  // Add Mermaid markdown support
+  markdown: {
+    mermaid: true,
+  },
+
   presets: [
     [
       'classic',
@@ -120,6 +126,9 @@ const config = {
       }),
     ],
   ],
+
+  // Add Mermaid theme
+  themes: ['@docusaurus/theme-mermaid'],
 
   themeConfig:
     /** @type {import('@docusaurus/preset-classic').ThemeConfig} */
@@ -204,7 +213,21 @@ const config = {
       prism: {
         theme: prismThemes.github,
         darkTheme: prismThemes.dracula,
-        additionalLanguages: ['java', 'scala', 'go', 'rust', 'swift'],
+        additionalLanguages: [
+          'java', 'scala', 'go', 'rust', 'swift', 
+          'kotlin', 'csharp', 'php', 'python', 'bash', 
+          'powershell', 'sql', 'typescript', 'jsx', 'tsx',
+          'yaml', 'json', 'css', 'markdown', 'diff'
+        ],
+        // 启用代码行高亮功能
+        magicComments: [
+          {
+            className: 'theme-code-block-highlighted-line',
+            line: 'highlight-next-line',
+            block: { start: 'highlight-start', end: 'highlight-end' },
+          }
+        ],
+        defaultLanguage: 'javascript',
       },
       // 添加元数据，有助于SEO
       metadata: [

@@ -225,7 +225,7 @@ function Features() {
         id: "feature.database.desc",
         message: '设计高效的数据库架构和查询优化，提升应用性能。'
       }),
-      link: '/docs/backend/database-orm',
+      link: '/docs/backend/database-orm/database-intro',
     },
     {
       title: translate({id: "feature.mobile.title", message: '移动应用开发'}),

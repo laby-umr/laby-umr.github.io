@@ -32,6 +32,198 @@ last_update:
 - API设计规范
 - 服务器部署与运维
 
+## 技术栈概览
+
+以下是我们的技术栈架构图：
+
+```mermaid
+graph TD
+    A[前端应用层] --> B[中间件/API网关]
+    B --> C[微服务集群]
+    C --> D1[数据库服务]
+    C --> D2[缓存服务]
+    C --> D3[消息队列]
+    
+    style A fill:#ffcccc,stroke:#ff0000
+    style B fill:#ccffcc,stroke:#00ff00
+    style C fill:#ccccff,stroke:#0000ff
+    style D1 fill:#ffffcc,stroke:#ffff00
+    style D2 fill:#ffffcc,stroke:#ffff00
+    style D3 fill:#ffffcc,stroke:#ffff00
+```
+
+### 前后端数据流
+
+下面是一个典型的前后端数据流示意图：
+
+```mermaid
+sequenceDiagram
+    participant 用户
+    participant 前端
+    participant API网关
+    participant 微服务
+    participant 数据库
+    
+    用户->>前端: 用户操作
+    前端->>API网关: 请求数据
+    API网关->>微服务: 路由请求
+    微服务->>数据库: 查询/写入
+    数据库-->>微服务: 返回结果
+    微服务-->>API网关: 处理数据
+    API网关-->>前端: 响应
+    前端-->>用户: 渲染界面
+```
+
+## 代码示例
+
+### React组件示例
+
+下面是一个带有代码高亮的React组件示例：
+
+```jsx
+import React, { useState, useEffect } from 'react';
+
+const UserProfile = ({ userId }) => {
+  const [userData, setUserData] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchUserData = async () => {
+      try {
+        const response = await fetch(`/api/users/${userId}`);
+        const data = await response.json();
+        setUserData(data);
+      } catch (error) {
+        console.error('Error fetching user data:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchUserData();
+  }, [userId]);
+
+  if (loading) return <div>Loading user profile...</div>;
+  if (!userData) return <div>User not found</div>;
+
+  return (
+    <div className="user-profile">
+      <h2>{userData.name}</h2>
+      <p>Email: {userData.email}</p>
+      <p>Role: {userData.role}</p>
+      <p>Joined: {new Date(userData.createdAt).toLocaleDateString()}</p>
+    </div>
+  );
+};
+
+export default UserProfile;
+```
+
+### Java Spring Boot示例
+
+后端API实现示例：
+
+```java
+@RestController
+@RequestMapping("/api/users")
+public class UserController {
+
+    private final UserService userService;
+
+    public UserController(UserService userService) {
+        this.userService = userService;
+    }
+
+    @GetMapping("/{id}")
+    public ResponseEntity<User> getUserById(@PathVariable Long id) {
+        return userService.findById(id)
+            .map(user -> ResponseEntity.ok().body(user))
+            .orElse(ResponseEntity.notFound().build());
+    }
+
+    @PostMapping
+    public ResponseEntity<User> createUser(@RequestBody User user) {
+        User createdUser = userService.save(user);
+        return ResponseEntity.created(URI.create("/api/users/" + createdUser.getId()))
+            .body(createdUser);
+    }
+}
+```
+
+### TypeScript 示例
+
+下面是一个 TypeScript 接口定义示例：
+
+```typescript
+export interface User {
+  id: number;
+  name: string;
+  email: string;
+  role: 'admin' | 'user' | 'guest';
+  createdAt: string;
+  profile?: {
+    avatar: string;
+    bio: string;
+    location: string;
+  };
+
+  isActive: boolean;
+}
+
+export type UserPartial = Partial<User>;
+
+export const isAdmin = (user: User): boolean => {
+  return user.role === 'admin';
+};
+```
+
+### CSS 样式示例
+
+一些 CSS 样式代码：
+
+```css
+.user-profile {
+  padding: 1.5rem;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  background-color: #fff;
+  max-width: 600px;
+  margin: 0 auto;
+}
+
+.user-profile h2 {
+  color: #2c3e50;
+  margin-bottom: 1rem;
+  border-bottom: 1px solid #eee;
+  padding-bottom: 0.5rem;
+}
+
+.user-profile p {
+  margin-bottom: 0.75rem;
+  color: #555;
+}
+
+.user-profile p:last-child { margin-bottom: 0; }
+```
+
+## 微服务架构设计
+
+我们的微服务架构状态转换图：
+
+```mermaid
+stateDiagram-v2
+    [*] --> 初始化
+    初始化 --> 运行中: 启动成功
+    运行中 --> 降级模式: 依赖服务不可用
+    降级模式 --> 运行中: 依赖恢复
+    运行中 --> 维护模式: 手动触发
+    维护模式 --> 运行中: 维护完成
+    运行中 --> 关闭: 接收停止信号
+    降级模式 --> 关闭: 接收停止信号
+    维护模式 --> 关闭: 接收停止信号
+    关闭 --> [*]
+```
+
 ## 如何使用本知识库
 
 1. **浏览学习**：按照目录结构系统学习全栈开发知识

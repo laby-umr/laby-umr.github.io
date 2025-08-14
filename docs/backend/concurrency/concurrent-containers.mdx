@@ -1,494 +1,861 @@
 ---
 sidebar_position: 6
-title: "并发容器"
-description: "Java并发容器详解"
+title: "Java并发容器详解"
+description: "全面介绍Java并发容器、线程安全集合、性能优化与最佳实践"
 authors: [Laby]
 last_update:
-  date: 2025-08-07
+  date: 2025-01-07
   author: Laby
 ---
 
-# 并发容器
+# Java 并发容器详解
 
-Java并发包提供了多种线程安全的容器类，这些容器专门为多线程环境设计，提供了比使用synchronized更高效的并发访问机制。
+Java并发包提供了多种线程安全的容器类，这些容器专门为多线程环境设计，提供了比使用synchronized更高效的并发访问机制。本文将详细介绍各种并发容器的使用方法和最佳实践。
 
-## ConcurrentHashMap
+## 1. 并发容器概述
+
+### 1.1 什么是并发容器？
+
+:::tip 核心概念
+并发容器是Java并发包中提供的线程安全集合类，它们通过不同的并发控制机制（如分段锁、CAS操作、读写锁等）实现线程安全，避免了使用synchronized的性能开销。
+:::
+
+### 1.2 并发容器的优势
+
+| 优势 | 具体体现 | 业务价值 |
+|------|----------|----------|
+| **线程安全** | 无需手动同步 | 简化编程，减少错误 |
+| **高性能** | 细粒度锁或无锁算法 | 提高系统吞吐量 |
+| **可扩展性** | 支持高并发访问 | 适应大规模应用 |
+| **一致性** | 提供弱一致性保证 | 平衡性能和一致性 |
+| **易用性** | API与普通容器相似 | 降低学习成本 |
+
+### 1.3 并发容器分类
+
+```java title="并发容器分类示例"
+import java.util.concurrent.*;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.PriorityBlockingQueue;
+import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.ConcurrentSkipListMap;
+import java.util.concurrent.ConcurrentSkipListSet;
+
+public class ConcurrentContainerCategories {
+    
+    /**
+     * 并发容器分类
+     */
+    public static void explainCategories() {
+        System.out.println("=== 并发容器分类 ===");
+        
+        // 1. 并发Map
+        System.out.println("1. 并发Map:");
+        System.out.println("   - ConcurrentHashMap: 并发哈希表");
+        System.out.println("   - ConcurrentSkipListMap: 并发跳表Map");
+        
+        // 2. 并发List
+        System.out.println("2. 并发List:");
+        System.out.println("   - CopyOnWriteArrayList: 写时复制列表");
+        
+        // 3. 并发Set
+        System.out.println("3. 并发Set:");
+        System.out.println("   - ConcurrentSkipListSet: 并发跳表Set");
+        System.out.println("   - CopyOnWriteArraySet: 写时复制Set");
+        
+        // 4. 阻塞队列
+        System.out.println("4. 阻塞队列:");
+        System.out.println("   - ArrayBlockingQueue: 数组阻塞队列");
+        System.out.println("   - LinkedBlockingQueue: 链表阻塞队列");
+        System.out.println("   - PriorityBlockingQueue: 优先级阻塞队列");
+        System.out.println("   - SynchronousQueue: 同步队列");
+        System.out.println("   - DelayQueue: 延迟队列");
+        
+        // 5. 非阻塞队列
+        System.out.println("5. 非阻塞队列:");
+        System.out.println("   - ConcurrentLinkedQueue: 并发链表队列");
+        System.out.println("   - ConcurrentLinkedDeque: 并发链表双端队列");
+    }
+}
+```
+
+## 2. ConcurrentHashMap
+
+### 2.1 ConcurrentHashMap 基本概念
 
 ConcurrentHashMap是HashMap的线程安全版本，使用分段锁机制实现高并发。
 
-### 基本用法
-
-```java
+```java title="ConcurrentHashMap基本用法示例"
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 
-public class ConcurrentHashMapExample {
+public class ConcurrentHashMapExamples {
     
-    public static void main(String[] args) {
-        ConcurrentHashMap<String, Integer> map = new ConcurrentHashMap<>();
-        ExecutorService executor = Executors.newFixedThreadPool(3);
-        
-        // 多个线程同时写入
-        for (int i = 0; i < 3; i++) {
-            final int threadId = i;
-            executor.submit(() -> {
-                for (int j = 0; j < 10; j++) {
-                    String key = "key-" + threadId + "-" + j;
-                    map.put(key, j);
-                    System.out.println("线程 " + threadId + " 写入: " + key);
-                }
-            });
-        }
-        
-        executor.shutdown();
-        
-        // 等待所有线程完成
-        while (!executor.isTerminated()) {
+    /**
+     * ConcurrentHashMap基本用法
+     */
+    public static class BasicUsage {
+        public static void main(String[] args) {
+            ConcurrentHashMap<String, Integer> map = new ConcurrentHashMap<>();
+            ExecutorService executor = Executors.newFixedThreadPool(3);
+            
+            System.out.println("=== ConcurrentHashMap基本用法 ===");
+            
+            // 多个线程同时写入
+            for (int i = 0; i < 3; i++) {
+                final int threadId = i;
+                executor.submit(() -> {
+                    for (int j = 0; j < 10; j++) {
+                        String key = "key-" + threadId + "-" + j;
+                        map.put(key, j);
+                        System.out.println("线程 " + threadId + " 写入: " + key);
+                    }
+                });
+            }
+            
+            executor.shutdown();
+            
+            // 等待所有线程完成
             try {
-                Thread.sleep(100);
+                executor.awaitTermination(5, TimeUnit.SECONDS);
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
             }
+            
+            System.out.println("最终Map大小: " + map.size());
+            System.out.println("Map内容: " + map);
+        }
+    }
+    
+    /**
+     * ConcurrentHashMap原子操作
+     */
+    public static class AtomicOperations {
+        public static void main(String[] args) {
+            ConcurrentHashMap<String, Integer> map = new ConcurrentHashMap<>();
+            
+            System.out.println("=== ConcurrentHashMap原子操作 ===");
+            
+            // putIfAbsent - 如果key不存在才放入
+            map.putIfAbsent("key1", 1);
+            map.putIfAbsent("key1", 2); // 不会覆盖，因为key1已存在
+            System.out.println("putIfAbsent结果: " + map.get("key1")); // 1
+            
+            // replace - 替换值
+            map.replace("key1", 1, 10); // 只有当值为1时才替换为10
+            System.out.println("replace结果: " + map.get("key1")); // 10
+            
+            // compute - 计算新值
+            map.compute("key2", (key, value) -> {
+                return value == null ? 1 : value + 1;
+            });
+            System.out.println("compute结果: " + map.get("key2")); // 1
+            
+            // computeIfAbsent - 如果key不存在才计算
+            map.computeIfAbsent("key3", key -> key.length());
+            System.out.println("computeIfAbsent结果: " + map.get("key3")); // 4
+            
+            // computeIfPresent - 如果key存在才计算
+            map.computeIfPresent("key3", (key, value) -> value * 2);
+            System.out.println("computeIfPresent结果: " + map.get("key3")); // 8
+            
+            // merge - 合并值
+            map.merge("key4", 1, (oldValue, newValue) -> oldValue + newValue);
+            map.merge("key4", 2, (oldValue, newValue) -> oldValue + newValue);
+            System.out.println("merge结果: " + map.get("key4")); // 3
+        }
+    }
+    
+    /**
+     * ConcurrentHashMap批量操作
+     */
+    public static class BatchOperations {
+        public static void main(String[] args) {
+            ConcurrentHashMap<String, Integer> map = new ConcurrentHashMap<>();
+            
+            System.out.println("=== ConcurrentHashMap批量操作 ===");
+            
+            // 初始化数据
+            for (int i = 0; i < 10; i++) {
+                map.put("key" + i, i);
+            }
+            
+            // forEach - 遍历所有元素
+            System.out.println("遍历所有元素:");
+            map.forEach((key, value) -> System.out.println(key + " = " + value));
+            
+            // forEachKey - 只遍历key
+            System.out.println("\n遍历所有key:");
+            map.forEachKey(1, key -> System.out.println("Key: " + key));
+            
+            // forEachValue - 只遍历value
+            System.out.println("\n遍历所有value:");
+            map.forEachValue(1, value -> System.out.println("Value: " + value));
+            
+            // forEachEntry - 遍历entry
+            System.out.println("\n遍历所有entry:");
+            map.forEachEntry(1, entry -> 
+                System.out.println(entry.getKey() + " = " + entry.getValue()));
+            
+            // reduce - 归约操作
+            int sum = map.reduce(1, 
+                (key, value) -> value, 
+                Integer::sum);
+            System.out.println("\n所有值的和: " + sum);
+        }
+    }
+    
+    /**
+     * ConcurrentHashMap实际应用场景
+     */
+    public static class PracticalApplications {
+        
+        /**
+         * 缓存实现
+         */
+        public static class Cache {
+            private final ConcurrentHashMap<String, CacheEntry> cache = new ConcurrentHashMap<>();
+            private final long maxAge;
+            
+            public Cache(long maxAge) {
+                this.maxAge = maxAge;
+            }
+            
+            public void put(String key, Object value) {
+                cache.put(key, new CacheEntry(value, System.currentTimeMillis()));
+            }
+            
+            public Object get(String key) {
+                CacheEntry entry = cache.get(key);
+                if (entry != null && !entry.isExpired(maxAge)) {
+                    return entry.getValue();
+                }
+                cache.remove(key);
+                return null;
+            }
+            
+            public void clear() {
+                cache.clear();
+            }
+            
+            public int size() {
+                return cache.size();
+            }
+            
+            static class CacheEntry {
+                private final Object value;
+                private final long timestamp;
+                
+                public CacheEntry(Object value, long timestamp) {
+                    this.value = value;
+                    this.timestamp = timestamp;
+                }
+                
+                public Object getValue() {
+                    return value;
+                }
+                
+                public boolean isExpired(long maxAge) {
+                    return System.currentTimeMillis() - timestamp > maxAge;
+                }
+            }
         }
         
-        System.out.println("最终Map大小: " + map.size());
-        System.out.println("Map内容: " + map);
-    }
-}
-```
-
-### 原子操作
-
-```java
-public class ConcurrentHashMapAtomicOps {
-    
-    public static void main(String[] args) {
-        ConcurrentHashMap<String, Integer> map = new ConcurrentHashMap<>();
-        
-        // putIfAbsent - 如果key不存在才放入
-        map.putIfAbsent("key1", 1);
-        map.putIfAbsent("key1", 2); // 不会覆盖，因为key1已存在
-        System.out.println("putIfAbsent结果: " + map.get("key1")); // 1
-        
-        // replace - 替换值
-        map.replace("key1", 1, 10); // 只有当值为1时才替换为10
-        System.out.println("replace结果: " + map.get("key1")); // 10
-        
-        // compute - 计算新值
-        map.compute("key2", (key, value) -> {
-            return value == null ? 1 : value + 1;
-        });
-        System.out.println("compute结果: " + map.get("key2")); // 1
-        
-        // computeIfAbsent - 如果key不存在才计算
-        map.computeIfAbsent("key3", key -> key.length());
-        System.out.println("computeIfAbsent结果: " + map.get("key3")); // 4
-        
-        // computeIfPresent - 如果key存在才计算
-        map.computeIfPresent("key3", (key, value) -> value * 2);
-        System.out.println("computeIfPresent结果: " + map.get("key3")); // 8
-        
-        // merge - 合并值
-        map.merge("key4", 1, (oldValue, newValue) -> oldValue + newValue);
-        map.merge("key4", 2, (oldValue, newValue) -> oldValue + newValue);
-        System.out.println("merge结果: " + map.get("key4")); // 3
-    }
-}
-```
-
-### 批量操作
-
-```java
-public class ConcurrentHashMapBatchOps {
-    
-    public static void main(String[] args) {
-        ConcurrentHashMap<String, Integer> map = new ConcurrentHashMap<>();
-        
-        // 初始化数据
-        for (int i = 0; i < 10; i++) {
-            map.put("key" + i, i);
+        /**
+         * 计数器实现
+         */
+        public static class Counter {
+            private final ConcurrentHashMap<String, AtomicInteger> counters = new ConcurrentHashMap<>();
+            
+            public void increment(String key) {
+                counters.computeIfAbsent(key, k -> new AtomicInteger()).incrementAndGet();
+            }
+            
+            public void decrement(String key) {
+                counters.computeIfAbsent(key, k -> new AtomicInteger()).decrementAndGet();
+            }
+            
+            public int get(String key) {
+                AtomicInteger counter = counters.get(key);
+                return counter != null ? counter.get() : 0;
+            }
+            
+            public void reset(String key) {
+                counters.remove(key);
+            }
+            
+            public Map<String, Integer> getAllCounters() {
+                Map<String, Integer> result = new HashMap<>();
+                counters.forEach((key, counter) -> result.put(key, counter.get()));
+                return result;
+            }
         }
-        
-        // forEach - 遍历所有元素
-        System.out.println("遍历所有元素:");
-        map.forEach((key, value) -> System.out.println(key + " = " + value));
-        
-        // forEachKey - 只遍历key
-        System.out.println("\n遍历所有key:");
-        map.forEachKey(1, key -> System.out.println("Key: " + key));
-        
-        // forEachValue - 只遍历value
-        System.out.println("\n遍历所有value:");
-        map.forEachValue(1, value -> System.out.println("Value: " + value));
-        
-        // forEachEntry - 遍历entry
-        System.out.println("\n遍历所有entry:");
-        map.forEachEntry(1, entry -> 
-            System.out.println(entry.getKey() + " = " + entry.getValue()));
-        
-        // reduce - 归约操作
-        int sum = map.reduce(1, 
-            (key, value) -> value, 
-            Integer::sum);
-        System.out.println("\n所有值的和: " + sum);
     }
 }
 ```
 
-## CopyOnWriteArrayList
+## 3. CopyOnWriteArrayList
+
+### 3.1 CopyOnWriteArrayList 基本概念
 
 CopyOnWriteArrayList是ArrayList的线程安全版本，适用于读多写少的场景。
 
-### 基本用法
-
-```java
+```java title="CopyOnWriteArrayList基本用法示例"
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
-public class CopyOnWriteArrayListExample {
+public class CopyOnWriteArrayListExamples {
     
-    public static void main(String[] args) {
-        CopyOnWriteArrayList<String> list = new CopyOnWriteArrayList<>();
-        ExecutorService executor = Executors.newFixedThreadPool(3);
+    /**
+     * CopyOnWriteArrayList基本用法
+     */
+    public static class BasicUsage {
+        public static void main(String[] args) {
+            CopyOnWriteArrayList<String> list = new CopyOnWriteArrayList<>();
+            ExecutorService executor = Executors.newFixedThreadPool(3);
+            
+            System.out.println("=== CopyOnWriteArrayList基本用法 ===");
+            
+            // 添加初始元素
+            list.add("初始元素1");
+            list.add("初始元素2");
+            
+            // 多个线程同时读写
+            for (int i = 0; i < 3; i++) {
+                final int threadId = i;
+                executor.submit(() -> {
+                    // 写操作
+                    list.add("线程" + threadId + "添加的元素");
+                    
+                    // 读操作
+                    for (String item : list) {
+                        System.out.println("线程" + threadId + "读取: " + item);
+                    }
+                });
+            }
+            
+            executor.shutdown();
+            
+            try {
+                executor.awaitTermination(5, TimeUnit.SECONDS);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+            
+            System.out.println("最终列表大小: " + list.size());
+            System.out.println("最终列表内容: " + list);
+        }
+    }
+    
+    /**
+     * CopyOnWriteArrayList适用场景
+     */
+    public static class UseCases {
         
-        // 添加初始元素
-        list.add("初始元素1");
-        list.add("初始元素2");
-        
-        // 多个线程同时读写
-        for (int i = 0; i < 3; i++) {
-            final int threadId = i;
-            executor.submit(() -> {
-                // 写操作
-                list.add("线程" + threadId + "添加的元素");
-                
-                // 读操作
-                for (String item : list) {
-                    System.out.println("线程" + threadId + "读取: " + item);
+        /**
+         * 事件监听器管理
+         */
+        public static class EventManager {
+            private final CopyOnWriteArrayList<EventListener> listeners = new CopyOnWriteArrayList<>();
+            
+            // 添加监听器（写操作较少）
+            public void addEventListener(EventListener listener) {
+                listeners.add(listener);
+            }
+            
+            // 移除监听器（写操作较少）
+            public void removeEventListener(EventListener listener) {
+                listeners.remove(listener);
+            }
+            
+            // 通知所有监听器（读操作较多）
+            public void notifyListeners(String event) {
+                for (EventListener listener : listeners) {
+                    try {
+                        listener.onEvent(event);
+                    } catch (Exception e) {
+                        System.err.println("监听器异常: " + e.getMessage());
+                    }
                 }
-            });
+            }
+            
+            interface EventListener {
+                void onEvent(String event);
+            }
         }
         
-        executor.shutdown();
-        
-        System.out.println("最终列表大小: " + list.size());
-        System.out.println("最终列表内容: " + list);
-    }
-}
-```
-
-### 适用场景
-
-```java
-public class CopyOnWriteArrayListUseCase {
-    
-    private final CopyOnWriteArrayList<EventListener> listeners = 
-        new CopyOnWriteArrayList<>();
-    
-    // 添加监听器（写操作较少）
-    public void addEventListener(EventListener listener) {
-        listeners.add(listener);
-    }
-    
-    // 移除监听器（写操作较少）
-    public void removeEventListener(EventListener listener) {
-        listeners.remove(listener);
-    }
-    
-    // 通知所有监听器（读操作较多）
-    public void notifyListeners(String event) {
-        for (EventListener listener : listeners) {
-            try {
-                listener.onEvent(event);
-            } catch (Exception e) {
-                // 处理异常
+        /**
+         * 配置管理
+         */
+        public static class ConfigurationManager {
+            private final CopyOnWriteArrayList<Configuration> configurations = new CopyOnWriteArrayList<>();
+            
+            public void addConfiguration(Configuration config) {
+                configurations.add(config);
+            }
+            
+            public void removeConfiguration(Configuration config) {
+                configurations.remove(config);
+            }
+            
+            public List<Configuration> getAllConfigurations() {
+                return new ArrayList<>(configurations);
+            }
+            
+            public void applyConfigurations() {
+                for (Configuration config : configurations) {
+                    config.apply();
+                }
+            }
+            
+            static class Configuration {
+                private final String name;
+                private final String value;
+                
+                public Configuration(String name, String value) {
+                    this.name = name;
+                    this.value = value;
+                }
+                
+                public void apply() {
+                    System.out.println("应用配置: " + name + " = " + value);
+                }
+                
+                @Override
+                public String toString() {
+                    return "Configuration{name='" + name + "', value='" + value + "'}";
+                }
             }
         }
     }
-    
-    interface EventListener {
-        void onEvent(String event);
-    }
 }
 ```
 
-## BlockingQueue
+## 4. BlockingQueue
+
+### 4.1 BlockingQueue 基本概念
 
 BlockingQueue是一个阻塞队列接口，提供了线程安全的队列操作。
 
-### ArrayBlockingQueue
-
-```java
+```java title="BlockingQueue基本用法示例"
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-
-public class ArrayBlockingQueueExample {
-    
-    public static void main(String[] args) {
-        BlockingQueue<String> queue = new ArrayBlockingQueue<>(5);
-        ExecutorService executor = Executors.newFixedThreadPool(2);
-        
-        // 生产者
-        executor.submit(() -> {
-            try {
-                for (int i = 0; i < 10; i++) {
-                    String item = "Item-" + i;
-                    queue.put(item); // 阻塞直到有空间
-                    System.out.println("生产者放入: " + item);
-                    Thread.sleep(500);
-                }
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-            }
-        });
-        
-        // 消费者
-        executor.submit(() -> {
-            try {
-                for (int i = 0; i < 10; i++) {
-                    String item = queue.take(); // 阻塞直到有元素
-                    System.out.println("消费者取出: " + item);
-                    Thread.sleep(1000);
-                }
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-            }
-        });
-        
-        executor.shutdown();
-    }
-}
-```
-
-### LinkedBlockingQueue
-
-```java
-import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 
-public class LinkedBlockingQueueExample {
+public class BlockingQueueExamples {
     
-    public static void main(String[] args) {
-        BlockingQueue<Integer> queue = new LinkedBlockingQueue<>(3);
-        
-        // 生产者
-        new Thread(() -> {
-            try {
-                for (int i = 0; i < 5; i++) {
-                    boolean offered = queue.offer(i, 1, TimeUnit.SECONDS);
-                    if (offered) {
-                        System.out.println("成功放入: " + i);
-                    } else {
-                        System.out.println("放入超时: " + i);
+    /**
+     * ArrayBlockingQueue基本用法
+     */
+    public static class ArrayBlockingQueueExample {
+        public static void main(String[] args) {
+            BlockingQueue<String> queue = new ArrayBlockingQueue<>(5);
+            ExecutorService executor = Executors.newFixedThreadPool(2);
+            
+            System.out.println("=== ArrayBlockingQueue基本用法 ===");
+            
+            // 生产者
+            executor.submit(() -> {
+                try {
+                    for (int i = 0; i < 10; i++) {
+                        String item = "Item-" + i;
+                        queue.put(item); // 阻塞直到有空间
+                        System.out.println("生产者放入: " + item);
+                        Thread.sleep(500);
                     }
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
                 }
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-            }
-        }).start();
-        
-        // 消费者
-        new Thread(() -> {
-            try {
-                for (int i = 0; i < 5; i++) {
-                    Integer item = queue.poll(2, TimeUnit.SECONDS);
-                    if (item != null) {
-                        System.out.println("成功取出: " + item);
-                    } else {
-                        System.out.println("取出超时");
+            });
+            
+            // 消费者
+            executor.submit(() -> {
+                try {
+                    for (int i = 0; i < 10; i++) {
+                        String item = queue.take(); // 阻塞直到有元素
+                        System.out.println("消费者取出: " + item);
+                        Thread.sleep(1000);
                     }
-                    Thread.sleep(1500);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
                 }
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
+            });
+            
+            executor.shutdown();
+        }
+    }
+    
+    /**
+     * LinkedBlockingQueue基本用法
+     */
+    public static class LinkedBlockingQueueExample {
+        public static void main(String[] args) {
+            BlockingQueue<Integer> queue = new LinkedBlockingQueue<>(3);
+            
+            System.out.println("=== LinkedBlockingQueue基本用法 ===");
+            
+            // 生产者
+            new Thread(() -> {
+                try {
+                    for (int i = 0; i < 5; i++) {
+                        boolean offered = queue.offer(i, 1, TimeUnit.SECONDS);
+                        if (offered) {
+                            System.out.println("成功放入: " + i);
+                        } else {
+                            System.out.println("放入超时: " + i);
+                        }
+                    }
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
+            }).start();
+            
+            // 消费者
+            new Thread(() -> {
+                try {
+                    for (int i = 0; i < 5; i++) {
+                        Integer item = queue.poll(2, TimeUnit.SECONDS);
+                        if (item != null) {
+                            System.out.println("成功取出: " + item);
+                        } else {
+                            System.out.println("取出超时");
+                        }
+                        Thread.sleep(1500);
+                    }
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
+            }).start();
+        }
+    }
+    
+    /**
+     * PriorityBlockingQueue基本用法
+     */
+    public static class PriorityBlockingQueueExample {
+        public static void main(String[] args) {
+            BlockingQueue<Integer> queue = new PriorityBlockingQueue<>();
+            
+            System.out.println("=== PriorityBlockingQueue基本用法 ===");
+            
+            // 生产者
+            new Thread(() -> {
+                try {
+                    int[] numbers = {5, 2, 8, 1, 9, 3};
+                    for (int num : numbers) {
+                        queue.put(num);
+                        System.out.println("放入: " + num);
+                        Thread.sleep(500);
+                    }
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
+            }).start();
+            
+            // 消费者
+            new Thread(() -> {
+                try {
+                    for (int i = 0; i < 6; i++) {
+                        Integer item = queue.take();
+                        System.out.println("取出: " + item);
+                        Thread.sleep(1000);
+                    }
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
+            }).start();
+        }
+    }
+    
+    /**
+     * BlockingQueue实际应用场景
+     */
+    public static class PracticalApplications {
+        
+        /**
+         * 生产者消费者模式
+         */
+        public static class ProducerConsumer {
+            private final BlockingQueue<Task> taskQueue;
+            private final ExecutorService executor;
+            
+            public ProducerConsumer(int queueSize, int threadCount) {
+                this.taskQueue = new LinkedBlockingQueue<>(queueSize);
+                this.executor = Executors.newFixedThreadPool(threadCount);
             }
-        }).start();
+            
+            public void start() {
+                // 启动消费者
+                for (int i = 0; i < 3; i++) {
+                    executor.submit(this::consume);
+                }
+                
+                // 启动生产者
+                new Thread(this::produce).start();
+            }
+            
+            private void produce() {
+                try {
+                    for (int i = 0; i < 10; i++) {
+                        Task task = new Task("任务-" + i, i);
+                        taskQueue.put(task);
+                        System.out.println("生产任务: " + task);
+                        Thread.sleep(500);
+                    }
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
+            }
+            
+            private void consume() {
+                try {
+                    while (!Thread.currentThread().isInterrupted()) {
+                        Task task = taskQueue.take();
+                        System.out.println("消费任务: " + task);
+                        task.execute();
+                        Thread.sleep(1000);
+                    }
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
+            }
+            
+            public void shutdown() {
+                executor.shutdown();
+            }
+            
+            static class Task {
+                private final String name;
+                private final int priority;
+                
+                public Task(String name, int priority) {
+                    this.name = name;
+                    this.priority = priority;
+                }
+                
+                public void execute() {
+                    System.out.println("执行任务: " + name + " (优先级: " + priority + ")");
+                }
+                
+                @Override
+                public String toString() {
+                    return "Task{name='" + name + "', priority=" + priority + "}";
+                }
+            }
+        }
     }
 }
 ```
 
-### PriorityBlockingQueue
+## 5. ConcurrentLinkedQueue
 
-```java
-import java.util.concurrent.PriorityBlockingQueue;
-
-public class PriorityBlockingQueueExample {
-    
-    public static void main(String[] args) {
-        BlockingQueue<Integer> queue = new PriorityBlockingQueue<>();
-        
-        // 生产者
-        new Thread(() -> {
-            try {
-                int[] numbers = {5, 2, 8, 1, 9, 3};
-                for (int num : numbers) {
-                    queue.put(num);
-                    System.out.println("放入: " + num);
-                    Thread.sleep(500);
-                }
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-            }
-        }).start();
-        
-        // 消费者
-        new Thread(() -> {
-            try {
-                for (int i = 0; i < 6; i++) {
-                    Integer item = queue.take();
-                    System.out.println("取出: " + item);
-                    Thread.sleep(1000);
-                }
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-            }
-        }).start();
-    }
-}
-```
-
-## ConcurrentLinkedQueue
+### 5.1 ConcurrentLinkedQueue 基本概念
 
 ConcurrentLinkedQueue是一个无界线程安全的队列，基于链表实现。
 
-```java
+```java title="ConcurrentLinkedQueue基本用法示例"
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
-public class ConcurrentLinkedQueueExample {
+public class ConcurrentLinkedQueueExamples {
     
-    public static void main(String[] args) {
-        ConcurrentLinkedQueue<String> queue = new ConcurrentLinkedQueue<>();
-        ExecutorService executor = Executors.newFixedThreadPool(4);
-        
-        // 多个生产者
-        for (int i = 0; i < 2; i++) {
-            final int producerId = i;
-            executor.submit(() -> {
-                for (int j = 0; j < 5; j++) {
-                    String item = "Producer" + producerId + "-Item" + j;
-                    queue.offer(item);
-                    System.out.println("生产者" + producerId + "放入: " + item);
-                    try {
-                        Thread.sleep(200);
-                    } catch (InterruptedException e) {
-                        Thread.currentThread().interrupt();
+    /**
+     * ConcurrentLinkedQueue基本用法
+     */
+    public static class BasicUsage {
+        public static void main(String[] args) {
+            ConcurrentLinkedQueue<String> queue = new ConcurrentLinkedQueue<>();
+            ExecutorService executor = Executors.newFixedThreadPool(4);
+            
+            System.out.println("=== ConcurrentLinkedQueue基本用法 ===");
+            
+            // 多个生产者
+            for (int i = 0; i < 2; i++) {
+                final int producerId = i;
+                executor.submit(() -> {
+                    for (int j = 0; j < 5; j++) {
+                        String item = "Producer" + producerId + "-Item" + j;
+                        queue.offer(item);
+                        System.out.println("生产者" + producerId + "放入: " + item);
+                        try {
+                            Thread.sleep(200);
+                        } catch (InterruptedException e) {
+                            Thread.currentThread().interrupt();
+                        }
                     }
-                }
-            });
+                });
+            }
+            
+            // 多个消费者
+            for (int i = 0; i < 2; i++) {
+                final int consumerId = i;
+                executor.submit(() -> {
+                    for (int j = 0; j < 5; j++) {
+                        String item = queue.poll();
+                        if (item != null) {
+                            System.out.println("消费者" + consumerId + "取出: " + item);
+                        }
+                        try {
+                            Thread.sleep(300);
+                        } catch (InterruptedException e) {
+                            Thread.currentThread().interrupt();
+                        }
+                    }
+                });
+            }
+            
+            executor.shutdown();
         }
+    }
+    
+    /**
+     * ConcurrentLinkedQueue实际应用场景
+     */
+    public static class PracticalApplications {
         
-        // 多个消费者
-        for (int i = 0; i < 2; i++) {
-            final int consumerId = i;
-            executor.submit(() -> {
-                for (int j = 0; j < 5; j++) {
-                    String item = queue.poll();
-                    if (item != null) {
-                        System.out.println("消费者" + consumerId + "取出: " + item);
-                    }
-                    try {
-                        Thread.sleep(300);
-                    } catch (InterruptedException e) {
-                        Thread.currentThread().interrupt();
-                    }
+        /**
+         * 消息队列实现
+         */
+        public static class MessageQueue {
+            private final ConcurrentLinkedQueue<Message> queue = new ConcurrentLinkedQueue<>();
+            
+            public void sendMessage(Message message) {
+                queue.offer(message);
+            }
+            
+            public Message receiveMessage() {
+                return queue.poll();
+            }
+            
+            public boolean isEmpty() {
+                return queue.isEmpty();
+            }
+            
+            public int size() {
+                return queue.size();
+            }
+            
+            static class Message {
+                private final String id;
+                private final String content;
+                private final long timestamp;
+                
+                public Message(String id, String content) {
+                    this.id = id;
+                    this.content = content;
+                    this.timestamp = System.currentTimeMillis();
                 }
-            });
+                
+                @Override
+                public String toString() {
+                    return "Message{id='" + id + "', content='" + content + "', timestamp=" + timestamp + "}";
+                }
+            }
         }
-        
-        executor.shutdown();
     }
 }
 ```
 
-## 其他并发容器
+## 6. 其他并发容器
 
-### ConcurrentSkipListMap
+### 6.1 ConcurrentSkipListMap
 
-```java
+```java title="ConcurrentSkipListMap基本用法示例"
 import java.util.concurrent.ConcurrentSkipListMap;
 
-public class ConcurrentSkipListMapExample {
+public class ConcurrentSkipListMapExamples {
     
-    public static void main(String[] args) {
-        ConcurrentSkipListMap<String, Integer> map = new ConcurrentSkipListMap<>();
-        
-        // 添加元素（自动排序）
-        map.put("zebra", 1);
-        map.put("apple", 2);
-        map.put("banana", 3);
-        map.put("cat", 4);
-        
-        System.out.println("排序后的Map:");
-        map.forEach((key, value) -> System.out.println(key + " = " + value));
-        
-        // 获取第一个和最后一个元素
-        System.out.println("第一个元素: " + map.firstKey());
-        System.out.println("最后一个元素: " + map.lastKey());
-        
-        // 获取子Map
-        System.out.println("a到c之间的元素:");
-        map.subMap("a", "d").forEach((key, value) -> 
-            System.out.println(key + " = " + value));
+    /**
+     * ConcurrentSkipListMap基本用法
+     */
+    public static class BasicUsage {
+        public static void main(String[] args) {
+            ConcurrentSkipListMap<String, Integer> map = new ConcurrentSkipListMap<>();
+            
+            System.out.println("=== ConcurrentSkipListMap基本用法 ===");
+            
+            // 添加元素（自动排序）
+            map.put("zebra", 1);
+            map.put("apple", 2);
+            map.put("banana", 3);
+            map.put("cat", 4);
+            
+            System.out.println("排序后的Map:");
+            map.forEach((key, value) -> System.out.println(key + " = " + value));
+            
+            // 获取第一个和最后一个元素
+            System.out.println("第一个元素: " + map.firstKey());
+            System.out.println("最后一个元素: " + map.lastKey());
+            
+            // 获取子Map
+            System.out.println("a到c之间的元素:");
+            map.subMap("a", "d").forEach((key, value) -> 
+                System.out.println(key + " = " + value));
+        }
     }
 }
 ```
 
-### ConcurrentSkipListSet
+### 6.2 ConcurrentSkipListSet
 
-```java
+```java title="ConcurrentSkipListSet基本用法示例"
 import java.util.concurrent.ConcurrentSkipListSet;
 
-public class ConcurrentSkipListSetExample {
+public class ConcurrentSkipListSetExamples {
     
-    public static void main(String[] args) {
-        ConcurrentSkipListSet<String> set = new ConcurrentSkipListSet<>();
-        
-        // 添加元素（自动排序）
-        set.add("zebra");
-        set.add("apple");
-        set.add("banana");
-        set.add("cat");
-        
-        System.out.println("排序后的Set:");
-        set.forEach(System.out::println);
-        
-        // 获取第一个和最后一个元素
-        System.out.println("第一个元素: " + set.first());
-        System.out.println("最后一个元素: " + set.last());
-        
-        // 获取子Set
-        System.out.println("a到c之间的元素:");
-        set.subSet("a", "d").forEach(System.out::println);
+    /**
+     * ConcurrentSkipListSet基本用法
+     */
+    public static class BasicUsage {
+        public static void main(String[] args) {
+            ConcurrentSkipListSet<String> set = new ConcurrentSkipListSet<>();
+            
+            System.out.println("=== ConcurrentSkipListSet基本用法 ===");
+            
+            // 添加元素（自动排序）
+            set.add("zebra");
+            set.add("apple");
+            set.add("banana");
+            set.add("cat");
+            
+            System.out.println("排序后的Set:");
+            set.forEach(System.out::println);
+            
+            // 获取第一个和最后一个元素
+            System.out.println("第一个元素: " + set.first());
+            System.out.println("最后一个元素: " + set.last());
+            
+            // 获取子Set
+            System.out.println("a到c之间的元素:");
+            set.subSet("a", "d").forEach(System.out::println);
+        }
     }
 }
 ```
 
-## 性能比较
+## 7. 性能比较
 
-### 不同容器的性能特点
+### 7.1 不同容器的性能特点
 
-```java
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.PriorityBlockingQueue;
-import java.util.concurrent.ConcurrentLinkedQueue;
-import java.util.concurrent.ConcurrentSkipListMap;
-import java.util.concurrent.ConcurrentSkipListSet;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.ArrayList;
+```java title="容器性能比较示例"
+import java.util.*;
+import java.util.concurrent.*;
 
 public class ContainerPerformanceComparison {
     
+    /**
+     * 容器性能比较
+     */
     public static void main(String[] args) {
+        System.out.println("=== 容器性能比较 ===");
+        
         // HashMap vs ConcurrentHashMap
         System.out.println("=== HashMap vs ConcurrentHashMap ===");
         
@@ -530,24 +897,39 @@ public class ContainerPerformanceComparison {
 }
 ```
 
-## 最佳实践
+## 8. 最佳实践
 
-### 1. 选择合适的容器
+### 8.1 选择合适的容器
 
-```java
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.PriorityBlockingQueue;
-import java.util.concurrent.ConcurrentLinkedQueue;
-import java.util.concurrent.ConcurrentSkipListMap;
-import java.util.concurrent.ConcurrentSkipListSet;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.ArrayList;
-
+```java title="容器选择指南示例"
 public class ContainerSelectionGuide {
+    
+    /**
+     * 容器选择指南
+     */
+    public static void selectionGuide() {
+        System.out.println("=== 并发容器选择指南 ===");
+        
+        // 高并发读写 - 使用ConcurrentHashMap
+        System.out.println("1. 高并发读写 -> ConcurrentHashMap");
+        System.out.println("   适用场景：缓存、计数器、配置管理");
+        
+        // 读多写少 - 使用CopyOnWriteArrayList
+        System.out.println("2. 读多写少 -> CopyOnWriteArrayList");
+        System.out.println("   适用场景：监听器列表、配置列表");
+        
+        // 生产者消费者 - 使用BlockingQueue
+        System.out.println("3. 生产者消费者 -> BlockingQueue");
+        System.out.println("   适用场景：任务队列、消息队列");
+        
+        // 需要排序 - 使用ConcurrentSkipListMap
+        System.out.println("4. 需要排序 -> ConcurrentSkipListMap");
+        System.out.println("   适用场景：有序缓存、排行榜");
+        
+        // 简单同步 - 使用Collections.synchronizedXXX()
+        System.out.println("5. 简单同步 -> Collections.synchronizedXXX()");
+        System.out.println("   适用场景：低并发场景");
+    }
     
     // 高并发读写 - 使用ConcurrentHashMap
     public static <K, V> Map<K, V> createHighConcurrencyMap() {
@@ -571,25 +953,19 @@ public class ContainerSelectionGuide {
 }
 ```
 
-### 2. 避免常见陷阱
+### 8.2 避免常见陷阱
 
-```java
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.PriorityBlockingQueue;
-import java.util.concurrent.ConcurrentLinkedQueue;
-import java.util.concurrent.ConcurrentSkipListMap;
-import java.util.concurrent.ConcurrentSkipListSet;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.ArrayList;
-
+```java title="常见陷阱示例"
 public class CommonPitfalls {
     
-    // 错误：在迭代时修改集合
-    public static void wrongIteration() {
+    /**
+     * 避免常见陷阱
+     */
+    public static void avoidPitfalls() {
+        System.out.println("=== 避免常见陷阱 ===");
+        
+        // 错误：在迭代时修改集合
+        System.out.println("1. 避免在迭代时修改集合");
         List<String> list = new CopyOnWriteArrayList<>();
         list.add("a");
         list.add("b");
@@ -599,10 +975,9 @@ public class CommonPitfalls {
         for (String item : list) {
             list.add("new"); // 不会影响当前迭代
         }
-    }
-    
-    // 正确：使用原子操作
-    public static void correctAtomicOperation() {
+        
+        // 正确：使用原子操作
+        System.out.println("2. 使用原子操作");
         ConcurrentHashMap<String, Integer> map = new ConcurrentHashMap<>();
         
         // 使用原子操作而不是检查然后设置
@@ -612,49 +987,100 @@ public class CommonPitfalls {
         // if (!map.containsKey("key")) {
         //     map.put("key", 1);
         // }
+        
+        // 正确：避免过度同步
+        System.out.println("3. 避免过度同步");
+        // 使用并发容器而不是手动同步
+        Map<String, String> safeMap = new ConcurrentHashMap<>();
+        // 而不是
+        // Map<String, String> unsafeMap = Collections.synchronizedMap(new HashMap<>());
     }
 }
 ```
 
-## 面试题
+## 9. 面试题
 
-### 1. ConcurrentHashMap和Hashtable有什么区别？
+### 9.1 基础概念
 
-**答案：**
-- Hashtable使用synchronized关键字，锁粒度大，性能较差
-- ConcurrentHashMap使用分段锁，锁粒度小，性能更好
-- Hashtable不允许null键值，ConcurrentHashMap允许null值
-- ConcurrentHashMap的迭代器是弱一致性的
+**Q: ConcurrentHashMap和Hashtable有什么区别？**
 
-### 2. CopyOnWriteArrayList适用于什么场景？
+**A:**
+- **Hashtable**：使用synchronized关键字，锁粒度大，性能较差
+- **ConcurrentHashMap**：使用分段锁，锁粒度小，性能更好
+- **Hashtable**：不允许null键值，ConcurrentHashMap允许null值
+- **ConcurrentHashMap**：迭代器是弱一致性的
 
-**答案：**
+**Q: CopyOnWriteArrayList适用于什么场景？**
+
+**A:**
 - 读多写少的场景
 - 监听器列表等需要频繁遍历但很少修改的场景
 - 写操作会创建新副本，内存开销较大
 - 迭代器不会抛出ConcurrentModificationException
 
-### 3. BlockingQueue的几种实现有什么区别？
+### 9.2 性能相关
 
-**答案：**
-- ArrayBlockingQueue：有界队列，基于数组
-- LinkedBlockingQueue：有界或无界队列，基于链表
-- PriorityBlockingQueue：无界优先级队列
-- SynchronousQueue：不存储元素的阻塞队列
+**Q: BlockingQueue的几种实现有什么区别？**
 
-### 4. 如何选择合适的并发容器？
+**A:**
+- **ArrayBlockingQueue**：有界队列，基于数组
+- **LinkedBlockingQueue**：有界或无界队列，基于链表
+- **PriorityBlockingQueue**：无界优先级队列
+- **SynchronousQueue**：不存储元素的阻塞队列
 
-**答案：**
+**Q: 如何选择合适的并发容器？**
+
+**A:**
 - 高并发读写：ConcurrentHashMap
 - 读多写少：CopyOnWriteArrayList
 - 生产者消费者：BlockingQueue
 - 需要排序：ConcurrentSkipListMap
 - 简单同步：Collections.synchronizedXXX()
 
-### 5. ConcurrentHashMap的size()方法是如何实现的？
+### 9.3 实际应用
 
-**答案：**
+**Q: ConcurrentHashMap的size()方法是如何实现的？**
+
+**A:**
 - 遍历所有段，累加每个段的元素数量
 - 由于并发修改，size()返回的是近似值
 - 如果需要精确值，可以使用mappingCount()方法
 - 在高并发环境下，size()的性能可能不如预期
+
+**Q: 如何避免并发容器的常见问题？**
+
+**A:**
+- 使用原子操作而不是检查然后设置
+- 避免在迭代时修改集合（除了CopyOnWriteArrayList）
+- 合理选择容器类型
+- 注意内存开销
+
+## 10. 总结
+
+Java并发容器为多线程编程提供了强大而高效的支持。
+
+### 10.1 关键要点
+
+1. **容器特性**：ConcurrentHashMap、CopyOnWriteArrayList、BlockingQueue等
+2. **性能特点**：不同容器适用于不同场景
+3. **选择原则**：根据读写比例、并发程度、功能需求选择
+4. **最佳实践**：避免常见陷阱，合理使用
+
+### 10.2 选择建议
+
+| 场景 | 推荐容器 | 原因 |
+|------|----------|------|
+| **高并发读写** | ConcurrentHashMap | 分段锁，性能好 |
+| **读多写少** | CopyOnWriteArrayList | 写时复制，读性能好 |
+| **生产者消费者** | BlockingQueue | 阻塞操作，线程安全 |
+| **需要排序** | ConcurrentSkipListMap | 自动排序，并发安全 |
+| **简单同步** | Collections.synchronizedXXX() | 简单易用 |
+
+### 10.3 学习建议
+
+1. **理解原理**：深入理解各种容器的实现原理
+2. **性能测试**：对比不同容器的性能差异
+3. **场景应用**：在实际项目中应用合适的容器
+4. **持续学习**：关注新的并发容器技术
+
+通过深入理解和熟练运用这些并发容器，我们能够构建出更加高效、健壮和可维护的Java并发应用程序。 

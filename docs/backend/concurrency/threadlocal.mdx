@@ -1,607 +1,887 @@
 ---
 sidebar_position: 7
-title: "ThreadLocal"
-description: "Java ThreadLocal详解"
+title: "Java ThreadLocal详解"
+description: "全面介绍Java ThreadLocal、线程本地变量、内存泄漏与最佳实践"
 authors: [Laby]
 last_update:
-  date: 2025-08-07
+  date: 2025-01-07
   author: Laby
 ---
 
-# ThreadLocal
+# Java ThreadLocal 详解
 
-## ThreadLocal概述
+ThreadLocal是Java中用于创建线程局部变量的类，每个线程都有自己独立的变量副本，线程间不会相互影响。本文将详细介绍ThreadLocal的原理、使用方法和最佳实践。
 
-ThreadLocal是Java中用于创建线程局部变量的类，每个线程都有自己独立的变量副本，线程间不会相互影响。
+## 1. ThreadLocal概述
 
-### ThreadLocal特点
+### 1.1 什么是ThreadLocal？
 
-```java
-// ThreadLocal的主要特点
-1. 线程隔离：每个线程都有独立的变量副本
-2. 线程安全：天然线程安全，无需同步
-3. 内存泄漏风险：使用不当可能导致内存泄漏
-4. 适用场景：线程上下文传递、数据库连接等
-```
+:::tip 核心概念
+ThreadLocal是Java中用于创建线程局部变量的类，它提供了线程隔离的存储机制，每个线程都有自己独立的变量副本，线程间不会相互影响。
+:::
 
-### ThreadLocal基本使用
+### 1.2 ThreadLocal的特点
 
-```java
-// ThreadLocal基本使用示例
-public class ThreadLocalExample {
-    // 创建ThreadLocal变量
-    private static ThreadLocal<String> threadLocal = new ThreadLocal<>();
+| 特点 | 具体体现 | 业务价值 |
+|------|----------|----------|
+| **线程隔离** | 每个线程独立变量副本 | 避免线程间数据竞争 |
+| **线程安全** | 天然线程安全，无需同步 | 简化编程，提高性能 |
+| **内存泄漏风险** | 使用不当可能导致内存泄漏 | 需要正确管理生命周期 |
+| **适用场景** | 线程上下文传递、数据库连接等 | 解决特定业务问题 |
+| **性能影响** | 访问速度快，内存开销小 | 适合高频访问场景 |
+
+### 1.3 ThreadLocal基本使用
+
+```java title="ThreadLocal基本使用示例"
+public class ThreadLocalExamples {
     
-    public static void main(String[] args) {
-        // 线程1
-        Thread thread1 = new Thread(() -> {
-            threadLocal.set("Thread1-Value");
-            System.out.println("Thread1: " + threadLocal.get());
+    /**
+     * ThreadLocal基本使用
+     */
+    public static class BasicUsage {
+        // 创建ThreadLocal变量
+        private static ThreadLocal<String> threadLocal = new ThreadLocal<>();
+        
+        public static void main(String[] args) {
+            System.out.println("=== ThreadLocal基本使用 ===");
             
-            // 清理ThreadLocal
-            threadLocal.remove();
-        });
-        
-        // 线程2
-        Thread thread2 = new Thread(() -> {
-            threadLocal.set("Thread2-Value");
-            System.out.println("Thread2: " + threadLocal.get());
-            
-            // 清理ThreadLocal
-            threadLocal.remove();
-        });
-        
-        thread1.start();
-        thread2.start();
-        
-        try {
-            thread1.join();
-            thread2.join();
-        } catch (InterruptedException e) {
-            e.printStackTrace();
-        }
-    }
-}
-```
-
-## ThreadLocal原理
-
-### ThreadLocal源码分析
-
-```java
-public class ThreadLocal<T> {
-    
-    // ThreadLocal的哈希码
-    private final int threadLocalHashCode = nextHashCode();
-    
-    // 下一个哈希码
-    private static AtomicInteger nextHashCode = new AtomicInteger();
-    
-    // 哈希码增量
-    private static final int HASH_INCREMENT = 0x61c88647;
-    
-    // 生成下一个哈希码
-    private static int nextHashCode() {
-        return nextHashCode.getAndAdd(HASH_INCREMENT);
-    }
-    
-    // 获取当前线程的ThreadLocalMap
-    public T get() {
-        Thread t = Thread.currentThread();
-        ThreadLocalMap map = getMap(t);
-        if (map != null) {
-            ThreadLocalMap.Entry e = map.getEntry(this);
-            if (e != null) {
-                @SuppressWarnings("unchecked")
-                T result = (T)e.value;
-                return result;
-            }
-        }
-        return setInitialValue();
-    }
-    
-    // 设置ThreadLocal的值
-    public void set(T value) {
-        Thread t = Thread.currentThread();
-        ThreadLocalMap map = getMap(t);
-        if (map != null)
-            map.set(this, value);
-        else
-            createMap(t, value);
-    }
-    
-    // 删除ThreadLocal的值
-    public void remove() {
-        ThreadLocalMap m = getMap(Thread.currentThread());
-        if (m != null)
-            m.remove(this);
-    }
-}
-```
-
-### ThreadLocalMap结构
-
-```java
-// ThreadLocalMap是ThreadLocal的内部类
-static class ThreadLocalMap {
-    
-    // Entry类，继承自WeakReference
-    static class Entry extends WeakReference<ThreadLocal<?>> {
-        Object value;
-        
-        Entry(ThreadLocal<?> k, Object v) {
-            super(k);
-            value = v;
-        }
-    }
-    
-    // Entry数组
-    private Entry[] table;
-    
-    // 数组大小
-    private int size = 0;
-    
-    // 阈值
-    private int threshold;
-    
-    // 构造方法
-    ThreadLocalMap(ThreadLocal<?> firstKey, Object firstValue) {
-        table = new Entry[INITIAL_CAPACITY];
-        int i = firstKey.threadLocalHashCode & (INITIAL_CAPACITY - 1);
-        table[i] = new Entry(firstKey, firstValue);
-        size = 1;
-        setThreshold(INITIAL_CAPACITY);
-    }
-    
-    // 获取Entry
-    private Entry getEntry(ThreadLocal<?> key) {
-        int i = key.threadLocalHashCode & (table.length - 1);
-        Entry e = table[i];
-        if (e != null && e.get() == key)
-            return e;
-        else
-            return getEntryAfterMiss(key, i, e);
-    }
-    
-    // 设置Entry
-    private void set(ThreadLocal<?> key, Object value) {
-        Entry[] tab = table;
-        int len = tab.length;
-        int i = key.threadLocalHashCode & (len-1);
-        
-        for (Entry e = tab[i]; e != null; e = tab[i = nextIndex(i, len)]) {
-            ThreadLocal<?> k = e.get();
-            
-            if (k == key) {
-                e.value = value;
-                return;
-            }
-            
-            if (k == null) {
-                replaceStaleEntry(key, value, i);
-                return;
-            }
-        }
-        
-        tab[i] = new Entry(key, value);
-        int sz = ++size;
-        if (!cleanSomeSlots(i, sz) && sz >= threshold)
-            rehash();
-    }
-}
-```
-
-## ThreadLocal使用场景
-
-### 1. 线程上下文传递
-
-```java
-// 线程上下文传递示例
-public class ThreadContextExample {
-    
-    // 用户上下文
-    public static class UserContext {
-        private String userId;
-        private String userName;
-        
-        public UserContext(String userId, String userName) {
-            this.userId = userId;
-            this.userName = userName;
-        }
-        
-        // getter和setter方法
-        public String getUserId() { return userId; }
-        public String getUserName() { return userName; }
-    }
-    
-    // ThreadLocal存储用户上下文
-    private static ThreadLocal<UserContext> userContextHolder = new ThreadLocal<>();
-    
-    // 设置用户上下文
-    public static void setUserContext(UserContext userContext) {
-        userContextHolder.set(userContext);
-    }
-    
-    // 获取用户上下文
-    public static UserContext getUserContext() {
-        return userContextHolder.get();
-    }
-    
-    // 清除用户上下文
-    public static void clearUserContext() {
-        userContextHolder.remove();
-    }
-    
-    // 业务方法
-    public static void businessMethod() {
-        UserContext context = getUserContext();
-        if (context != null) {
-            System.out.println("当前用户: " + context.getUserName() + " (ID: " + context.getUserId() + ")");
-        }
-    }
-    
-    public static void main(String[] args) {
-        // 模拟多线程环境
-        for (int i = 1; i <= 3; i++) {
-            final int userId = i;
-            Thread thread = new Thread(() -> {
-                // 设置用户上下文
-                setUserContext(new UserContext("user" + userId, "User" + userId));
+            // 线程1
+            Thread thread1 = new Thread(() -> {
+                threadLocal.set("Thread1-Value");
+                System.out.println("Thread1: " + threadLocal.get());
                 
-                // 执行业务方法
-                businessMethod();
-                
-                // 清理上下文
-                clearUserContext();
+                // 清理ThreadLocal
+                threadLocal.remove();
             });
-            thread.start();
-        }
-    }
-}
-```
-
-### 2. 数据库连接管理
-
-```java
-// 数据库连接管理示例
-public class DatabaseConnectionExample {
-    
-    // ThreadLocal存储数据库连接
-    private static ThreadLocal<Connection> connectionHolder = new ThreadLocal<>();
-    
-    // 获取数据库连接
-    public static Connection getConnection() throws SQLException {
-        Connection connection = connectionHolder.get();
-        if (connection == null || connection.isClosed()) {
-            connection = createConnection();
-            connectionHolder.set(connection);
-        }
-        return connection;
-    }
-    
-    // 创建数据库连接
-    private static Connection createConnection() throws SQLException {
-        // 这里应该使用真实的数据库连接配置
-        return DriverManager.getConnection("jdbc:mysql://localhost:3306/test", "user", "password");
-    }
-    
-    // 关闭数据库连接
-    public static void closeConnection() {
-        Connection connection = connectionHolder.get();
-        if (connection != null) {
-            try {
-                connection.close();
-            } catch (SQLException e) {
-                e.printStackTrace();
-            } finally {
-                connectionHolder.remove();
-            }
-        }
-    }
-    
-    // 事务管理
-    public static void executeInTransaction(Runnable task) {
-        try {
-            Connection connection = getConnection();
-            connection.setAutoCommit(false);
+            
+            // 线程2
+            Thread thread2 = new Thread(() -> {
+                threadLocal.set("Thread2-Value");
+                System.out.println("Thread2: " + threadLocal.get());
+                
+                // 清理ThreadLocal
+                threadLocal.remove();
+            });
+            
+            thread1.start();
+            thread2.start();
             
             try {
-                task.run();
-                connection.commit();
-            } catch (Exception e) {
-                connection.rollback();
-                throw e;
-            } finally {
-                closeConnection();
+                thread1.join();
+                thread2.join();
+            } catch (InterruptedException e) {
+                e.printStackTrace();
             }
-        } catch (SQLException e) {
-            throw new RuntimeException("数据库操作失败", e);
+        }
+    }
+    
+    /**
+     * ThreadLocal初始值
+     */
+    public static class InitialValueUsage {
+        // 使用withInitial提供初始值
+        private static ThreadLocal<Integer> counter = ThreadLocal.withInitial(() -> 0);
+        
+        public static void main(String[] args) {
+            System.out.println("=== ThreadLocal初始值 ===");
+            
+            // 多个线程访问ThreadLocal
+            for (int i = 0; i < 3; i++) {
+                final int threadId = i;
+                new Thread(() -> {
+                    System.out.println("线程" + threadId + "初始值: " + counter.get());
+                    counter.set(counter.get() + 1);
+                    System.out.println("线程" + threadId + "修改后: " + counter.get());
+                    counter.remove();
+                }).start();
+            }
         }
     }
 }
 ```
 
-### 3. 请求追踪
+## 2. ThreadLocal原理
 
-```java
-// 请求追踪示例
-public class RequestTraceExample {
+### 2.1 ThreadLocal源码分析
+
+```java title="ThreadLocal源码分析示例"
+public class ThreadLocalSourceCodeAnalysis {
     
-    // ThreadLocal存储请求ID
-    private static ThreadLocal<String> requestIdHolder = new ThreadLocal<>();
-    
-    // ThreadLocal存储请求开始时间
-    private static ThreadLocal<Long> startTimeHolder = new ThreadLocal<>();
-    
-    // 设置请求信息
-    public static void setRequestInfo(String requestId) {
-        requestIdHolder.set(requestId);
-        startTimeHolder.set(System.currentTimeMillis());
-    }
-    
-    // 获取请求ID
-    public static String getRequestId() {
-        return requestIdHolder.get();
-    }
-    
-    // 获取请求耗时
-    public static long getRequestDuration() {
-        Long startTime = startTimeHolder.get();
-        if (startTime != null) {
-            return System.currentTimeMillis() - startTime;
+    /**
+     * ThreadLocal核心方法分析
+     */
+    public static class CoreMethods {
+        
+        /**
+         * get方法分析
+         */
+        public static void analyzeGetMethod() {
+            System.out.println("=== ThreadLocal.get()方法分析 ===");
+            System.out.println("1. 获取当前线程");
+            System.out.println("2. 获取线程的ThreadLocalMap");
+            System.out.println("3. 如果map存在，根据ThreadLocal的hashCode查找Entry");
+            System.out.println("4. 如果找到Entry，返回value");
+            System.out.println("5. 如果没找到，调用setInitialValue()");
         }
-        return 0;
+        
+        /**
+         * set方法分析
+         */
+        public static void analyzeSetMethod() {
+            System.out.println("=== ThreadLocal.set()方法分析 ===");
+            System.out.println("1. 获取当前线程");
+            System.out.println("2. 获取线程的ThreadLocalMap");
+            System.out.println("3. 如果map存在，设置key-value");
+            System.out.println("4. 如果map不存在，创建新的ThreadLocalMap");
+        }
+        
+        /**
+         * remove方法分析
+         */
+        public static void analyzeRemoveMethod() {
+            System.out.println("=== ThreadLocal.remove()方法分析 ===");
+            System.out.println("1. 获取当前线程的ThreadLocalMap");
+            System.out.println("2. 如果map存在，删除对应的Entry");
+            System.out.println("3. 清理过期的Entry（key为null的Entry）");
+        }
     }
     
-    // 清理请求信息
-    public static void clearRequestInfo() {
-        requestIdHolder.remove();
-        startTimeHolder.remove();
+    /**
+     * ThreadLocalMap结构分析
+     */
+    public static class ThreadLocalMapStructure {
+        
+        /**
+         * Entry类分析
+         */
+        public static void analyzeEntryClass() {
+            System.out.println("=== ThreadLocalMap.Entry分析 ===");
+            System.out.println("1. Entry继承自WeakReference<ThreadLocal<?>>");
+            System.out.println("2. key是ThreadLocal的弱引用");
+            System.out.println("3. value是强引用");
+            System.out.println("4. 当ThreadLocal被回收时，key变为null");
+        }
+        
+        /**
+         * 哈希算法分析
+         */
+        public static void analyzeHashAlgorithm() {
+            System.out.println("=== ThreadLocal哈希算法分析 ===");
+            System.out.println("1. 使用黄金分割数0x61c88647");
+            System.out.println("2. 每次递增HASH_INCREMENT");
+            System.out.println("3. 减少哈希冲突");
+            System.out.println("4. 提高查找效率");
+        }
+    }
+}
+```
+
+### 2.2 ThreadLocalMap结构
+
+```java title="ThreadLocalMap结构示例"
+public class ThreadLocalMapStructure {
+    
+    /**
+     * ThreadLocalMap核心结构
+     */
+    public static class CoreStructure {
+        
+        /**
+         * Entry数组结构
+         */
+        public static void explainEntryArray() {
+            System.out.println("=== ThreadLocalMap.Entry数组 ===");
+            System.out.println("1. 使用Entry数组存储数据");
+            System.out.println("2. 数组大小必须是2的幂");
+            System.out.println("3. 初始容量为16");
+            System.out.println("4. 负载因子为2/3");
+            System.out.println("5. 超过阈值时进行扩容");
+        }
+        
+        /**
+         * 哈希冲突处理
+         */
+        public static void explainHashCollision() {
+            System.out.println("=== 哈希冲突处理 ===");
+            System.out.println("1. 使用线性探测法");
+            System.out.println("2. 遇到冲突时向后查找");
+            System.out.println("3. 到达数组末尾时从头开始");
+            System.out.println("4. 清理过期的Entry");
+        }
+        
+        /**
+         * 过期Entry清理
+         */
+        public static void explainExpiredEntryCleanup() {
+            System.out.println("=== 过期Entry清理 ===");
+            System.out.println("1. 在set、get、remove时触发清理");
+            System.out.println("2. 清理key为null的Entry");
+            System.out.println("3. 重新整理数组");
+            System.out.println("4. 减少内存泄漏");
+        }
+    }
+}
+```
+
+## 3. ThreadLocal使用场景
+
+### 3.1 线程上下文传递
+
+```java title="线程上下文传递示例"
+public class ThreadContextExamples {
+    
+    /**
+     * 用户上下文传递
+     */
+    public static class UserContextExample {
+        
+        // 用户上下文
+        public static class UserContext {
+            private String userId;
+            private String userName;
+            private String sessionId;
+            
+            public UserContext(String userId, String userName, String sessionId) {
+                this.userId = userId;
+                this.userName = userName;
+                this.sessionId = sessionId;
+            }
+            
+            // getter和setter方法
+            public String getUserId() { return userId; }
+            public String getUserName() { return userName; }
+            public String getSessionId() { return sessionId; }
+            
+            @Override
+            public String toString() {
+                return "UserContext{userId='" + userId + "', userName='" + userName + "', sessionId='" + sessionId + "'}";
+            }
+        }
+        
+        // ThreadLocal存储用户上下文
+        private static ThreadLocal<UserContext> userContextHolder = new ThreadLocal<>();
+        
+        // 设置用户上下文
+        public static void setUserContext(UserContext userContext) {
+            userContextHolder.set(userContext);
+        }
+        
+        // 获取用户上下文
+        public static UserContext getUserContext() {
+            return userContextHolder.get();
+        }
+        
+        // 清除用户上下文
+        public static void clearUserContext() {
+            userContextHolder.remove();
+        }
+        
+        // 业务方法
+        public static void businessMethod() {
+            UserContext context = getUserContext();
+            if (context != null) {
+                System.out.println("当前用户: " + context.getUserName() + " (ID: " + context.getUserId() + ")");
+            }
+        }
+        
+        public static void main(String[] args) {
+            System.out.println("=== 用户上下文传递 ===");
+            
+            // 模拟多线程环境
+            for (int i = 1; i <= 3; i++) {
+                final int userId = i;
+                Thread thread = new Thread(() -> {
+                    // 设置用户上下文
+                    setUserContext(new UserContext("user" + userId, "User" + userId, "session" + userId));
+                    
+                    // 执行业务方法
+                    businessMethod();
+                    
+                    // 清理上下文
+                    clearUserContext();
+                });
+                thread.start();
+            }
+        }
     }
     
-    // 日志记录
-    public static void log(String message) {
-        String requestId = getRequestId();
-        long duration = getRequestDuration();
-        System.out.println(String.format("[%s] [%dms] %s", requestId, duration, message));
+    /**
+     * 请求追踪
+     */
+    public static class RequestTraceExample {
+        
+        // ThreadLocal存储请求ID
+        private static ThreadLocal<String> requestIdHolder = new ThreadLocal<>();
+        
+        // ThreadLocal存储请求开始时间
+        private static ThreadLocal<Long> startTimeHolder = new ThreadLocal<>();
+        
+        // 设置请求信息
+        public static void setRequestInfo(String requestId) {
+            requestIdHolder.set(requestId);
+            startTimeHolder.set(System.currentTimeMillis());
+        }
+        
+        // 获取请求ID
+        public static String getRequestId() {
+            return requestIdHolder.get();
+        }
+        
+        // 获取请求耗时
+        public static long getRequestDuration() {
+            Long startTime = startTimeHolder.get();
+            if (startTime != null) {
+                return System.currentTimeMillis() - startTime;
+            }
+            return 0;
+        }
+        
+        // 清理请求信息
+        public static void clearRequestInfo() {
+            requestIdHolder.remove();
+            startTimeHolder.remove();
+        }
+        
+        // 日志记录
+        public static void log(String message) {
+            String requestId = getRequestId();
+            long duration = getRequestDuration();
+            System.out.println(String.format("[%s] [%dms] %s", requestId, duration, message));
+        }
+        
+        public static void main(String[] args) {
+            System.out.println("=== 请求追踪 ===");
+            
+            // 模拟请求处理
+            for (int i = 1; i <= 3; i++) {
+                final int requestId = i;
+                Thread thread = new Thread(() -> {
+                    try {
+                        setRequestInfo("REQ-" + requestId);
+                        log("开始处理请求");
+                        
+                        Thread.sleep(1000); // 模拟处理时间
+                        log("请求处理完成");
+                        
+                    } catch (InterruptedException e) {
+                        e.printStackTrace();
+                    } finally {
+                        clearRequestInfo();
+                    }
+                });
+                thread.start();
+            }
+        }
     }
+}
+```
+
+### 3.2 数据库连接管理
+
+```java title="数据库连接管理示例"
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.SQLException;
+
+public class DatabaseConnectionExamples {
     
-    public static void main(String[] args) {
-        // 模拟请求处理
-        for (int i = 1; i <= 3; i++) {
-            final int requestId = i;
-            Thread thread = new Thread(() -> {
+    /**
+     * 数据库连接管理
+     */
+    public static class DatabaseConnectionManager {
+        
+        // ThreadLocal存储数据库连接
+        private static ThreadLocal<Connection> connectionHolder = new ThreadLocal<>();
+        
+        // 获取数据库连接
+        public static Connection getConnection() throws SQLException {
+            Connection connection = connectionHolder.get();
+            if (connection == null || connection.isClosed()) {
+                connection = createConnection();
+                connectionHolder.set(connection);
+            }
+            return connection;
+        }
+        
+        // 创建数据库连接
+        private static Connection createConnection() throws SQLException {
+            // 这里应该使用真实的数据库连接配置
+            return DriverManager.getConnection("jdbc:mysql://localhost:3306/test", "user", "password");
+        }
+        
+        // 关闭数据库连接
+        public static void closeConnection() {
+            Connection connection = connectionHolder.get();
+            if (connection != null) {
                 try {
-                    setRequestInfo("REQ-" + requestId);
-                    log("开始处理请求");
-                    
-                    Thread.sleep(1000); // 模拟处理时间
-                    log("请求处理完成");
-                    
-                } catch (InterruptedException e) {
+                    connection.close();
+                } catch (SQLException e) {
                     e.printStackTrace();
                 } finally {
-                    clearRequestInfo();
+                    connectionHolder.remove();
                 }
-            });
-            thread.start();
+            }
         }
-    }
-}
-```
-
-## ThreadLocal内存泄漏
-
-### 内存泄漏原因
-
-```java
-// ThreadLocal内存泄漏示例
-public class ThreadLocalMemoryLeakExample {
-    
-    // 可能导致内存泄漏的ThreadLocal
-    private static ThreadLocal<byte[]> threadLocal = new ThreadLocal<>();
-    
-    public static void main(String[] args) {
-        // 创建大量线程，每个线程都设置ThreadLocal
-        for (int i = 0; i < 1000; i++) {
-            Thread thread = new Thread(() -> {
-                // 设置大对象
-                threadLocal.set(new byte[1024 * 1024]); // 1MB
+        
+        // 事务管理
+        public static void executeInTransaction(Runnable task) {
+            try {
+                Connection connection = getConnection();
+                connection.setAutoCommit(false);
                 
-                // 线程结束，但没有清理ThreadLocal
-                // 这会导致内存泄漏
-            });
-            thread.start();
-        }
-        
-        // 问题：线程结束后，ThreadLocalMap中的Entry仍然存在
-        // 虽然ThreadLocal被回收，但value仍然被强引用
-    }
-}
-```
-
-### 防止内存泄漏
-
-```java
-// 防止ThreadLocal内存泄漏的最佳实践
-public class ThreadLocalBestPractice {
-    
-    // 使用try-finally确保清理
-    public static void safeThreadLocalUsage() {
-        ThreadLocal<String> threadLocal = new ThreadLocal<>();
-        
-        try {
-            threadLocal.set("some value");
-            // 使用ThreadLocal
-            System.out.println(threadLocal.get());
-        } finally {
-            // 确保清理ThreadLocal
-            threadLocal.remove();
-        }
-    }
-    
-    // 使用ThreadLocal.withInitial()提供初始值
-    public static void threadLocalWithInitial() {
-        ThreadLocal<String> threadLocal = ThreadLocal.withInitial(() -> "default value");
-        
-        // 不需要手动设置初始值
-        System.out.println(threadLocal.get()); // 输出: default value
-    }
-    
-    // 在线程池中使用ThreadLocal
-    public static void threadLocalInThreadPool() {
-        ThreadLocal<String> threadLocal = new ThreadLocal<>();
-        ExecutorService executor = Executors.newFixedThreadPool(5);
-        
-        for (int i = 0; i < 10; i++) {
-            final int taskId = i;
-            executor.submit(() -> {
                 try {
-                    threadLocal.set("Task-" + taskId);
-                    System.out.println("执行任务: " + threadLocal.get());
+                    task.run();
+                    connection.commit();
+                } catch (Exception e) {
+                    connection.rollback();
+                    throw e;
                 } finally {
-                    // 在线程池中必须清理ThreadLocal
-                    threadLocal.remove();
+                    closeConnection();
                 }
-            });
+            } catch (SQLException e) {
+                throw new RuntimeException("数据库操作失败", e);
+            }
         }
         
-        executor.shutdown();
+        public static void main(String[] args) {
+            System.out.println("=== 数据库连接管理 ===");
+            
+            // 模拟多线程数据库操作
+            for (int i = 1; i <= 3; i++) {
+                final int threadId = i;
+                new Thread(() -> {
+                    try {
+                        executeInTransaction(() -> {
+                            System.out.println("线程" + threadId + "执行数据库操作");
+                            // 模拟数据库操作
+                            try {
+                                Thread.sleep(500);
+                            } catch (InterruptedException e) {
+                                Thread.currentThread().interrupt();
+                            }
+                        });
+                    } catch (Exception e) {
+                        System.err.println("线程" + threadId + "操作失败: " + e.getMessage());
+                    }
+                }).start();
+            }
+        }
     }
 }
 ```
 
-## ThreadLocal最佳实践
+### 3.3 事务管理
 
-### 1. 正确使用ThreadLocal
+```java title="事务管理示例"
+public class TransactionManagementExamples {
+    
+    /**
+     * 事务管理
+     */
+    public static class TransactionManager {
+        
+        // ThreadLocal存储事务信息
+        private static ThreadLocal<TransactionInfo> transactionHolder = new ThreadLocal<>();
+        
+        // 事务信息
+        public static class TransactionInfo {
+            private String transactionId;
+            private long startTime;
+            private boolean active;
+            
+            public TransactionInfo(String transactionId) {
+                this.transactionId = transactionId;
+                this.startTime = System.currentTimeMillis();
+                this.active = true;
+            }
+            
+            public String getTransactionId() { return transactionId; }
+            public long getStartTime() { return startTime; }
+            public boolean isActive() { return active; }
+            public void setActive(boolean active) { this.active = active; }
+        }
+        
+        // 开始事务
+        public static void beginTransaction() {
+            String transactionId = "TXN-" + System.currentTimeMillis();
+            transactionHolder.set(new TransactionInfo(transactionId));
+            System.out.println("开始事务: " + transactionId);
+        }
+        
+        // 提交事务
+        public static void commitTransaction() {
+            TransactionInfo info = transactionHolder.get();
+            if (info != null && info.isActive()) {
+                info.setActive(false);
+                System.out.println("提交事务: " + info.getTransactionId());
+            }
+        }
+        
+        // 回滚事务
+        public static void rollbackTransaction() {
+            TransactionInfo info = transactionHolder.get();
+            if (info != null && info.isActive()) {
+                info.setActive(false);
+                System.out.println("回滚事务: " + info.getTransactionId());
+            }
+        }
+        
+        // 获取当前事务ID
+        public static String getCurrentTransactionId() {
+            TransactionInfo info = transactionHolder.get();
+            return info != null ? info.getTransactionId() : null;
+        }
+        
+        // 清理事务信息
+        public static void clearTransaction() {
+            transactionHolder.remove();
+        }
+        
+        public static void main(String[] args) {
+            System.out.println("=== 事务管理 ===");
+            
+            // 模拟多线程事务操作
+            for (int i = 1; i <= 3; i++) {
+                final int threadId = i;
+                new Thread(() -> {
+                    try {
+                        beginTransaction();
+                        System.out.println("线程" + threadId + "执行业务操作");
+                        
+                        // 模拟业务操作
+                        Thread.sleep(1000);
+                        
+                        if (Math.random() > 0.5) {
+                            commitTransaction();
+                        } else {
+                            rollbackTransaction();
+                        }
+                        
+                    } catch (InterruptedException e) {
+                        rollbackTransaction();
+                        Thread.currentThread().interrupt();
+                    } finally {
+                        clearTransaction();
+                    }
+                }).start();
+            }
+        }
+    }
+}
+```
 
-```java
-// ThreadLocal最佳实践
+## 4. ThreadLocal内存泄漏
+
+### 4.1 内存泄漏原因
+
+```java title="内存泄漏原因分析示例"
+public class MemoryLeakAnalysis {
+    
+    /**
+     * 内存泄漏原因分析
+     */
+    public static class MemoryLeakCauses {
+        
+        /**
+         * 内存泄漏示例
+         */
+        public static void demonstrateMemoryLeak() {
+            System.out.println("=== ThreadLocal内存泄漏原因 ===");
+            
+            // 可能导致内存泄漏的ThreadLocal
+            ThreadLocal<byte[]> threadLocal = new ThreadLocal<>();
+            
+            // 创建大量线程，每个线程都设置ThreadLocal
+            for (int i = 0; i < 1000; i++) {
+                Thread thread = new Thread(() -> {
+                    // 设置大对象
+                    threadLocal.set(new byte[1024 * 1024]); // 1MB
+                    
+                    // 线程结束，但没有清理ThreadLocal
+                    // 这会导致内存泄漏
+                });
+                thread.start();
+            }
+            
+            System.out.println("问题：线程结束后，ThreadLocalMap中的Entry仍然存在");
+            System.out.println("虽然ThreadLocal被回收，但value仍然被强引用");
+        }
+        
+        /**
+         * 内存泄漏原理
+         */
+        public static void explainMemoryLeakPrinciple() {
+            System.out.println("=== 内存泄漏原理 ===");
+            System.out.println("1. ThreadLocalMap.Entry的key是ThreadLocal的弱引用");
+            System.out.println("2. 当ThreadLocal被回收时，key变为null");
+            System.out.println("3. 但value仍然是强引用，无法被回收");
+            System.out.println("4. 导致内存泄漏");
+            System.out.println("5. 只有在ThreadLocalMap被清理时才能回收value");
+        }
+    }
+}
+```
+
+### 4.2 防止内存泄漏
+
+```java title="防止内存泄漏示例"
+public class MemoryLeakPrevention {
+    
+    /**
+     * 防止内存泄漏的最佳实践
+     */
+    public static class BestPractices {
+        
+        /**
+         * 使用try-finally确保清理
+         */
+        public static void safeThreadLocalUsage() {
+            System.out.println("=== 安全的ThreadLocal使用 ===");
+            
+            ThreadLocal<String> threadLocal = new ThreadLocal<>();
+            
+            try {
+                threadLocal.set("some value");
+                // 使用ThreadLocal
+                System.out.println(threadLocal.get());
+            } finally {
+                // 确保清理ThreadLocal
+                threadLocal.remove();
+            }
+        }
+        
+        /**
+         * 使用ThreadLocal.withInitial()提供初始值
+         */
+        public static void threadLocalWithInitial() {
+            System.out.println("=== 使用withInitial ===");
+            
+            ThreadLocal<String> threadLocal = ThreadLocal.withInitial(() -> "default value");
+            
+            // 不需要手动设置初始值
+            System.out.println(threadLocal.get()); // 输出: default value
+        }
+        
+        /**
+         * 在线程池中使用ThreadLocal
+         */
+        public static void threadLocalInThreadPool() {
+            System.out.println("=== 线程池中的ThreadLocal使用 ===");
+            
+            ThreadLocal<String> threadLocal = new ThreadLocal<>();
+            ExecutorService executor = Executors.newFixedThreadPool(5);
+            
+            for (int i = 0; i < 10; i++) {
+                final int taskId = i;
+                executor.submit(() -> {
+                    try {
+                        threadLocal.set("Task-" + taskId);
+                        System.out.println("执行任务: " + threadLocal.get());
+                    } finally {
+                        // 在线程池中必须清理ThreadLocal
+                        threadLocal.remove();
+                    }
+                });
+            }
+            
+            executor.shutdown();
+        }
+    }
+}
+```
+
+## 5. ThreadLocal最佳实践
+
+### 5.1 正确使用ThreadLocal
+
+```java title="ThreadLocal最佳实践示例"
 public class ThreadLocalBestPractices {
     
-    // 1. 使用静态final修饰ThreadLocal
-    private static final ThreadLocal<UserContext> USER_CONTEXT = new ThreadLocal<>();
-    
-    // 2. 提供便捷的访问方法
-    public static void setUserContext(UserContext context) {
-        USER_CONTEXT.set(context);
-    }
-    
-    public static UserContext getUserContext() {
-        return USER_CONTEXT.get();
-    }
-    
-    public static void clearUserContext() {
-        USER_CONTEXT.remove();
-    }
-    
-    // 3. 使用try-finally确保清理
-    public static void executeWithUserContext(UserContext context, Runnable task) {
-        try {
-            setUserContext(context);
-            task.run();
-        } finally {
-            clearUserContext();
-        }
-    }
-    
-    // 4. 在线程池中使用ThreadLocal
-    public static void executeInThreadPool() {
-        ExecutorService executor = Executors.newFixedThreadPool(5);
+    /**
+     * ThreadLocal最佳实践
+     */
+    public static class BestPractices {
         
-        for (int i = 0; i < 10; i++) {
-            final int userId = i;
-            executor.submit(() -> {
-                UserContext context = new UserContext("user" + userId, "User" + userId);
-                executeWithUserContext(context, () -> {
-                    System.out.println("当前用户: " + getUserContext().getUserName());
+        // 1. 使用静态final修饰ThreadLocal
+        private static final ThreadLocal<UserContext> USER_CONTEXT = new ThreadLocal<>();
+        
+        // 2. 提供便捷的访问方法
+        public static void setUserContext(UserContext context) {
+            USER_CONTEXT.set(context);
+        }
+        
+        public static UserContext getUserContext() {
+            return USER_CONTEXT.get();
+        }
+        
+        public static void clearUserContext() {
+            USER_CONTEXT.remove();
+        }
+        
+        // 3. 使用try-finally确保清理
+        public static void executeWithUserContext(UserContext context, Runnable task) {
+            try {
+                setUserContext(context);
+                task.run();
+            } finally {
+                clearUserContext();
+            }
+        }
+        
+        // 4. 在线程池中使用ThreadLocal
+        public static void executeInThreadPool() {
+            ExecutorService executor = Executors.newFixedThreadPool(5);
+            
+            for (int i = 0; i < 10; i++) {
+                final int userId = i;
+                executor.submit(() -> {
+                    UserContext context = new UserContext("user" + userId, "User" + userId, "session" + userId);
+                    executeWithUserContext(context, () -> {
+                        System.out.println("当前用户: " + getUserContext().getUserName());
+                    });
                 });
-            });
+            }
+            
+            executor.shutdown();
         }
         
-        executor.shutdown();
+        // 用户上下文类
+        public static class UserContext {
+            private String userId;
+            private String userName;
+            private String sessionId;
+            
+            public UserContext(String userId, String userName, String sessionId) {
+                this.userId = userId;
+                this.userName = userName;
+                this.sessionId = sessionId;
+            }
+            
+            public String getUserId() { return userId; }
+            public String getUserName() { return userName; }
+            public String getSessionId() { return sessionId; }
+        }
     }
 }
 ```
 
-### 2. ThreadLocal工具类
+### 5.2 ThreadLocal工具类
 
-```java
-// ThreadLocal工具类
+```java title="ThreadLocal工具类示例"
 public class ThreadLocalUtils {
     
-    // 用户上下文ThreadLocal
-    private static final ThreadLocal<UserContext> USER_CONTEXT = new ThreadLocal<>();
-    
-    // 请求ID ThreadLocal
-    private static final ThreadLocal<String> REQUEST_ID = new ThreadLocal<>();
-    
-    // 事务连接ThreadLocal
-    private static final ThreadLocal<Connection> TRANSACTION_CONNECTION = new ThreadLocal<>();
-    
-    // 用户上下文相关方法
-    public static void setUserContext(UserContext context) {
-        USER_CONTEXT.set(context);
-    }
-    
-    public static UserContext getUserContext() {
-        return USER_CONTEXT.get();
-    }
-    
-    public static void clearUserContext() {
-        USER_CONTEXT.remove();
-    }
-    
-    // 请求ID相关方法
-    public static void setRequestId(String requestId) {
-        REQUEST_ID.set(requestId);
-    }
-    
-    public static String getRequestId() {
-        return REQUEST_ID.get();
-    }
-    
-    public static void clearRequestId() {
-        REQUEST_ID.remove();
-    }
-    
-    // 事务连接相关方法
-    public static void setTransactionConnection(Connection connection) {
-        TRANSACTION_CONNECTION.set(connection);
-    }
-    
-    public static Connection getTransactionConnection() {
-        return TRANSACTION_CONNECTION.get();
-    }
-    
-    public static void clearTransactionConnection() {
-        TRANSACTION_CONNECTION.remove();
-    }
-    
-    // 清理所有ThreadLocal
-    public static void clearAll() {
-        USER_CONTEXT.remove();
-        REQUEST_ID.remove();
-        TRANSACTION_CONNECTION.remove();
+    /**
+     * ThreadLocal工具类
+     */
+    public static class ThreadLocalManager {
+        
+        // 用户上下文ThreadLocal
+        private static final ThreadLocal<UserContext> USER_CONTEXT = new ThreadLocal<>();
+        
+        // 请求ID ThreadLocal
+        private static final ThreadLocal<String> REQUEST_ID = new ThreadLocal<>();
+        
+        // 事务连接ThreadLocal
+        private static final ThreadLocal<Connection> TRANSACTION_CONNECTION = new ThreadLocal<>();
+        
+        // 用户上下文相关方法
+        public static void setUserContext(UserContext context) {
+            USER_CONTEXT.set(context);
+        }
+        
+        public static UserContext getUserContext() {
+            return USER_CONTEXT.get();
+        }
+        
+        public static void clearUserContext() {
+            USER_CONTEXT.remove();
+        }
+        
+        // 请求ID相关方法
+        public static void setRequestId(String requestId) {
+            REQUEST_ID.set(requestId);
+        }
+        
+        public static String getRequestId() {
+            return REQUEST_ID.get();
+        }
+        
+        public static void clearRequestId() {
+            REQUEST_ID.remove();
+        }
+        
+        // 事务连接相关方法
+        public static void setTransactionConnection(Connection connection) {
+            TRANSACTION_CONNECTION.set(connection);
+        }
+        
+        public static Connection getTransactionConnection() {
+            return TRANSACTION_CONNECTION.get();
+        }
+        
+        public static void clearTransactionConnection() {
+            TRANSACTION_CONNECTION.remove();
+        }
+        
+        // 清理所有ThreadLocal
+        public static void clearAll() {
+            USER_CONTEXT.remove();
+            REQUEST_ID.remove();
+            TRANSACTION_CONNECTION.remove();
+        }
+        
+        // 用户上下文类
+        public static class UserContext {
+            private String userId;
+            private String userName;
+            
+            public UserContext(String userId, String userName) {
+                this.userId = userId;
+                this.userName = userName;
+            }
+            
+            public String getUserId() { return userId; }
+            public String getUserName() { return userName; }
+        }
+        
+        // 模拟Connection类
+        public static class Connection {
+            private String name;
+            
+            public Connection(String name) {
+                this.name = name;
+            }
+            
+            public String getName() {
+                return name;
+            }
+        }
     }
 }
 ```
 
-## 面试题
+## 6. 面试题
 
-### 1. ThreadLocal的作用是什么？
+### 6.1 基础概念
 
+**Q: ThreadLocal的作用是什么？**
+
+**A:**
 ThreadLocal用于创建线程局部变量，每个线程都有自己独立的变量副本，线程间不会相互影响。
 
-### 2. ThreadLocal的原理是什么？
+**Q: ThreadLocal的原理是什么？**
 
+**A:**
 1. **ThreadLocalMap**：每个Thread都有一个ThreadLocalMap
 2. **Entry数组**：ThreadLocalMap内部使用Entry数组存储数据
 3. **弱引用**：Entry的key是ThreadLocal的弱引用
 4. **哈希算法**：使用ThreadLocal的hashCode确定存储位置
 
-### 3. ThreadLocal的内存泄漏问题？
+### 6.2 内存泄漏
 
+**Q: ThreadLocal的内存泄漏问题？**
+
+**A:**
 **原因**：
 - ThreadLocal被回收后，Entry的key变为null
 - 但Entry的value仍然被强引用
@@ -612,15 +892,27 @@ ThreadLocal用于创建线程局部变量，每个线程都有自己独立的变
 - 使用try-finally确保清理
 - 在线程池中特别注意清理
 
-### 4. ThreadLocal的使用场景？
+**Q: 如何避免ThreadLocal内存泄漏？**
 
+**A:**
+- 使用完ThreadLocal后立即调用remove()
+- 在线程池中使用ThreadLocal时要特别注意清理
+- 使用try-finally确保清理
+- 避免存储大对象
+
+### 6.3 使用场景
+
+**Q: ThreadLocal的使用场景？**
+
+**A:**
 1. **线程上下文传递**：传递用户信息、请求ID等
 2. **数据库连接管理**：每个线程独立的数据库连接
 3. **事务管理**：线程级别的事务控制
 4. **请求追踪**：记录请求处理过程
 
-### 5. ThreadLocal和synchronized的区别？
+**Q: ThreadLocal和synchronized的区别？**
 
+**A:**
 **ThreadLocal**：
 - 线程隔离，每个线程独立变量
 - 无需同步，天然线程安全
@@ -631,8 +923,11 @@ ThreadLocal用于创建线程局部变量，每个线程都有自己独立的变
 - 需要同步机制
 - 适合线程间协作
 
-### 6. 如何正确使用ThreadLocal？
+### 6.4 最佳实践
 
+**Q: 如何正确使用ThreadLocal？**
+
+**A:**
 ```java
 // 正确的使用方式
 public class CorrectThreadLocalUsage {
@@ -651,8 +946,9 @@ public class CorrectThreadLocalUsage {
 }
 ```
 
-### 7. ThreadLocal在线程池中的问题？
+**Q: ThreadLocal在线程池中的问题？**
 
+**A:**
 **问题**：
 - 线程池中的线程会重复使用
 - ThreadLocal的值可能被上一个任务污染
@@ -662,15 +958,19 @@ public class CorrectThreadLocalUsage {
 - 在任务结束时清理ThreadLocal
 - 使用try-finally确保清理
 
-### 8. ThreadLocal的替代方案？
+### 6.5 高级特性
 
+**Q: ThreadLocal的替代方案？**
+
+**A:**
 1. **InheritableThreadLocal**：子线程继承父线程的值
 2. **TransmittableThreadLocal**：支持线程池传递
 3. **ThreadLocalRandom**：线程安全的随机数生成器
 4. **自定义上下文传递**：使用参数传递
 
-### 9. ThreadLocal的性能影响？
+**Q: ThreadLocal的性能影响？**
 
+**A:**
 **优点**：
 - 无需同步，性能好
 - 线程隔离，避免竞争
@@ -680,11 +980,31 @@ public class CorrectThreadLocalUsage {
 - 可能导致内存泄漏
 - 调试困难
 
-### 10. ThreadLocal的最佳实践？
+## 7. 总结
 
-1. **及时清理**：使用完立即调用remove()
-2. **静态final**：ThreadLocal声明为静态final
-3. **try-finally**：使用try-finally确保清理
-4. **线程池注意**：在线程池中特别注意清理
-5. **避免大对象**：避免存储大对象
-6. **提供工具方法**：封装get/set/remove方法
+ThreadLocal为Java多线程编程提供了线程隔离的存储机制。
+
+### 7.1 关键要点
+
+1. **线程隔离**：每个线程独立的变量副本
+2. **内存管理**：正确使用和清理，避免内存泄漏
+3. **使用场景**：线程上下文传递、数据库连接、事务管理
+4. **最佳实践**：及时清理、在线程池中特别注意
+
+### 7.2 使用建议
+
+| 场景 | 推荐方式 | 原因 |
+|------|----------|------|
+| **线程上下文传递** | ThreadLocal | 天然线程安全 |
+| **数据库连接管理** | ThreadLocal | 线程隔离 |
+| **事务管理** | ThreadLocal | 线程级别控制 |
+| **请求追踪** | ThreadLocal | 简单易用 |
+
+### 7.3 学习建议
+
+1. **理解原理**：深入理解ThreadLocal的工作原理
+2. **实践验证**：通过编写代码验证ThreadLocal的效果
+3. **内存管理**：特别注意内存泄漏问题
+4. **最佳实践**：掌握正确的使用方式
+
+通过深入理解和熟练运用ThreadLocal，我们能够构建出更加高效、健壮和可维护的Java多线程应用程序。 

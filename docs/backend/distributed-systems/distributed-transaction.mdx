@@ -1,32 +1,1056 @@
 ---
 sidebar_position: 2
-title: "分布式事务"
-description: "分布式事务解决方案"
+title: "分布式事务解决方案详解"
+description: "全面介绍分布式事务的理论基础、技术方案与最佳实践"
 authors: [Laby]
 last_update:
-  date: 2025-08-07
+  date: 2025-01-07
   author: Laby
 ---
 
-# 分布式事务
+# 分布式事务解决方案详解
 
-分布式事务用于在多个服务/数据库之间保持数据一致性。核心在于一致性与可用性的权衡、失败场景的补偿与幂等。
+分布式事务是分布式系统中的核心挑战，用于在多个服务/数据库之间保持数据一致性。本章将详细介绍分布式事务的理论基础、技术方案和最佳实践。
 
-## 2PC协议
+:::tip 分布式事务的重要性
+- **数据一致性**：确保跨服务的数据操作保持一致性
+- **业务完整性**：保证复杂业务流程的原子性
+- **系统可靠性**：提高分布式系统的容错能力
+- **用户体验**：避免数据不一致导致的用户困惑
+:::
 
-流程：
-1. 准备阶段（Prepare）：协调者询问参与者是否可以提交
-2. 提交阶段（Commit/Rollback）：若全部准备成功则提交，否则回滚
+## 1. 分布式事务基础理论
 
-优点：实现简单，强一致
-缺点：
-- 协调者单点，阻塞
-- 准备阶段长期持锁，吞吐低
-- 协调者崩溃恢复复杂（需超时/重选）
+### 1.1 分布式事务的挑战
 
-## 3PC协议
+分布式事务面临的主要挑战包括：
 
-在2PC基础上加入超时与预提交，减少阻塞范围，但工程落地仍复杂；现代系统多采用共识/补偿型方案替代。
+| 挑战 | 描述 | 影响 |
+|------|------|------|
+| **网络分区** | 网络延迟、丢包、分区 | 消息传递不可靠 |
+| **节点故障** | 服务宕机、数据库故障 | 事务状态不一致 |
+| **时钟不同步** | 各节点时钟存在偏差 | 时序判断错误 |
+| **并发控制** | 多事务并发执行 | 数据竞争和死锁 |
+
+### 1.2 一致性模型
+
+```mermaid
+graph TD
+    A[一致性模型] --> B[强一致性]
+    A --> C[最终一致性]
+    A --> D[因果一致性]
+    A --> E[会话一致性]
+    
+    B --> B1[线性一致性]
+    B --> B2[顺序一致性]
+    B --> B3[严格一致性]
+    
+    C --> C1[时间窗口]
+    C --> C2[补偿机制]
+    C --> C3[幂等性]
+    
+    D --> D1[向量时钟]
+    D --> D2[因果依赖]
+    D --> D3[并发控制]
+    
+    E --> E1[会话内一致]
+    E --> E2[跨会话最终一致]
+    E --> E3[用户感知一致]
+```
+
+## 2. 两阶段提交协议（2PC）
+
+### 2.1 2PC协议原理
+
+两阶段提交协议是分布式事务的基础协议，通过两个阶段来保证事务的原子性。
+
+#### 协议流程
+
+```mermaid
+sequenceDiagram
+    participant C as 协调者
+    participant P1 as 参与者1
+    participant P2 as 参与者2
+    participant P3 as 参与者3
+    
+    C->>P1: 1. 准备阶段：CanCommit?
+    C->>P2: 1. 准备阶段：CanCommit?
+    C->>P3: 1. 准备阶段：CanCommit?
+    
+    P1-->>C: 2. 准备响应：Yes/No
+    P2-->>C: 2. 准备响应：Yes/No
+    P3-->>C: 2. 准备响应：Yes/No
+    
+    alt 所有参与者都同意
+        C->>P1: 3. 提交阶段：DoCommit
+        C->>P2: 3. 提交阶段：DoCommit
+        C->>P3: 3. 提交阶段：DoCommit
+        
+        P1-->>C: 4. 提交确认：ACK
+        P2-->>C: 4. 提交确认：ACK
+        P3-->>C: 4. 提交确认：ACK
+    else 有参与者不同意
+        C->>P1: 3. 提交阶段：DoAbort
+        C->>P2: 3. 提交阶段：DoAbort
+        C->>P3: 3. 提交阶段：DoAbort
+        
+        P1-->>C: 4. 回滚确认：ACK
+        P2-->>C: 4. 回滚确认：ACK
+        P3-->>C: 4. 回滚确认：ACK
+    end
+```
+
+### 2.2 2PC实现示例
+
+```java title="2PC协调者实现"
+@Service
+public class TwoPhaseCommitCoordinator {
+    
+    private final List<TransactionParticipant> participants;
+    private final TransactionLog transactionLog;
+    
+    public TwoPhaseCommitCoordinator(List<TransactionParticipant> participants) {
+        this.participants = participants;
+        this.transactionLog = new TransactionLog();
+    }
+    
+    /**
+     * 执行两阶段提交
+     */
+    public boolean executeTransaction(TransactionContext context) {
+        String transactionId = generateTransactionId();
+        
+        try {
+            // 记录事务开始
+            transactionLog.logTransactionStart(transactionId, context);
+            
+            // 第一阶段：准备阶段
+            if (!preparePhase(transactionId, context)) {
+                // 准备失败，执行回滚
+                abortPhase(transactionId, context);
+                return false;
+            }
+            
+            // 第二阶段：提交阶段
+            if (!commitPhase(transactionId, context)) {
+                // 提交失败，需要人工干预
+                log.error("Transaction commit failed: " + transactionId);
+                return false;
+            }
+            
+            // 记录事务完成
+            transactionLog.logTransactionComplete(transactionId);
+            return true;
+            
+        } catch (Exception e) {
+            log.error("Transaction execution failed: " + transactionId, e);
+            // 发生异常，执行回滚
+            abortPhase(transactionId, context);
+            return false;
+        }
+    }
+    
+    /**
+     * 准备阶段：询问所有参与者是否可以提交
+     */
+    private boolean preparePhase(String transactionId, TransactionContext context) {
+        List<CompletableFuture<Boolean>> futures = new ArrayList<>();
+        
+        // 并行询问所有参与者
+        for (TransactionParticipant participant : participants) {
+            CompletableFuture<Boolean> future = CompletableFuture.supplyAsync(() -> {
+                try {
+                    return participant.prepare(transactionId, context);
+                } catch (Exception e) {
+                    log.error("Participant prepare failed: " + participant.getId(), e);
+                    return false;
+                }
+            });
+            futures.add(future);
+        }
+        
+        // 等待所有参与者响应
+        try {
+            CompletableFuture<Void> allFutures = CompletableFuture.allOf(
+                futures.toArray(new CompletableFuture[0])
+            );
+            allFutures.get(30, TimeUnit.SECONDS); // 30秒超时
+            
+            // 检查所有参与者是否都同意
+            for (CompletableFuture<Boolean> future : futures) {
+                if (!future.get()) {
+                    return false; // 有参与者不同意
+                }
+            }
+            
+            return true; // 所有参与者都同意
+            
+        } catch (Exception e) {
+            log.error("Prepare phase failed: " + transactionId, e);
+            return false;
+        }
+    }
+    
+    /**
+     * 提交阶段：通知所有参与者提交事务
+     */
+    private boolean commitPhase(String transactionId, TransactionContext context) {
+        List<CompletableFuture<Boolean>> futures = new ArrayList<>();
+        
+        // 并行通知所有参与者提交
+        for (TransactionParticipant participant : participants) {
+            CompletableFuture<Boolean> future = CompletableFuture.supplyAsync(() -> {
+                try {
+                    return participant.commit(transactionId, context);
+                } catch (Exception e) {
+                    log.error("Participant commit failed: " + participant.getId(), e);
+                    return false;
+                }
+            });
+            futures.add(future);
+        }
+        
+        // 等待所有参与者确认
+        try {
+            CompletableFuture<Void> allFutures = CompletableFuture.allOf(
+                futures.toArray(new CompletableFuture[0])
+            );
+            allFutures.get(30, TimeUnit.SECONDS); // 30秒超时
+            
+            // 检查所有参与者是否都提交成功
+            for (CompletableFuture<Boolean> future : futures) {
+                if (!future.get()) {
+                    return false; // 有参与者提交失败
+                }
+            }
+            
+            return true; // 所有参与者都提交成功
+            
+        } catch (Exception e) {
+            log.error("Commit phase failed: " + transactionId, e);
+            return false;
+        }
+    }
+    
+    /**
+     * 回滚阶段：通知所有参与者回滚事务
+     */
+    private void abortPhase(String transactionId, TransactionContext context) {
+        // 并行通知所有参与者回滚
+        for (TransactionParticipant participant : participants) {
+            CompletableFuture.runAsync(() -> {
+                try {
+                    participant.abort(transactionId, context);
+                } catch (Exception e) {
+                    log.error("Participant abort failed: " + participant.getId(), e);
+                }
+            });
+        }
+        
+        // 记录事务回滚
+        transactionLog.logTransactionAbort(transactionId);
+    }
+}
+```
+
+### 2.3 参与者实现
+
+```java title="2PC参与者实现"
+@Service
+public class TransactionParticipant {
+    
+    private final String participantId;
+    private final DataSource dataSource;
+    private final TransactionLog transactionLog;
+    
+    public TransactionParticipant(String participantId, DataSource dataSource) {
+        this.participantId = participantId;
+        this.dataSource = dataSource;
+        this.transactionLog = new TransactionLog();
+    }
+    
+    /**
+     * 准备阶段：检查是否可以提交
+     */
+    public boolean prepare(String transactionId, TransactionContext context) {
+        Connection connection = null;
+        try {
+            connection = dataSource.getConnection();
+            connection.setAutoCommit(false);
+            
+            // 记录准备状态
+            transactionLog.logPrepare(transactionId, participantId, context);
+            
+            // 执行预提交操作
+            boolean canCommit = executePreCommit(connection, context);
+            
+            if (canCommit) {
+                // 记录准备成功
+                transactionLog.logPrepareSuccess(transactionId, participantId);
+                return true;
+            } else {
+                // 记录准备失败
+                transactionLog.logPrepareFailure(transactionId, participantId);
+                return false;
+            }
+            
+        } catch (Exception e) {
+            log.error("Prepare failed: " + transactionId, e);
+            transactionLog.logPrepareFailure(transactionId, participantId, e);
+            return false;
+        } finally {
+            if (connection != null) {
+                try {
+                    connection.close();
+                } catch (SQLException e) {
+                    log.error("Failed to close connection", e);
+                }
+            }
+        }
+    }
+    
+    /**
+     * 提交阶段：执行实际提交
+     */
+    public boolean commit(String transactionId, TransactionContext context) {
+        Connection connection = null;
+        try {
+            connection = dataSource.getConnection();
+            connection.setAutoCommit(false);
+            
+            // 检查是否已经准备
+            if (!transactionLog.isPrepared(transactionId, participantId)) {
+                log.error("Transaction not prepared: " + transactionId);
+                return false;
+            }
+            
+            // 执行提交操作
+            boolean success = executeCommit(connection, context);
+            
+            if (success) {
+                connection.commit();
+                transactionLog.logCommitSuccess(transactionId, participantId);
+                return true;
+            } else {
+                connection.rollback();
+                transactionLog.logCommitFailure(transactionId, participantId);
+                return false;
+            }
+            
+        } catch (Exception e) {
+            log.error("Commit failed: " + transactionId, e);
+            if (connection != null) {
+                try {
+                    connection.rollback();
+                } catch (SQLException se) {
+                    log.error("Failed to rollback", se);
+                }
+            }
+            transactionLog.logCommitFailure(transactionId, participantId, e);
+            return false;
+        } finally {
+            if (connection != null) {
+                try {
+                    connection.close();
+                } catch (SQLException e) {
+                    log.error("Failed to close connection", e);
+                }
+            }
+        }
+    }
+    
+    /**
+     * 回滚阶段：执行回滚操作
+     */
+    public boolean abort(String transactionId, TransactionContext context) {
+        Connection connection = null;
+        try {
+            connection = dataSource.getConnection();
+            connection.setAutoCommit(false);
+            
+            // 执行回滚操作
+            boolean success = executeAbort(connection, context);
+            
+            if (success) {
+                connection.commit();
+                transactionLog.logAbortSuccess(transactionId, participantId);
+                return true;
+            } else {
+                connection.rollback();
+                transactionLog.logAbortFailure(transactionId, participantId);
+                return false;
+            }
+            
+        } catch (Exception e) {
+            log.error("Abort failed: " + transactionId, e);
+            if (connection != null) {
+                try {
+                    connection.rollback();
+                } catch (SQLException se) {
+                    log.error("Failed to rollback", se);
+                }
+            }
+            transactionLog.logAbortFailure(transactionId, participantId, e);
+            return false;
+        } finally {
+            if (connection != null) {
+                try {
+                    connection.close();
+                } catch (SQLException e) {
+                    log.error("Failed to close connection", e);
+                }
+            }
+        }
+    }
+    
+    /**
+     * 执行预提交操作
+     */
+    private boolean executePreCommit(Connection connection, TransactionContext context) {
+        // 具体的预提交逻辑
+        // 例如：检查资源可用性、预留资源等
+        return true;
+    }
+    
+    /**
+     * 执行提交操作
+     */
+    private boolean executeCommit(Connection connection, TransactionContext context) {
+        // 具体的提交逻辑
+        // 例如：更新数据库、发送消息等
+        return true;
+    }
+    
+    /**
+     * 执行回滚操作
+     */
+    private boolean executeAbort(Connection connection, TransactionContext context) {
+        // 具体的回滚逻辑
+        // 例如：释放资源、撤销操作等
+        return true;
+    }
+}
+```
+
+### 2.4 2PC的优缺点
+
+#### 优点
+- **强一致性**：保证事务的ACID特性
+- **实现简单**：协议相对简单，易于理解
+- **理论成熟**：有完善的理论基础
+
+#### 缺点
+- **性能问题**：
+  - 协调者单点瓶颈
+  - 准备阶段长期持锁，影响吞吐量
+  - 两阶段通信开销大
+
+- **可用性问题**：
+  - 协调者单点故障
+  - 参与者故障影响整个事务
+  - 网络分区导致阻塞
+
+- **恢复复杂**：
+  - 协调者崩溃恢复复杂
+  - 需要超时机制和重选策略
+  - 状态不一致处理困难
+
+:::caution 2PC适用场景
+2PC适用于对一致性要求极高、事务规模较小的场景，如金融交易、库存管理等。
+:::
+
+## 3. 三阶段提交协议（3PC）
+
+### 3.1 3PC协议原理
+
+三阶段提交协议是对2PC的改进，通过增加预提交阶段来减少阻塞时间，提高系统性能。
+
+#### 协议流程
+
+```mermaid
+sequenceDiagram
+    participant C as 协调者
+    participant P1 as 参与者1
+    participant P2 as 参与者2
+    participant P3 as 参与者3
+    
+    C->>P1: 1. CanCommit?
+    C->>P2: 1. CanCommit?
+    C->>P3: 1. CanCommit?
+    
+    P1-->>C: 2. Yes/No
+    P2-->>C: 2. Yes/No
+    P3-->>C: 2. Yes/No
+    
+    alt 所有参与者都同意
+        C->>P1: 3. PreCommit
+        C->>P2: 3. PreCommit
+        C->>P3: 3. PreCommit
+        
+        P1-->>C: 4. ACK
+        P2-->>C: 4. ACK
+        P3-->>C: 4. ACK
+        
+        C->>P1: 5. DoCommit
+        C->>P2: 5. DoCommit
+        C->>P3: 5. DoCommit
+        
+        P1-->>C: 6. ACK
+        P2-->>C: 6. ACK
+        P3-->>C: 6. ACK
+    else 有参与者不同意
+        C->>P1: 3. Abort
+        C->>P2: 3. Abort
+        C->>P3: 3. Abort
+    end
+```
+
+### 3.2 3PC的优势
+
+#### 相比2PC的改进
+- **减少阻塞时间**：预提交阶段减少了资源锁定时间
+- **提高性能**：并行处理能力更强
+- **更好的容错性**：超时机制更完善
+
+#### 仍然存在的问题
+- **实现复杂**：增加了预提交阶段的复杂性
+- **网络开销**：多了一个阶段的通信开销
+- **工程落地困难**：实际应用中较少采用
+
+:::info 3PC现状
+现代分布式系统较少直接使用3PC，更多采用基于补偿的最终一致性方案，如TCC、Saga等。
+:::
+
+## 4. TCC模式（Try-Confirm-Cancel）
+
+### 4.1 TCC模式原理
+
+TCC（Try-Confirm-Cancel）是一种基于补偿的分布式事务模式，将事务拆分为三个阶段：
+
+- **Try阶段**：资源预留，检查并预留资源
+- **Confirm阶段**：确认执行，使用预留的资源
+- **Cancel阶段**：取消执行，释放预留的资源
+
+```mermaid
+graph TD
+    A[业务请求] --> B[Try阶段]
+    B --> C{所有Try成功?}
+    C -->|是| D[Confirm阶段]
+    C -->|否| E[Cancel阶段]
+    D --> F[事务成功]
+    E --> G[事务失败]
+    
+    B --> B1[预留资源]
+    B --> B2[检查条件]
+    B --> B3[记录状态]
+    
+    D --> D1[确认资源]
+    D --> D2[执行业务]
+    D --> D3[更新状态]
+    
+    E --> E1[释放资源]
+    E --> E2[回滚操作]
+    E --> E3[更新状态]
+```
+
+### 4.2 TCC接口设计
+
+```java title="TCC接口定义"
+public interface TccService {
+    
+    /**
+     * Try阶段：资源预留
+     * @param context 事务上下文
+     * @return 是否预留成功
+     */
+    boolean try(TransactionContext context);
+    
+    /**
+     * Confirm阶段：确认执行
+     * @param context 事务上下文
+     * @return 是否确认成功
+     */
+    boolean confirm(TransactionContext context);
+    
+    /**
+     * Cancel阶段：取消执行
+     * @param context 事务上下文
+     * @return 是否取消成功
+     */
+    boolean cancel(TransactionContext context);
+}
+```
+
+### 4.3 账户服务TCC实现
+
+```java title="账户服务TCC实现"
+@Service
+public class AccountTccService implements TccService {
+    
+    private final AccountRepository accountRepository;
+    private final TransactionLog transactionLog;
+    
+    @Override
+    public boolean try(TransactionContext context) {
+        String transactionId = context.getTransactionId();
+        String accountId = context.getAccountId();
+        BigDecimal amount = context.getAmount();
+        
+        try {
+            // 1. 检查账户是否存在
+            Account account = accountRepository.findById(accountId);
+            if (account == null) {
+                log.error("Account not found: " + accountId);
+                return false;
+            }
+            
+            // 2. 检查余额是否充足
+            if (account.getBalance().compareTo(amount) < 0) {
+                log.error("Insufficient balance: " + accountId);
+                return false;
+            }
+            
+            // 3. 冻结资金（预留资源）
+            account.setFrozenAmount(account.getFrozenAmount().add(amount));
+            account.setBalance(account.getBalance().subtract(amount));
+            accountRepository.save(account);
+            
+            // 4. 记录Try操作
+            transactionLog.logTry(transactionId, accountId, amount);
+            
+            return true;
+            
+        } catch (Exception e) {
+            log.error("Try failed for account: " + accountId, e);
+            return false;
+        }
+    }
+    
+    @Override
+    public boolean confirm(TransactionContext context) {
+        String transactionId = context.getTransactionId();
+        String accountId = context.getAccountId();
+        BigDecimal amount = context.getAmount();
+        
+        try {
+            // 1. 检查是否已经Try过
+            if (!transactionLog.hasTried(transactionId, accountId)) {
+                log.error("Transaction not tried: " + transactionId);
+                return false;
+            }
+            
+            // 2. 检查是否已经Confirm过（幂等性）
+            if (transactionLog.hasConfirmed(transactionId, accountId)) {
+                log.info("Transaction already confirmed: " + transactionId);
+                return true;
+            }
+            
+            // 3. 确认扣款（使用冻结的资金）
+            Account account = accountRepository.findById(accountId);
+            if (account != null) {
+                // 解冻资金，实际扣款
+                account.setFrozenAmount(account.getFrozenAmount().subtract(amount));
+                accountRepository.save(account);
+            }
+            
+            // 4. 记录Confirm操作
+            transactionLog.logConfirm(transactionId, accountId, amount);
+            
+            return true;
+            
+        } catch (Exception e) {
+            log.error("Confirm failed for account: " + accountId, e);
+            return false;
+        }
+    }
+    
+    @Override
+    public boolean cancel(TransactionContext context) {
+        String transactionId = context.getTransactionId();
+        String accountId = context.getAccountId();
+        BigDecimal amount = context.getAmount();
+        
+        try {
+            // 1. 检查是否已经Try过
+            if (!transactionLog.hasTried(transactionId, accountId)) {
+                log.error("Transaction not tried: " + transactionId);
+                return false;
+            }
+            
+            // 2. 检查是否已经Cancel过（幂等性）
+            if (transactionLog.hasCancelled(transactionId, accountId)) {
+                log.info("Transaction already cancelled: " + transactionId);
+                return true;
+            }
+            
+            // 3. 解冻资金（释放预留的资源）
+            Account account = accountRepository.findById(accountId);
+            if (account != null) {
+                account.setFrozenAmount(account.getFrozenAmount().subtract(amount));
+                account.setBalance(account.getBalance().add(amount));
+                accountRepository.save(account);
+            }
+            
+            // 4. 记录Cancel操作
+            transactionLog.logCancel(transactionId, accountId, amount);
+            
+            return true;
+            
+        } catch (Exception e) {
+            log.error("Cancel failed for account: " + accountId, e);
+            return false;
+        }
+    }
+}
+```
+
+### 4.4 库存服务TCC实现
+
+```java title="库存服务TCC实现"
+@Service
+public class InventoryTccService implements TccService {
+    
+    private final InventoryRepository inventoryRepository;
+    private final TransactionLog transactionLog;
+    
+    @Override
+    public boolean try(TransactionContext context) {
+        String transactionId = context.getTransactionId();
+        String productId = context.getProductId();
+        int quantity = context.getQuantity();
+        
+        try {
+            // 1. 检查商品是否存在
+            Inventory inventory = inventoryRepository.findByProductId(productId);
+            if (inventory == null) {
+                log.error("Product not found: " + productId);
+                return false;
+            }
+            
+            // 2. 检查库存是否充足
+            if (inventory.getAvailableStock() < quantity) {
+                log.error("Insufficient stock: " + productId);
+                return false;
+            }
+            
+            // 3. 预留库存
+            inventory.setAvailableStock(inventory.getAvailableStock() - quantity);
+            inventory.setReservedStock(inventory.getReservedStock() + quantity);
+            inventoryRepository.save(inventory);
+            
+            // 4. 记录Try操作
+            transactionLog.logTry(transactionId, productId, quantity);
+            
+            return true;
+            
+        } catch (Exception e) {
+            log.error("Try failed for product: " + productId, e);
+            return false;
+        }
+    }
+    
+    @Override
+    public boolean confirm(TransactionContext context) {
+        String transactionId = context.getTransactionId();
+        String productId = context.getProductId();
+        int quantity = context.getQuantity();
+        
+        try {
+            // 1. 检查是否已经Try过
+            if (!transactionLog.hasTried(transactionId, productId)) {
+                log.error("Transaction not tried: " + transactionId);
+                return false;
+            }
+            
+            // 2. 检查是否已经Confirm过（幂等性）
+            if (transactionLog.hasConfirmed(transactionId, productId)) {
+                log.info("Transaction already confirmed: " + transactionId);
+                return true;
+            }
+            
+            // 3. 确认扣减库存
+            Inventory inventory = inventoryRepository.findByProductId(productId);
+            if (inventory != null) {
+                // 解冻库存，实际扣减
+                inventory.setReservedStock(inventory.getReservedStock() - quantity);
+                inventoryRepository.save(inventory);
+            }
+            
+            // 4. 记录Confirm操作
+            transactionLog.logConfirm(transactionId, productId, quantity);
+            
+            return true;
+            
+        } catch (Exception e) {
+            log.error("Confirm failed for product: " + productId, e);
+            return false;
+        }
+    }
+    
+    @Override
+    public boolean cancel(TransactionContext context) {
+        String transactionId = context.getTransactionId();
+        String productId = context.getProductId();
+        int quantity = context.getQuantity();
+        
+        try {
+            // 1. 检查是否已经Try过
+            if (!transactionLog.hasTried(transactionId, productId)) {
+                log.error("Transaction not tried: " + transactionId);
+                return false;
+            }
+            
+            // 2. 检查是否已经Cancel过（幂等性）
+            if (transactionLog.hasCancelled(transactionId, productId)) {
+                log.info("Transaction already cancelled: " + transactionId);
+                return true;
+            }
+            
+            // 3. 释放预留库存
+            Inventory inventory = inventoryRepository.findByProductId(productId);
+            if (inventory != null) {
+                inventory.setReservedStock(inventory.getReservedStock() - quantity);
+                inventory.setAvailableStock(inventory.getAvailableStock() + quantity);
+                inventoryRepository.save(inventory);
+            }
+            
+            // 4. 记录Cancel操作
+            transactionLog.logCancel(transactionId, productId, quantity);
+            
+            return true;
+            
+        } catch (Exception e) {
+            log.error("Cancel failed for product: " + productId, e);
+            return false;
+        }
+    }
+}
+```
+
+### 4.5 TCC事务协调器
+
+```java title="TCC事务协调器"
+@Service
+public class TccTransactionCoordinator {
+    
+    private final List<TccService> tccServices;
+    private final TransactionLog transactionLog;
+    
+    public TccTransactionCoordinator(List<TccService> tccServices) {
+        this.tccServices = tccServices;
+        this.transactionLog = new TransactionLog();
+    }
+    
+    /**
+     * 执行TCC事务
+     */
+    public boolean executeTransaction(TransactionContext context) {
+        String transactionId = context.getTransactionId();
+        
+        try {
+            // 记录事务开始
+            transactionLog.logTransactionStart(transactionId, context);
+            
+            // Try阶段：所有服务预留资源
+            if (!tryPhase(transactionId, context)) {
+                // Try失败，执行Cancel
+                cancelPhase(transactionId, context);
+                return false;
+            }
+            
+            // Confirm阶段：所有服务确认执行
+            if (!confirmPhase(transactionId, context)) {
+                // Confirm失败，需要人工干预
+                log.error("Transaction confirm failed: " + transactionId);
+                return false;
+            }
+            
+            // 记录事务完成
+            transactionLog.logTransactionComplete(transactionId);
+            return true;
+            
+        } catch (Exception e) {
+            log.error("Transaction execution failed: " + transactionId, e);
+            // 发生异常，执行Cancel
+            cancelPhase(transactionId, context);
+            return false;
+        }
+    }
+    
+    /**
+     * Try阶段：所有服务预留资源
+     */
+    private boolean tryPhase(String transactionId, TransactionContext context) {
+        List<CompletableFuture<Boolean>> futures = new ArrayList<>();
+        
+        // 并行执行所有服务的Try操作
+        for (TccService service : tccServices) {
+            CompletableFuture<Boolean> future = CompletableFuture.supplyAsync(() -> {
+                try {
+                    return service.try(context);
+                } catch (Exception e) {
+                    log.error("Service try failed", e);
+                    return false;
+                }
+            });
+            futures.add(future);
+        }
+        
+        // 等待所有服务完成Try
+        try {
+            CompletableFuture<Void> allFutures = CompletableFuture.allOf(
+                futures.toArray(new CompletableFuture[0])
+            );
+            allFutures.get(30, TimeUnit.SECONDS); // 30秒超时
+            
+            // 检查所有服务是否都Try成功
+            for (CompletableFuture<Boolean> future : futures) {
+                if (!future.get()) {
+                    return false; // 有服务Try失败
+                }
+            }
+            
+            return true; // 所有服务都Try成功
+            
+        } catch (Exception e) {
+            log.error("Try phase failed: " + transactionId, e);
+            return false;
+        }
+    }
+    
+    /**
+     * Confirm阶段：所有服务确认执行
+     */
+    private boolean confirmPhase(String transactionId, TransactionContext context) {
+        List<CompletableFuture<Boolean>> futures = new ArrayList<>();
+        
+        // 并行执行所有服务的Confirm操作
+        for (TccService service : tccServices) {
+            CompletableFuture<Boolean> future = CompletableFuture.supplyAsync(() -> {
+                try {
+                    return service.confirm(context);
+                } catch (Exception e) {
+                    log.error("Service confirm failed", e);
+                    return false;
+                }
+            });
+            futures.add(future);
+        }
+        
+        // 等待所有服务完成Confirm
+        try {
+            CompletableFuture<Void> allFutures = CompletableFuture.allOf(
+                futures.toArray(new CompletableFuture[0])
+            );
+            allFutures.get(30, TimeUnit.SECONDS); // 30秒超时
+            
+            // 检查所有服务是否都Confirm成功
+            for (CompletableFuture<Boolean> future : futures) {
+                if (!future.get()) {
+                    return false; // 有服务Confirm失败
+                }
+            }
+            
+            return true; // 所有服务都Confirm成功
+            
+        } catch (Exception e) {
+            log.error("Confirm phase failed: " + transactionId, e);
+            return false;
+        }
+    }
+    
+    /**
+     * Cancel阶段：所有服务取消执行
+     */
+    private void cancelPhase(String transactionId, TransactionContext context) {
+        // 并行执行所有服务的Cancel操作
+        for (TccService service : tccServices) {
+            CompletableFuture.runAsync(() -> {
+                try {
+                    service.cancel(context);
+                } catch (Exception e) {
+                    log.error("Service cancel failed", e);
+                }
+            });
+        }
+        
+        // 记录事务取消
+        transactionLog.logTransactionCancel(transactionId);
+    }
+}
+```
+
+### 4.6 TCC的关键问题
+
+#### 1. 幂等性问题
+```java title="幂等性处理示例"
+@Service
+public class IdempotentTccService {
+    
+    private final TransactionLog transactionLog;
+    
+    public boolean confirm(TransactionContext context) {
+        String transactionId = context.getTransactionId();
+        
+        // 检查是否已经Confirm过（幂等性检查）
+        if (transactionLog.hasConfirmed(transactionId)) {
+            log.info("Transaction already confirmed: " + transactionId);
+            return true; // 直接返回成功
+        }
+        
+        // 执行Confirm逻辑
+        boolean success = doConfirm(context);
+        
+        if (success) {
+            // 记录Confirm状态
+            transactionLog.logConfirm(transactionId);
+        }
+        
+        return success;
+    }
+}
+```
+
+#### 2. 空回滚问题
+```java title="空回滚处理示例"
+@Service
+public class EmptyRollbackTccService {
+    
+    public boolean cancel(TransactionContext context) {
+        String transactionId = context.getTransactionId();
+        
+        // 检查是否已经Try过
+        if (!transactionLog.hasTried(transactionId)) {
+            // 没有Try过，记录空回滚
+            transactionLog.logEmptyRollback(transactionId);
+            return true; // 空回滚也算成功
+        }
+        
+        // 执行Cancel逻辑
+        return doCancel(context);
+    }
+}
+```
+
+#### 3. 悬挂问题
+```java title="悬挂问题处理示例"
+@Service
+public class HangingTccService {
+    
+    public boolean confirm(TransactionContext context) {
+        String transactionId = context.getTransactionId();
+        
+        // 检查是否已经Cancel过
+        if (transactionLog.hasCancelled(transactionId)) {
+            log.warn("Transaction cancelled before confirm: " + transactionId);
+            return false; // 拒绝Confirm
+        }
+        
+        // 执行Confirm逻辑
+        return doConfirm(context);
+    }
+}
+```
 
 ## TCC模式
 

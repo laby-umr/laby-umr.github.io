@@ -1,724 +1,1318 @@
 ---
-sidebar_position: 9
-title: "Stream API"
-description: "Java Stream API使用详解"
+sidebar_position: 2
+title: Java Stream API完全指南
+description: 深入解析Java 8 Stream API的核心概念、操作方法、性能优化与实战应用
 authors: [Laby]
+tags: [Java, Stream API, 函数式编程, Lambda, 集合处理, 并行流, 性能优化]
 last_update:
-  date: 2025-08-07
+  date: 2025-08-14
   author: Laby
 ---
 
-# Stream API
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+import CodeBlock from '@theme/CodeBlock';
 
-Java Stream API是Java 8引入的一种新的抽象概念，用于处理集合中的数据。Stream API提供了一种函数式编程风格的方法来操作数据集合，通过声明式的方式处理数据，而无需关注具体的实现细节。
+# Java Stream API完全指南
 
-## Stream基础
+Java 8引入的Stream API是Java函数式编程的重要里程碑，它提供了一种声明式的方式来处理集合数据。Stream API不仅让代码更加简洁、可读，还支持并行处理，大大提升了Java处理数据的能力和开发效率。
 
-### 什么是Stream？
+:::tip 核心价值
+**Stream API = 函数式编程 + 声明式处理 + 并行计算 + 链式操作 + 惰性求值**
+- 🔄 **函数式编程**：支持Lambda表达式和方法引用，代码更简洁
+- 📝 **声明式处理**：关注做什么，而不是怎么做，提高代码可读性
+- ⚡ **并行计算**：轻松实现并行数据处理，充分利用多核CPU
+- 🔗 **链式操作**：流畅的API设计，操作可以链式调用
+- 🎯 **惰性求值**：中间操作延迟执行，只有遇到终端操作才执行
+- 🛠️ **丰富操作**：过滤、映射、归约等丰富的数据处理操作
+:::
 
-Stream是数据元素的序列，支持顺序和并行操作。它不是一种数据结构，而是对数据源（如集合、数组）进行操作的API。Stream操作分为中间操作和终端操作两类，具有以下特点：
+## 1. Stream基础概念与原理
 
-- **声明式**：像SQL查询一样以声明方式表达，而非命令式编程
-- **可组合**：多个操作可以组合成管道
-- **可并行**：并行处理大规模数据集，无需编写多线程代码
-- **内部迭代**：由Stream API内部完成迭代，而非开发者显式控制
-- **延迟执行**：中间操作不会立即执行，直到遇到终端操作
+### 1.1 Stream核心概念
 
-### 创建Stream
+Stream不是数据结构，而是数据源的视图。它不存储数据，而是按需计算。Stream操作分为中间操作和终端操作。
 
-Stream可以通过多种方式创建：
-
-1. **从集合创建**
-```java
-List<String> list = Arrays.asList("a", "b", "c");
-Stream<String> stream = list.stream(); // 顺序流
-Stream<String> parallelStream = list.parallelStream(); // 并行流
+```mermaid
+flowchart LR
+    A["数据源<br/>Collection/Array"] --> B["中间操作1<br/>filter/map"]
+    B --> C["中间操作2<br/>sorted/distinct"]
+    C --> D["中间操作N<br/>limit/skip"]
+    D --> E["终端操作<br/>collect/reduce"]
+    E --> F["结果<br/>Collection/Value"]
+    
+    subgraph "惰性求值区域"
+        B
+        C
+        D
+    end
+    
+    subgraph "立即执行"
+        E
+        F
+    end
 ```
 
-2. **从数组创建**
-```java
-String[] array = {"a", "b", "c"};
-Stream<String> stream = Arrays.stream(array);
-```
-
-3. **从值创建**
-```java
-Stream<String> stream = Stream.of("a", "b", "c");
-```
-
-4. **无限流**
-```java
-// 生成无限序列
-Stream<Integer> infiniteNumbers = Stream.iterate(0, n -> n + 1);
-// 生成10个随机数
-Stream<Double> randomNumbers = Stream.generate(Math::random).limit(10);
-```
-
-5. **空Stream**
-```java
-Stream<String> emptyStream = Stream.empty();
-```
-
-6. **文件流**
-```java
-Stream<String> lines = Files.lines(Paths.get("file.txt"));
-```
-
-## Stream操作
-
-Stream API操作分为两类：中间操作（Intermediate operations）和终端操作（Terminal operations）。
-
-### 中间操作
-
-中间操作返回一个新的Stream，允许我们对操作进行链接。它们是惰性的，即在遇到终端操作前不会执行。
-
-#### 筛选和切片
-
-1. **filter**：过滤元素
-```java
-Stream<String> filtered = stream.filter(s -> s.startsWith("a"));
-```
-
-2. **distinct**：去重
-```java
-Stream<String> distinct = stream.distinct();
-```
-
-3. **limit**：限制数量
-```java
-Stream<String> limited = stream.limit(10); // 取前10个元素
-```
-
-4. **skip**：跳过元素
-```java
-Stream<String> skipped = stream.skip(5); // 跳过前5个元素
-```
-
-#### 映射
-
-1. **map**：一对一映射
-```java
-Stream<Integer> lengths = stream.map(String::length);
-```
-
-2. **flatMap**：一对多映射，将每个元素转换为流，然后合并所有流
-```java
-// 将二维数组扁平化为一维
-List<List<Integer>> nestedList = Arrays.asList(
-    Arrays.asList(1, 2, 3),
-    Arrays.asList(4, 5, 6)
-);
-Stream<Integer> flatStream = nestedList.stream()
-    .flatMap(Collection::stream);
-```
-
-#### 排序
-
-1. **sorted**：自然排序
-```java
-Stream<String> sorted = stream.sorted();
-```
-
-2. **sorted(Comparator)**：自定义排序
-```java
-Stream<String> customSorted = stream.sorted(Comparator.comparing(String::length));
-```
-
-#### 窥视
-
-**peek**：查看每个元素（主要用于调试）
-```java
-Stream<String> peeked = stream.peek(System.out::println);
-```
-
-### 终端操作
-
-终端操作会触发Stream的执行，并产生结果。执行终端操作后，Stream不能再被使用。
-
-#### 匹配与查找
-
-1. **anyMatch**：任一元素匹配
-```java
-boolean hasAnyA = stream.anyMatch(s -> s.contains("a"));
-```
-
-2. **allMatch**：所有元素匹配
-```java
-boolean allStartWithA = stream.allMatch(s -> s.startsWith("a"));
-```
-
-3. **noneMatch**：没有元素匹配
-```java
-boolean noneHasZ = stream.noneMatch(s -> s.contains("z"));
-```
-
-4. **findFirst**：找到第一个元素
-```java
-Optional<String> first = stream.findFirst();
-```
-
-5. **findAny**：找到任意元素（并行时性能优于findFirst）
-```java
-Optional<String> any = stream.findAny();
-```
-
-#### 归约
-
-1. **count**：计数
-```java
-long count = stream.count();
-```
-
-2. **max/min**：最大值/最小值
-```java
-Optional<String> max = stream.max(Comparator.naturalOrder());
-Optional<String> min = stream.min(Comparator.naturalOrder());
-```
-
-3. **reduce**：归约操作，将Stream元素组合成一个结果
-```java
-// 求和
-Integer sum = numbers.stream().reduce(0, Integer::sum);
-
-// 字符串连接
-String joined = strings.stream().reduce("", String::concat);
-
-// 找最大值
-Optional<Integer> max = numbers.stream().reduce(Integer::max);
-```
-
-#### 收集
-
-**collect**：将Stream转换为其他形式
-```java
-// 转为List
-List<String> list = stream.collect(Collectors.toList());
-
-// 转为Set
-Set<String> set = stream.collect(Collectors.toSet());
-
-// 转为Map
-Map<String, Integer> map = stream.collect(
-    Collectors.toMap(s -> s, String::length)
-);
-
-// 分组
-Map<Integer, List<String>> groups = stream.collect(
-    Collectors.groupingBy(String::length)
-);
-
-// 拼接字符串
-String joined = stream.collect(Collectors.joining(", "));
-```
-
-#### 遍历
-
-**forEach**：对每个元素执行操作
-```java
-stream.forEach(System.out::println);
-```
-
-## 实际应用场景
-
-### 数据转换与过滤
-
-```java
-// 找出所有长度大于3的单词并转为大写
-List<String> result = words.stream()
-    .filter(s -> s.length() > 3)
-    .map(String::toUpperCase)
-    .collect(Collectors.toList());
-```
-
-### 数据分析与统计
-
-```java
-// 计算产品的平均价格
-double avgPrice = products.stream()
-    .mapToDouble(Product::getPrice)
-    .average()
-    .orElse(0.0);
-
-// 按类别分组并计算每组的总价
-Map<String, Double> totalPriceByCategory = products.stream()
-    .collect(Collectors.groupingBy(
-        Product::getCategory,
-        Collectors.summingDouble(Product::getPrice)
-    ));
-```
-
-### 复杂对象处理
-
-```java
-// 找出每个部门薪资最高的员工
-Map<Department, Optional<Employee>> highestPaidByDept = employees.stream()
-    .collect(Collectors.groupingBy(
-        Employee::getDepartment,
-        Collectors.maxBy(Comparator.comparing(Employee::getSalary))
-    ));
-```
-
-### 并行处理
-
-```java
-// 并行计算所有数字的平方和
-long sum = numbers.parallelStream()
-    .mapToLong(n -> n * n)
-    .sum();
-```
-
-## Stream的高级特性
-
-### Optional与Stream
-
-Optional是一个可以为null的容器对象，可以配合Stream使用：
-
-```java
-// 找到第一个偶数并乘以2
-Optional<Integer> result = numbers.stream()
-    .filter(n -> n % 2 == 0)
-    .findFirst()
-    .map(n -> n * 2);
-```
-
-### 自定义Collector
-
-可以实现Collector接口来创建自定义收集器：
-
-```java
-public class CustomCollector<T> implements Collector<T, List<T>, List<T>> {
-    @Override
-    public Supplier<List<T>> supplier() {
-        return ArrayList::new;
-    }
-
-    @Override
-    public BiConsumer<List<T>, T> accumulator() {
-        return List::add;
-    }
-
-    @Override
-    public BinaryOperator<List<T>> combiner() {
-        return (list1, list2) -> {
-            list1.addAll(list2);
-            return list1;
-        };
-    }
-
-    @Override
-    public Function<List<T>, List<T>> finisher() {
-        return Function.identity();
-    }
-
-    @Override
-    public Set<Characteristics> characteristics() {
-        return EnumSet.of(Characteristics.IDENTITY_FINISH);
+#### Stream特性对比表
+
+| 特性 | 传统集合操作 | Stream API | 优势 |
+|------|-------------|------------|------|
+| **执行方式** | 立即执行 | 惰性求值 | 性能优化，避免不必要计算 |
+| **数据修改** | 可能修改原数据 | 不修改原数据 | 数据安全，函数式编程 |
+| **并行处理** | 需要手动实现 | 内置并行支持 | 简化并发编程 |
+| **代码风格** | 命令式 | 声明式 | 代码更简洁易读 |
+| **链式调用** | 不支持 | 完全支持 | 流畅的API体验 |
+| **内存使用** | 可能创建中间集合 | 按需处理 | 内存效率更高 |
+
+<Tabs>
+<TabItem value="stream-basics" label="Stream基础">
+
+### Stream创建与基本操作
+
+```java title="Stream创建方式完整示例"
+import java.util.*;
+import java.util.stream.*;
+import java.nio.file.*;
+import java.io.IOException;
+
+public class StreamCreationDemo {
+    public static void main(String[] args) throws IOException {
+        // 1. 从集合创建Stream
+        List<String> languages = Arrays.asList("Java", "Python", "JavaScript", "C++", "Go");
+        Stream<String> streamFromList = languages.stream();
+        System.out.println("从List创建: " + streamFromList.collect(Collectors.toList()));
+        
+        // 2. 从数组创建Stream
+        String[] array = {"Apple", "Banana", "Cherry", "Date"};
+        Stream<String> streamFromArray = Arrays.stream(array);
+        System.out.println("从数组创建: " + streamFromArray.collect(Collectors.toList()));
+        
+        // 3. 使用Stream.of()创建
+        Stream<Integer> streamOf = Stream.of(1, 2, 3, 4, 5);
+        System.out.println("使用of()创建: " + streamOf.collect(Collectors.toList()));
+        
+        // 4. 创建空Stream
+        Stream<String> emptyStream = Stream.empty();
+        System.out.println("空Stream元素数量: " + emptyStream.count());
+        
+        // 5. 使用Stream.generate()创建无限流
+        Stream<Double> randomStream = Stream.generate(Math::random).limit(5);
+        System.out.println("随机数流: " + randomStream.collect(Collectors.toList()));
+        
+        // 6. 使用Stream.iterate()创建
+        Stream<Integer> iterateStream = Stream.iterate(0, n -> n + 2).limit(10);
+        System.out.println("迭代流(偶数): " + iterateStream.collect(Collectors.toList()));
+        
+        // 7. 从范围创建IntStream
+        IntStream rangeStream = IntStream.range(1, 6);
+        System.out.println("范围流: " + rangeStream.boxed().collect(Collectors.toList()));
+        
+        // 8. 从文件创建Stream
+        try {
+            Stream<String> fileStream = Files.lines(Paths.get("example.txt"));
+            // 注意：实际使用时需要确保文件存在
+            // System.out.println("文件行数: " + fileStream.count());
+        } catch (Exception e) {
+            System.out.println("文件不存在，跳过文件流示例");
+        }
+        
+        // 9. 从字符串创建字符流
+        IntStream charStream = "Hello World".chars();
+        System.out.println("字符流: " + charStream.mapToObj(c -> (char) c).collect(Collectors.toList()));
+        
+        // 10. 并行流创建
+        Stream<String> parallelStream = languages.parallelStream();
+        System.out.println("并行流处理: " + parallelStream.map(String::toUpperCase).collect(Collectors.toList()));
     }
 }
 ```
 
-### 处理无限流
-
-当使用无限流时，必须使用短路操作(如limit, findFirst, findAny)：
-
-```java
-// 生成10个偶数
-List<Integer> evenNumbers = Stream.iterate(0, n -> n + 2)
-    .limit(10)
-    .collect(Collectors.toList());
-```
-
-## Stream API的性能考量
-
-### 性能优化建议
-
-1. **选择适当的Stream操作**：避免不必要的中间操作
-2. **使用并行流时需谨慎**：
-   - 数据量大时才考虑
-   - 确保操作是线程安全的
-   - 避免在共享状态上操作
-3. **优先使用特定类型Stream**：如IntStream而非包装类型Stream
-4. **慎用flatMap**：会产生额外的Stream对象
-5. **避免装箱/拆箱**：使用基本类型Stream (IntStream, LongStream, DoubleStream)
-
-```java
-// 推荐：直接使用IntStream
-int sum = IntStream.range(1, 1000).sum();
-
-// 不推荐：需要装箱和拆箱
-int sum = Stream.iterate(1, n -> n + 1)
-    .limit(999)
-    .mapToInt(Integer::intValue)
-    .sum();
-```
-
-### 并行流使用场景
-
-适合并行流的场景：
-
-- 大数据量处理（元素数量很多）
-- 每个元素处理逻辑比较耗时
-- 无状态操作
-- 元素之间无依赖关系
-- 数据源为ArrayList, 数组或IntStream.range()这样的可分解数据源
-
-不适合并行流的场景：
-
-- 数据量小
-- 操作简单快速
-- 有状态操作
-- 使用LinkedList等不易分解的数据源
-
-## Stream与传统迭代对比
-
-### 函数式与命令式对比
-
-Stream API与传统for循环对比：
-
-**传统方式**：
-```java
-List<String> longNames = new ArrayList<>();
-for (String name : names) {
-    if (name.length() > 5) {
-        longNames.add(name.toUpperCase());
-    }
-}
-Collections.sort(longNames);
-```
-
-**Stream方式**：
-```java
-List<String> longNames = names.stream()
-    .filter(name -> name.length() > 5)
-    .map(String::toUpperCase)
-    .sorted()
-    .collect(Collectors.toList());
-```
-
-### Stream的优势
-
-1. **代码简洁**：更少的样板代码，更高的可读性
-2. **声明式编程**：表达的是做什么，而非怎么做
-3. **并行化简单**：简单切换到并行流
-4. **懒加载**：仅在需要时执行运算
-5. **无副作用**：鼓励不可变性和无副作用的函数
-6. **数据转换清晰**：清晰表达数据转换过程
-
-## 面试题
-
-### 1. 什么是Java Stream? Stream与集合有什么区别?
-
-**答**：Java Stream是Java 8引入的处理数据序列的API，允许以声明式方式操作数据集。
-
-Stream与集合的主要区别：
-- **数据存储**：集合是数据结构，存储数据；Stream只是数据的视图，不存储数据
-- **计算方式**：集合是外部迭代(开发者控制)；Stream是内部迭代(API控制)
-- **执行模式**：集合立即计算；Stream延迟计算，直到终端操作才执行
-- **功能性**：集合侧重于数据的访问和管理；Stream侧重于数据的计算和转换
-- **一次性**：集合可以反复使用；Stream只能使用一次
-- **并行支持**：Stream原生支持并行操作；集合需手动实现并行
-
-### 2. Stream操作的执行过程是怎样的？
-
-**答**：Stream操作的执行过程分为三个阶段：
-1. **创建Stream**：从数据源（如集合、数组）创建Stream
-2. **构建中间操作管道**：添加一个或多个中间操作（filter, map等），这些操作会返回新Stream，并且是延迟执行的
-3. **执行终端操作**：添加一个终端操作（collect, forEach等）触发整个流水线的执行，获得结果
-
-Stream采用"垂直执行"模式——对每个元素依次执行所有操作，而不是"水平执行"（先对所有元素执行第一个操作，再执行第二个）。这种短路执行模式能提高处理大数据集或无限流的效率。
-
-### 3. 什么是中间操作和终端操作？请举例说明。
-
-**答**：Stream操作分为两类：中间操作和终端操作。
-
-**中间操作**：
-- 返回Stream对象，可以链式调用
-- 延迟执行（懒加载），直到遇到终端操作
-- 例子：filter(), map(), flatMap(), distinct(), sorted(), peek(), limit(), skip()
-
-**终端操作**：
-- 返回非Stream结果（或void）
-- 触发整个Stream管道的执行
-- 执行后Stream被消费，不能再使用
-- 例子：forEach(), collect(), reduce(), count(), anyMatch(), allMatch(), noneMatch(), findFirst(), findAny(), min(), max()
-
-### 4. 如何将Stream转换为集合？有哪些常用的Collectors方法？
-
-**答**：可以使用Stream的collect()方法与Collectors类中的收集器将Stream转换为集合：
-
-```java
-// 转为List
-List<String> list = stream.collect(Collectors.toList());
-// 或使用JDK 16+新方法
-List<String> list = stream.toList();
-
-// 转为Set
-Set<String> set = stream.collect(Collectors.toSet());
-
-// 转为特定集合实现
-ArrayList<String> arrayList = stream.collect(Collectors.toCollection(ArrayList::new));
-```
-
-常用的Collectors方法：
-- **toList()/toSet()/toCollection()**：转换为集合
-- **joining()**：连接字符串
-- **summingInt()/averagingDouble()**：计算数值统计
-- **groupingBy()**：分组
-- **partitioningBy()**：分区（根据条件分为两组）
-- **mapping()**：在收集前对元素进行映射
-- **reducing()**：归约操作
-- **summarizingInt()/summarizingLong()/summarizingDouble()**：数值统计（count, sum, min, max, average）
-- **toConcurrentMap()**：并行收集到ConcurrentMap
-
-### 5. 解释Stream中map和flatMap的区别。
-
-**答**：map和flatMap都是Stream的中间操作，用于转换元素，但有重要区别：
-
-**map**：
-- 一对一转换，将每个元素映射为一个新元素
-- 函数签名：map方法接收一个Function类型参数，将T类型映射为R类型
-- 结果：保持Stream的一维结构不变
-
-```java
-// 将字符串转换为长度
-Stream<Integer> lengths = Stream.of("a", "bc", "def").map(String::length);
-// 结果: [1, 2, 3]
-```
-
-**flatMap**：
-- 一对多转换，将每个元素映射为一个Stream，然后将所有Stream合并
-- 函数签名：flatMap方法接收一个Function类型参数，将T类型映射为Stream
-- 结果：将多维结构扁平化为一维
-
-```java
-// 将字符串数组展平为字符流
-Stream<String> words = Stream.of("Hello", "World");
-Stream<Character> letters = words.flatMap(word -> 
-    word.chars().mapToObj(c -> (char) c)
-);
-// 结果: ['H','e','l','l','o','W','o','r','l','d']
-```
-
-本质区别：map操作是"一对一"函数，而flatMap是"一对多"函数，适合处理嵌套集合。
-
-### 6. 如何使用Stream API对集合中的对象进行分组或分区？
-
-**答**：Stream API提供了强大的分组和分区功能：
-
-**分组(groupingBy)**：根据某个属性将元素分到不同的组中，结果是Map类型
-
-```java
-// 按长度分组
-Map<Integer, List<String>> byLength = strings.stream()
-    .collect(Collectors.groupingBy(String::length));
-
-// 多级分组
-Map<Department, Map<EmployeeType, List<Employee>>> byDeptAndType = employees.stream()
-    .collect(Collectors.groupingBy(
-        Employee::getDepartment,
-        Collectors.groupingBy(Employee::getType)
-    ));
-
-// 自定义下游收集器
-Map<Department, Long> countByDept = employees.stream()
-    .collect(Collectors.groupingBy(
-        Employee::getDepartment,
-        Collectors.counting()
-    ));
-```
-
-**分区(partitioningBy)**：根据条件将元素分成两组（true/false），结果是Boolean键的Map
-
-```java
-// 将员工分为高薪和低薪两组
-Map<Boolean, List<Employee>> partitioned = employees.stream()
-    .collect(Collectors.partitioningBy(e -> e.getSalary() > 100000));
-
-// 每组使用不同的下游收集器
-Map<Boolean, Long> highLowSalaryCount = employees.stream()
-    .collect(Collectors.partitioningBy(
-        e -> e.getSalary() > 100000,
-        Collectors.counting()
-    ));
-```
-
-### 7. 如何使用并行流？何时应该使用它？
-
-**答**：使用并行流很简单，只需要调用parallelStream()方法或parallel()方法：
-
-```java
-// 从集合创建并行流
-List<String> result1 = collection.parallelStream()
-    .filter(s -> s.length() > 5)
-    .collect(Collectors.toList());
-
-// 将顺序流转换为并行流
-List<String> result2 = collection.stream()
-    .parallel()
-    .filter(s -> s.length() > 5)
-    .collect(Collectors.toList());
-```
-
-**适合使用并行流的场景**：
-- 数据量大（通常至少数万个元素）
-- 每个元素处理成本高（处理时间长）
-- 操作是无状态的，元素之间没有依赖关系
-- 数据结构易于分解（如ArrayList、数组，而非LinkedList）
-- 计算密集型任务，而非I/O密集型
-- 机器有足够的CPU核心
-
-**不应使用并行流的场景**：
-- 数据量小
-- 操作简单快速，顺序执行开销小
-- 使用有状态操作(distinct, sorted等)
-- 使用不易分解的数据源
-- 依赖共享可变状态的操作(非线程安全)
-
-### 8. Stream中的reduce操作是什么？如何使用？
-
-**答**：reduce是Stream API的终端操作之一，用于将Stream中的元素组合成一个结果。它通过重复应用组合操作，将所有元素合并成一个单一结果。
-
-reduce有三种形式：
-
-1. **有标识值的归约**（初始值+二元操作）:
-```java
-// 求和
-int sum = numbers.stream().reduce(0, Integer::sum);
-
-// 拼接字符串
-String concat = strings.stream().reduce("", String::concat);
-```
-
-2. **无初始值的归约**（返回Optional）:
-```java
-// 找最大值
-Optional<Integer> max = numbers.stream().reduce(Integer::max);
-
-// 如果Stream为空，返回空Optional
-Optional<Integer> sum = numbers.stream().reduce(Integer::sum);
-```
-
-3. **带组合器的归约**（用于并行Stream）:
-```java
-// 计算所有员工的总薪资
-int totalSalary = employees.parallelStream().reduce(
-    0,                                          // 初始值
-    (sum, emp) -> sum + emp.getSalary(),        // 累加器
-    Integer::sum                                // 组合器(并行处理时合并结果)
-);
-```
-
-reduce操作的关键点：
-- 初始值可选，无初始值时返回Optional
-- 累加器需满足结合律以支持并行处理
-- 通常用于汇总、统计、集合等操作
-
-### 9. 如何避免Stream API中的常见陷阱？
-
-**答**：使用Stream API时的常见陷阱和解决方案：
-
-1. **重复使用Stream**：
-   - 陷阱：Stream只能消费一次，重复使用会抛异常
-   - 解决：每次需要Stream时重新从源创建
-
-2. **副作用**：
-   - 陷阱：在Stream操作中修改外部状态
-   - 解决：优先使用无副作用函数，如reduce和collect，而非forEach
-
-3. **阻塞操作**：
-   - 陷阱：在并行流中使用阻塞操作或I/O
-   - 解决：并行流主要用于CPU密集型任务，I/O操作使用其他并发工具
-
-4. **过度并行化**：
-   - 陷阱：盲目使用并行流
-   - 解决：只在数据量大且适合并行的场景使用，先测量性能
-
-5. **订单依赖**：
-   - 陷阱：依赖Stream操作的顺序
-   - 解决：重新考虑算法设计，避免顺序依赖，特别是在并行流中
-
-6. **装箱/拆箱开销**：
-   - 陷阱：处理基本类型时使用包装类型的Stream
-   - 解决：使用IntStream, LongStream等专用流
-
-7. **无限流未短路**：
-   - 陷阱：在无限流上使用非短路操作
-   - 解决：在无限流上必须使用limit或类似操作限制
-
-8. **流操作干扰源集合**：
-   - 陷阱：在遍历的同时修改源集合
-   - 解决：不在Stream操作中修改源数据
-
-### 10. 如何编写自定义收集器(Collector)?
-
-**答**：自定义收集器需实现Collector接口的五个方法：supplier(), accumulator(), combiner(), finisher()和characteristics()。
-
-例如，实现一个计算平均值的收集器：
-
-```java
-public class AverageCollector implements Collector<Integer, double[], Double> {
-    // 创建累加器
-    @Override
-    public Supplier<double[]> supplier() {
-        return () -> new double[]{0.0, 0.0}; // [sum, count]
+</TabItem>
+<TabItem value="stream-pipeline" label="Stream流水线">
+
+### Stream操作流水线
+
+```java title="Stream操作流水线详解"
+import java.util.*;
+import java.util.stream.*;
+
+public class StreamPipelineDemo {
+    
+    static class Product {
+        private String name;
+        private String category;
+        private double price;
+        private int stock;
+        private boolean available;
+        
+        public Product(String name, String category, double price, int stock, boolean available) {
+            this.name = name;
+            this.category = category;
+            this.price = price;
+            this.stock = stock;
+            this.available = available;
+        }
+        
+        // getters
+        public String getName() { return name; }
+        public String getCategory() { return category; }
+        public double getPrice() { return price; }
+        public int getStock() { return stock; }
+        public boolean isAvailable() { return available; }
+        
+        @Override
+        public String toString() {
+            return String.format("Product{name='%s', category='%s', price=%.2f, stock=%d, available=%s}",
+                name, category, price, stock, available);
+        }
     }
     
-    // 累加元素
-    @Override
-    public BiConsumer<double[], Integer> accumulator() {
-        return (acc, item) -> {
-            acc[0] += item; // 累加和
-            acc[1]++;       // 累加计数
-        };
-    }
-    
-    // 合并两个累加器（并行流使用）
-    @Override
-    public BinaryOperator<double[]> combiner() {
-        return (acc1, acc2) -> {
-            acc1[0] += acc2[0]; // 合并和
-            acc1[1] += acc2[1]; // 合并计数
-            return acc1;
-        };
-    }
-    
-    // 最终转换
-    @Override
-    public Function<double[], Double> finisher() {
-        return acc -> acc[1] == 0 ? 0.0 : acc[0] / acc[1];
-    }
-    
-    // 收集器特性
-    @Override
-    public Set<Characteristics> characteristics() {
-        return Collections.emptySet();
+    public static void main(String[] args) {
+        // 创建测试数据
+        List<Product> products = Arrays.asList(
+            new Product("iPhone 14", "Electronics", 999.99, 50, true),
+            new Product("MacBook Pro", "Electronics", 2499.99, 20, true),
+            new Product("AirPods", "Electronics", 179.99, 100, true),
+            new Product("Java编程思想", "Books", 89.99, 30, true),
+            new Product("Spring实战", "Books", 79.99, 0, false),
+            new Product("Nike运动鞋", "Sports", 129.99, 80, true),
+            new Product("Adidas T恤", "Sports", 49.99, 0, false),
+            new Product("咖啡机", "Home", 299.99, 15, true)
+        );
+        
+        System.out.println("=== 原始数据 ===");
+        products.forEach(System.out::println);
+        
+        // 复杂的Stream流水线操作
+        System.out.println("\n=== 复杂流水线处理 ===");
+        Map<String, List<String>> result = products.stream()
+            .filter(product -> product.isAvailable())           // 过滤：只要可用的产品
+            .filter(product -> product.getPrice() > 50)         // 过滤：价格大于50
+            .peek(product -> System.out.println("处理中: " + product.getName())) // 调试：查看处理过程
+            .sorted(Comparator.comparing(Product::getPrice).reversed()) // 排序：按价格降序
+            .limit(5)                                           // 限制：只取前5个
+            .collect(Collectors.groupingBy(                     // 分组：按类别分组
+                Product::getCategory,
+                Collectors.mapping(Product::getName, Collectors.toList())
+            ));
+        
+        System.out.println("\n=== 处理结果 ===");
+        result.forEach((category, productNames) -> {
+            System.out.println(category + ": " + productNames);
+        });
+        
+        // 统计信息
+        System.out.println("\n=== 统计信息 ===");
+        DoubleSummaryStatistics priceStats = products.stream()
+            .filter(Product::isAvailable)
+            .mapToDouble(Product::getPrice)
+            .summaryStatistics();
+        
+        System.out.println("价格统计: " + priceStats);
+        System.out.println("平均价格: " + String.format("%.2f", priceStats.getAverage()));
+        System.out.println("最高价格: " + priceStats.getMax());
+        System.out.println("最低价格: " + priceStats.getMin());
+        System.out.println("总计: " + String.format("%.2f", priceStats.getSum()));
+        
+        // 查找操作
+        System.out.println("\n=== 查找操作 ===");
+        Optional<Product> mostExpensive = products.stream()
+            .filter(Product::isAvailable)
+            .max(Comparator.comparing(Product::getPrice));
+        
+        mostExpensive.ifPresent(product -> 
+            System.out.println("最贵的产品: " + product.getName() + " - $" + product.getPrice()));
+        
+        // 检查操作
+        boolean hasExpensiveProduct = products.stream()
+            .anyMatch(product -> product.getPrice() > 2000);
+        System.out.println("是否有价格超过2000的产品: " + hasExpensiveProduct);
+        
+        boolean allAvailable = products.stream()
+            .allMatch(Product::isAvailable);
+        System.out.println("所有产品都可用: " + allAvailable);
     }
 }
 ```
 
-使用自定义收集器：
+</TabItem>
+<TabItem value="lazy-evaluation" label="惰性求值">
 
-```java
-Double average = Stream.of(1, 2, 3, 4, 5)
-    .collect(new AverageCollector());
+### 惰性求值机制
+
+```java title="惰性求值演示"
+import java.util.*;
+import java.util.stream.*;
+
+public class LazyEvaluationDemo {
+    
+    // 自定义函数，用于演示何时执行
+    public static String processString(String input) {
+        System.out.println("处理字符串: " + input);
+        return input.toUpperCase();
+    }
+    
+    public static boolean isLongString(String input) {
+        System.out.println("检查字符串长度: " + input);
+        return input.length() > 5;
+    }
+    
+    public static void main(String[] args) {
+        List<String> words = Arrays.asList("apple", "banana", "cherry", "date", "elderberry", "fig");
+        
+        System.out.println("=== 演示惰性求值 ===");
+        System.out.println("创建Stream（注意：没有任何输出）");
+        
+        Stream<String> stream = words.stream()
+            .filter(word -> {
+                System.out.println("过滤: " + word);
+                return word.length() > 4;
+            })
+            .map(word -> {
+                System.out.println("映射: " + word);
+                return word.toUpperCase();
+            });
+        
+        System.out.println("Stream已创建，但还没有执行任何操作");
+        System.out.println("现在执行终端操作...");
+        
+        List<String> result = stream.collect(Collectors.toList());
+        System.out.println("结果: " + result);
+        
+        System.out.println("\n=== 短路操作演示 ===");
+        // 短路操作：findFirst会在找到第一个匹配元素后停止处理
+        Optional<String> firstLong = words.stream()
+            .filter(word -> {
+                System.out.println("短路过滤: " + word);
+                return word.length() > 5;
+            })
+            .findFirst();
+        
+        System.out.println("第一个长字符串: " + firstLong.orElse("未找到"));
+        
+        System.out.println("\n=== limit操作的短路效果 ===");
+        List<String> limitedResult = words.stream()
+            .filter(word -> {
+                System.out.println("limit过滤: " + word);
+                return word.length() > 3;
+            })
+            .limit(2)  // 只取前2个
+            .collect(Collectors.toList());
+        
+        System.out.println("限制结果: " + limitedResult);
+        
+        System.out.println("\n=== 无终端操作的Stream ===");
+        // 这个Stream不会执行任何操作，因为没有终端操作
+        words.stream()
+            .filter(word -> {
+                System.out.println("这行不会打印: " + word);
+                return true;
+            })
+            .map(word -> {
+                System.out.println("这行也不会打印: " + word);
+                return word.toUpperCase();
+            });
+        
+        System.out.println("没有终端操作，所以上面的中间操作都不会执行");
+        
+        System.out.println("\n=== 性能对比：传统方式 vs Stream ===");
+        
+        // 传统方式
+        long startTime = System.nanoTime();
+        List<String> traditionalResult = new ArrayList<>();
+        for (String word : words) {
+            if (word.length() > 4) {
+                traditionalResult.add(word.toUpperCase());
+            }
+        }
+        long traditionalTime = System.nanoTime() - startTime;
+        
+        // Stream方式
+        startTime = System.nanoTime();
+        List<String> streamResult = words.stream()
+            .filter(word -> word.length() > 4)
+            .map(String::toUpperCase)
+            .collect(Collectors.toList());
+        long streamTime = System.nanoTime() - startTime;
+        
+        System.out.println("传统方式结果: " + traditionalResult);
+        System.out.println("Stream方式结果: " + streamResult);
+        System.out.println("传统方式耗时: " + traditionalTime + " 纳秒");
+        System.out.println("Stream方式耗时: " + streamTime + " 纳秒");
+    }
+}
 ```
 
-也可以使用Collector.of工厂方法简化创建过程：
+</TabItem>
+</Tabs>
 
-```java
-Collector<Integer, double[], Double> averageCollector = Collector.of(
-    () -> new double[]{0.0, 0.0},          // supplier
-    (acc, i) -> { acc[0] += i; acc[1]++; }, // accumulator
-    (acc1, acc2) -> {                       // combiner
-        acc1[0] += acc2[0];
-        acc1[1] += acc2[1];
-        return acc1;
-    },
-    acc -> acc[1] == 0 ? 0.0 : acc[0] / acc[1] // finisher
-);
+## 2. Stream中间操作详解
+
+中间操作是Stream处理的核心，它们是惰性的，只有在遇到终端操作时才会执行。
+
+```mermaid
+graph TB
+    subgraph "Stream中间操作分类"
+        A["中间操作"] --> B["过滤操作"]
+        A --> C["映射操作"]
+        A --> D["排序操作"]
+        A --> E["去重操作"]
+        A --> F["限制操作"]
+        A --> G["跳过操作"]
+        A --> H["查看操作"]
+        
+        B --> B1["filter"]
+        B --> B2["takeWhile"]
+        B --> B3["dropWhile"]
+        
+        C --> C1["map"]
+        C --> C2["flatMap"]
+        C --> C3["mapToInt/Long/Double"]
+        
+        D --> D1["sorted"]
+        E --> E1["distinct"]
+        F --> F1["limit"]
+        G --> G1["skip"]
+        H --> H1["peek"]
+    end
 ```
 
-收集器特性(Characteristics)影响收集过程的优化：
-- CONCURRENT：可以并行收集到同一个结果容器
-- UNORDERED：收集顺序不重要
-- IDENTITY_FINISH：finisher是恒等函数，可省略
+<Tabs>
+<TabItem value="filter-operations" label="过滤操作">
+
+### 过滤操作详解
+
+```java title="过滤操作完整示例"
+import java.util.*;
+import java.util.stream.*;
+
+public class FilterOperationsDemo {
+    
+    static class Employee {
+        private String name;
+        private String department;
+        private int age;
+        private double salary;
+        private List<String> skills;
+        
+        public Employee(String name, String department, int age, double salary, String... skills) {
+            this.name = name;
+            this.department = department;
+            this.age = age;
+            this.salary = salary;
+            this.skills = Arrays.asList(skills);
+        }
+        
+        // getters
+        public String getName() { return name; }
+        public String getDepartment() { return department; }
+        public int getAge() { return age; }
+        public double getSalary() { return salary; }
+        public List<String> getSkills() { return skills; }
+        
+        @Override
+        public String toString() {
+            return String.format("Employee{name='%s', dept='%s', age=%d, salary=%.0f, skills=%s}",
+                name, department, age, salary, skills);
+        }
+    }
+    
+    public static void main(String[] args) {
+        List<Employee> employees = Arrays.asList(
+            new Employee("张三", "IT", 28, 8000, "Java", "Spring", "MySQL"),
+            new Employee("李四", "IT", 32, 12000, "Python", "Django", "PostgreSQL"),
+            new Employee("王五", "HR", 29, 6000, "招聘", "培训"),
+            new Employee("赵六", "Finance", 35, 9000, "会计", "审计"),
+            new Employee("钱七", "IT", 26, 7000, "JavaScript", "React", "Node.js"),
+            new Employee("孙八", "Marketing", 31, 7500, "市场分析", "广告策划"),
+            new Employee("周九", "IT", 40, 15000, "Java", "架构设计", "团队管理")
+        );
+        
+        System.out.println("=== 原始员工数据 ===");
+        employees.forEach(System.out::println);
+        
+        // 1. 基础过滤 - filter()
+        System.out.println("\n=== IT部门员工 ===");
+        List<Employee> itEmployees = employees.stream()
+            .filter(emp -> "IT".equals(emp.getDepartment()))
+            .collect(Collectors.toList());
+        itEmployees.forEach(System.out::println);
+        
+        // 2. 复合条件过滤
+        System.out.println("\n=== IT部门且薪资>8000的员工 ===");
+        List<Employee> highSalaryIT = employees.stream()
+            .filter(emp -> "IT".equals(emp.getDepartment()))
+            .filter(emp -> emp.getSalary() > 8000)
+            .collect(Collectors.toList());
+        highSalaryIT.forEach(System.out::println);
+        
+        // 3. 使用Predicate组合
+        System.out.println("\n=== 使用Predicate组合条件 ===");
+        Predicate<Employee> isIT = emp -> "IT".equals(emp.getDepartment());
+        Predicate<Employee> isHighSalary = emp -> emp.getSalary() > 10000;
+        Predicate<Employee> isYoung = emp -> emp.getAge() < 30;
+        
+        // 年轻的高薪IT员工
+        List<Employee> youngHighSalaryIT = employees.stream()
+            .filter(isIT.and(isHighSalary).and(isYoung))
+            .collect(Collectors.toList());
+        System.out.println("年轻高薪IT员工: " + youngHighSalaryIT);
+        
+        // IT或高薪员工
+        List<Employee> itOrHighSalary = employees.stream()
+            .filter(isIT.or(isHighSalary))
+            .collect(Collectors.toList());
+        System.out.println("IT或高薪员工数量: " + itOrHighSalary.size());
+        
+        // 4. 基于集合属性过滤
+        System.out.println("\n=== 掌握Java技能的员工 ===");
+        List<Employee> javaEmployees = employees.stream()
+            .filter(emp -> emp.getSkills().contains("Java"))
+            .collect(Collectors.toList());
+        javaEmployees.forEach(System.out::println);
+        
+        // 5. 空值过滤
+        List<String> namesWithNulls = Arrays.asList("Alice", null, "Bob", "", "Charlie", null);
+        System.out.println("\n=== 过滤空值和空字符串 ===");
+        List<String> validNames = namesWithNulls.stream()
+            .filter(Objects::nonNull)
+            .filter(name -> !name.trim().isEmpty())
+            .collect(Collectors.toList());
+        System.out.println("有效姓名: " + validNames);
+        
+        // 6. 范围过滤
+        System.out.println("\n=== 年龄在25-35之间的员工 ===");
+        List<Employee> ageRangeEmployees = employees.stream()
+            .filter(emp -> emp.getAge() >= 25 && emp.getAge() <= 35)
+            .collect(Collectors.toList());
+        ageRangeEmployees.forEach(emp -> 
+            System.out.println(emp.getName() + " - 年龄: " + emp.getAge()));
+        
+        // 7. 自定义复杂过滤逻辑
+        System.out.println("\n=== 资深员工（年龄>30且薪资>平均薪资） ===");
+        double avgSalary = employees.stream()
+            .mapToDouble(Employee::getSalary)
+            .average()
+            .orElse(0.0);
+        
+        System.out.println("平均薪资: " + String.format("%.2f", avgSalary));
+        
+        List<Employee> seniorEmployees = employees.stream()
+            .filter(emp -> emp.getAge() > 30 && emp.getSalary() > avgSalary)
+            .collect(Collectors.toList());
+        seniorEmployees.forEach(System.out::println);
+    }
+}
+```
+
+</TabItem>
+<TabItem value="map-operations" label="映射操作">
+
+### 映射操作详解
+
+```java title="映射操作完整示例"
+import java.util.*;
+import java.util.stream.*;
+
+public class MapOperationsDemo {
+    
+    static class Order {
+        private String orderId;
+        private String customerId;
+        private List<OrderItem> items;
+        private double totalAmount;
+        
+        public Order(String orderId, String customerId, double totalAmount, OrderItem... items) {
+            this.orderId = orderId;
+            this.customerId = customerId;
+            this.totalAmount = totalAmount;
+            this.items = Arrays.asList(items);
+        }
+        
+        // getters
+        public String getOrderId() { return orderId; }
+        public String getCustomerId() { return customerId; }
+        public List<OrderItem> getItems() { return items; }
+        public double getTotalAmount() { return totalAmount; }
+        
+        @Override
+        public String toString() {
+            return String.format("Order{id='%s', customer='%s', total=%.2f, items=%d}",
+                orderId, customerId, totalAmount, items.size());
+        }
+    }
+    
+    static class OrderItem {
+        private String productName;
+        private int quantity;
+        private double price;
+        
+        public OrderItem(String productName, int quantity, double price) {
+            this.productName = productName;
+            this.quantity = quantity;
+            this.price = price;
+        }
+        
+        // getters
+        public String getProductName() { return productName; }
+        public int getQuantity() { return quantity; }
+        public double getPrice() { return price; }
+        
+        @Override
+        public String toString() {
+            return String.format("OrderItem{product='%s', qty=%d, price=%.2f}",
+                productName, quantity, price);
+        }
+    }
+    
+    public static void main(String[] args) {
+        // 创建测试数据
+        List<Order> orders = Arrays.asList(
+            new Order("ORD001", "CUST001", 299.99,
+                new OrderItem("笔记本电脑", 1, 199.99),
+                new OrderItem("鼠标", 2, 50.00)),
+            new Order("ORD002", "CUST002", 89.98,
+                new OrderItem("键盘", 1, 79.99),
+                new OrderItem("鼠标垫", 1, 9.99)),
+            new Order("ORD003", "CUST001", 1299.99,
+                new OrderItem("显示器", 1, 899.99),
+                new OrderItem("音响", 1, 400.00))
+        );
+        
+        System.out.println("=== 原始订单数据 ===");
+        orders.forEach(System.out::println);
+        
+        // 1. 基础映射 - map()
+        System.out.println("\n=== 提取订单ID ===");
+        List<String> orderIds = orders.stream()
+            .map(Order::getOrderId)
+            .collect(Collectors.toList());
+        System.out.println("订单ID列表: " + orderIds);
+        
+        // 2. 映射到不同类型
+        System.out.println("\n=== 订单总金额列表 ===");
+        List<Double> totalAmounts = orders.stream()
+            .map(Order::getTotalAmount)
+            .collect(Collectors.toList());
+        System.out.println("总金额列表: " + totalAmounts);
+        
+        // 3. 复杂对象映射
+        System.out.println("\n=== 创建订单摘要 ===");
+        List<String> orderSummaries = orders.stream()
+            .map(order -> String.format("订单%s: 客户%s, 金额%.2f, 商品%d件",
+                order.getOrderId(),
+                order.getCustomerId(),
+                order.getTotalAmount(),
+                order.getItems().size()))
+            .collect(Collectors.toList());
+        orderSummaries.forEach(System.out::println);
+        
+        // 4. flatMap - 扁平化操作
+        System.out.println("\n=== 所有订单项（使用flatMap） ===");
+        List<OrderItem> allItems = orders.stream()
+            .flatMap(order -> order.getItems().stream())
+            .collect(Collectors.toList());
+        allItems.forEach(System.out::println);
+        
+        // 5. flatMap复杂示例 - 提取所有产品名称
+        System.out.println("\n=== 所有产品名称（去重） ===");
+        List<String> allProductNames = orders.stream()
+            .flatMap(order -> order.getItems().stream())
+            .map(OrderItem::getProductName)
+            .distinct()
+            .collect(Collectors.toList());
+        System.out.println("所有产品: " + allProductNames);
+        
+        // 6. mapToInt/mapToDouble - 映射到基本类型
+        System.out.println("\n=== 数值统计 ===");
+        IntSummaryStatistics itemStats = orders.stream()
+            .flatMap(order -> order.getItems().stream())
+            .mapToInt(OrderItem::getQuantity)
+            .summaryStatistics();
+        
+        System.out.println("商品数量统计: " + itemStats);
+        System.out.println("总商品数量: " + itemStats.getSum());
+        System.out.println("平均数量: " + itemStats.getAverage());
+        
+        DoubleSummaryStatistics priceStats = orders.stream()
+            .mapToDouble(Order::getTotalAmount)
+            .summaryStatistics();
+        
+        System.out.println("订单金额统计: " + priceStats);
+        System.out.println("总金额: " + String.format("%.2f", priceStats.getSum()));
+        System.out.println("平均金额: " + String.format("%.2f", priceStats.getAverage()));
+        
+        // 7. 链式映射操作
+        System.out.println("\n=== 链式映射：客户订单统计 ===");
+        Map<String, Double> customerTotals = orders.stream()
+            .collect(Collectors.groupingBy(
+                Order::getCustomerId,
+                Collectors.summingDouble(Order::getTotalAmount)
+            ));
+        
+        List<String> customerSummaries = customerTotals.entrySet().stream()
+            .map(entry -> String.format("客户%s: 总消费%.2f", entry.getKey(), entry.getValue()))
+            .sorted()
+            .collect(Collectors.toList());
+        
+        customerSummaries.forEach(System.out::println);
+        
+        // 8. 条件映射
+        System.out.println("\n=== 条件映射：订单等级 ===");
+        List<String> orderLevels = orders.stream()
+            .map(order -> {
+                String level;
+                if (order.getTotalAmount() > 1000) {
+                    level = "VIP";
+                } else if (order.getTotalAmount() > 200) {
+                    level = "高级";
+                } else {
+                    level = "普通";
+                }
+                return order.getOrderId() + " - " + level;
+            })
+            .collect(Collectors.toList());
+        
+        orderLevels.forEach(System.out::println);
+        
+        // 9. 映射到Optional
+        System.out.println("\n=== 安全映射示例 ===");
+        List<String> safeCustomerIds = orders.stream()
+            .map(order -> Optional.ofNullable(order.getCustomerId())
+                .filter(id -> !id.isEmpty())
+                .orElse("UNKNOWN"))
+            .collect(Collectors.toList());
+        
+        System.out.println("安全的客户ID: " + safeCustomerIds);
+        
+        // 10. 自定义映射函数
+        System.out.println("\n=== 自定义映射函数 ===");
+        Function<Order, String> orderFormatter = order -> 
+            String.format("[%s] %s (%.2f元)", 
+                order.getOrderId(), 
+                order.getCustomerId(), 
+                order.getTotalAmount());
+        
+        List<String> formattedOrders = orders.stream()
+            .map(orderFormatter)
+            .collect(Collectors.toList());
+        
+        formattedOrders.forEach(System.out::println);
+    }
+}
+```
+
+</TabItem>
+<TabItem value="sort-distinct" label="排序去重">
+
+### 排序和去重操作
+
+```java title="排序去重操作完整示例"
+import java.util.*;
+import java.util.stream.*;
+
+public class SortDistinctDemo {
+    
+    static class Student {
+        private String name;
+        private int age;
+        private String major;
+        private double gpa;
+        private List<String> courses;
+        
+        public Student(String name, int age, String major, double gpa, String... courses) {
+            this.name = name;
+            this.age = age;
+            this.major = major;
+            this.gpa = gpa;
+            this.courses = Arrays.asList(courses);
+        }
+        
+        // getters
+        public String getName() { return name; }
+        public int getAge() { return age; }
+        public String getMajor() { return major; }
+        public double getGpa() { return gpa; }
+        public List<String> getCourses() { return courses; }
+        
+        @Override
+        public String toString() {
+            return String.format("Student{name='%s', age=%d, major='%s', gpa=%.2f}",
+                name, age, major, gpa);
+        }
+        
+        @Override
+        public boolean equals(Object obj) {
+            if (this == obj) return true;
+            if (obj == null || getClass() != obj.getClass()) return false;
+            Student student = (Student) obj;
+            return Objects.equals(name, student.name) && Objects.equals(major, student.major);
+        }
+        
+        @Override
+        public int hashCode() {
+            return Objects.hash(name, major);
+        }
+    }
+    
+    public static void main(String[] args) {
+        List<Student> students = Arrays.asList(
+            new Student("张三", 20, "计算机科学", 3.8, "数据结构", "算法", "数据库"),
+            new Student("李四", 22, "软件工程", 3.6, "软件架构", "设计模式"),
+            new Student("王五", 19, "计算机科学", 3.9, "操作系统", "网络编程"),
+            new Student("赵六", 21, "信息管理", 3.4, "信息系统", "数据分析"),
+            new Student("钱七", 20, "软件工程", 3.7, "项目管理", "软件测试"),
+            new Student("张三", 20, "计算机科学", 3.8, "数据结构", "算法"), // 重复数据
+            new Student("孙八", 23, "计算机科学", 3.5, "人工智能", "机器学习"),
+            new Student("周九", 22, "信息管理", 3.2, "数据挖掘", "商业智能")
+        );
+        
+        System.out.println("=== 原始学生数据 ===");
+        students.forEach(System.out::println);
+        
+        // 1. 基础排序 - 按年龄排序
+        System.out.println("\n=== 按年龄升序排序 ===");
+        List<Student> sortedByAge = students.stream()
+            .sorted(Comparator.comparing(Student::getAge))
+            .collect(Collectors.toList());
+        sortedByAge.forEach(System.out::println);
+        
+        // 2. 降序排序 - 按GPA降序
+        System.out.println("\n=== 按GPA降序排序 ===");
+        List<Student> sortedByGpaDesc = students.stream()
+            .sorted(Comparator.comparing(Student::getGpa).reversed())
+            .collect(Collectors.toList());
+        sortedByGpaDesc.forEach(System.out::println);
+        
+        // 3. 多字段排序
+        System.out.println("\n=== 多字段排序：专业升序，GPA降序 ===");
+        List<Student> multiFieldSorted = students.stream()
+            .sorted(Comparator.comparing(Student::getMajor)
+                .thenComparing(Student::getGpa, Comparator.reverseOrder()))
+            .collect(Collectors.toList());
+        multiFieldSorted.forEach(System.out::println);
+        
+        // 4. 自定义排序逻辑
+        System.out.println("\n=== 自定义排序：年龄分组排序 ===");
+        List<Student> customSorted = students.stream()
+            .sorted((s1, s2) -> {
+                // 先按年龄分组：20岁以下、20-22岁、22岁以上
+                int ageGroup1 = s1.getAge() < 20 ? 0 : (s1.getAge() <= 22 ? 1 : 2);
+                int ageGroup2 = s2.getAge() < 20 ? 0 : (s2.getAge() <= 22 ? 1 : 2);
+                
+                if (ageGroup1 != ageGroup2) {
+                    return Integer.compare(ageGroup1, ageGroup2);
+                }
+                
+                // 同一年龄组内按GPA降序
+                return Double.compare(s2.getGpa(), s1.getGpa());
+            })
+            .collect(Collectors.toList());
+        
+        customSorted.forEach(student -> 
+            System.out.println(String.format("年龄组: %s, %s", 
+                getAgeGroup(student.getAge()), student)));
+        
+        // 5. 去重操作 - distinct()
+        System.out.println("\n=== 去重操作 ===");
+        List<Student> distinctStudents = students.stream()
+            .distinct()
+            .collect(Collectors.toList());
+        System.out.println("去重前数量: " + students.size());
+        System.out.println("去重后数量: " + distinctStudents.size());
+        distinctStudents.forEach(System.out::println);
+        
+        // 6. 基于特定字段去重
+        System.out.println("\n=== 基于专业去重（保留GPA最高的） ===");
+        Map<String, Student> bestByMajor = students.stream()
+            .collect(Collectors.toMap(
+                Student::getMajor,
+                student -> student,
+                (existing, replacement) -> 
+                    existing.getGpa() > replacement.getGpa() ? existing : replacement
+            ));
+        
+        bestByMajor.values().forEach(System.out::println);
+        
+        // 7. 复杂去重：基于多个字段
+        System.out.println("\n=== 基于姓名和年龄去重 ===");
+        List<Student> distinctByNameAge = students.stream()
+            .collect(Collectors.toMap(
+                student -> student.getName() + "-" + student.getAge(),
+                student -> student,
+                (existing, replacement) -> existing
+            ))
+            .values()
+            .stream()
+            .sorted(Comparator.comparing(Student::getName))
+            .collect(Collectors.toList());
+        
+        distinctByNameAge.forEach(System.out::println);
+        
+        // 8. 排序 + 去重组合
+        System.out.println("\n=== 排序后去重：按专业分组，每组取GPA最高的2名 ===");
+        Map<String, List<Student>> topStudentsByMajor = students.stream()
+            .distinct()
+            .sorted(Comparator.comparing(Student::getGpa).reversed())
+            .collect(Collectors.groupingBy(Student::getMajor))
+            .entrySet().stream()
+            .collect(Collectors.toMap(
+                Map.Entry::getKey,
+                entry -> entry.getValue().stream().limit(2).collect(Collectors.toList())
+            ));
+        
+        topStudentsByMajor.forEach((major, topStudents) -> {
+            System.out.println(major + "专业前2名:");
+            topStudents.forEach(student -> System.out.println("  " + student));
+        });
+        
+        // 9. 字符串去重和排序
+        System.out.println("\n=== 所有课程去重排序 ===");
+        List<String> allCourses = students.stream()
+            .flatMap(student -> student.getCourses().stream())
+            .distinct()
+            .sorted()
+            .collect(Collectors.toList());
+        
+        System.out.println("所有课程: " + allCourses);
+        
+        // 10. 性能对比：排序 vs 去重顺序
+        System.out.println("\n=== 性能测试：先排序后去重 vs 先去重后排序 ===");
+        
+        // 创建大量重复数据进行测试
+        List<Student> largeDataset = new ArrayList<>();
+        for (int i = 0; i < 1000; i++) {
+            largeDataset.addAll(students);
+        }
+        
+        // 先排序后去重
+        long startTime = System.nanoTime();
+        List<Student> sortThenDistinct = largeDataset.stream()
+            .sorted(Comparator.comparing(Student::getGpa))
+            .distinct()
+            .collect(Collectors.toList());
+        long sortFirstTime = System.nanoTime() - startTime;
+        
+        // 先去重后排序
+        startTime = System.nanoTime();
+        List<Student> distinctThenSort = largeDataset.stream()
+            .distinct()
+            .sorted(Comparator.comparing(Student::getGpa))
+            .collect(Collectors.toList());
+        long distinctFirstTime = System.nanoTime() - startTime;
+        
+        System.out.println("数据量: " + largeDataset.size());
+        System.out.println("先排序后去重耗时: " + sortFirstTime / 1_000_000 + " ms");
+        System.out.println("先去重后排序耗时: " + distinctFirstTime / 1_000_000 + " ms");
+        System.out.println("结果数量相同: " + (sortThenDistinct.size() == distinctThenSort.size()));
+    }
+    
+    private static String getAgeGroup(int age) {
+        if (age < 20) return "19岁以下";
+        if (age <= 22) return "20-22岁";
+        return "22岁以上";
+    }
+}
+```
+
+</TabItem>
+</Tabs>
+
+## 3. Stream终端操作详解
+
+终端操作会触发流的处理并产生结果。一旦执行了终端操作，流就被消费了，不能再次使用。
+
+```mermaid
+flowchart TB
+    A["Stream终端操作"] --> B["收集操作"]
+    A --> C["归约操作"]
+    A --> D["查找操作"]
+    A --> E["匹配操作"]
+    A --> F["统计操作"]
+    A --> G["遍历操作"]
+    
+    B --> B1["collect"]
+    B --> B2["toArray"]
+    
+    C --> C1["reduce"]
+    C --> C2["min/max"]
+    
+    D --> D1["findFirst"]
+    D --> D2["findAny"]
+    
+    E --> E1["allMatch"]
+    E --> E2["anyMatch"]
+    E --> E3["noneMatch"]
+    
+    F --> F1["count"]
+    F --> F2["summaryStatistics"]
+    
+    G --> G1["forEach"]
+    G --> G2["forEachOrdered"]
+```
+ 4. 并行流与性能优化
+
+并行流是Stream API的重要特性，可以充分利用多核处理器的优势。
+
+```mermaid
+graph TB
+    subgraph "并行流处理流程"
+        A["数据源"] --> B["Fork/Join框架"]
+        B --> C["任务分割"]
+        C --> D["并行处理"]
+        D --> E["结果合并"]
+        E --> F["最终结果"]
+        
+        C --> C1["线程1"]
+        C --> C2["线程2"]
+        C --> C3["线程N"]
+        
+        C1 --> D
+        C2 --> D
+        C3 --> D
+    end
+```
+
+:::warning 并行流使用注意事项
+1. **数据量要足够大**：小数据集使用并行流可能反而降低性能
+2. **避免有状态操作**：如sorted、distinct等操作会影响并行性能
+3. **线程安全**：确保Lambda表达式中的操作是线程安全的
+4. **I/O密集型任务**：不适合使用并行流，应该使用异步处理
+:::
+
+<Tabs>
+<TabItem value="parallel-basics" label="并行流基础">
+
+### 并行流基础操作
+
+```java title="并行流基础示例"
+import java.util.*;
+import java.util.concurrent.*;
+import java.util.stream.*;
+
+public class ParallelStreamBasics {
+    
+    public static void main(String[] args) {
+        // 创建大量测试数据
+        List<Integer> numbers = IntStream.rangeClosed(1, 1_000_000)
+            .boxed()
+            .collect(Collectors.toList());
+        
+        System.out.println("数据量: " + numbers.size());
+        System.out.println("可用处理器数量: " + Runtime.getRuntime().availableProcessors());
+        
+        // 1. 串行流 vs 并行流性能对比
+        System.out.println("\n=== 性能对比：计算平方和 ===");
+        
+        // 串行流
+        long startTime = System.currentTimeMillis();
+        long serialSum = numbers.stream()
+            .mapToLong(n -> (long) n * n)
+            .sum();
+        long serialTime = System.currentTimeMillis() - startTime;
+        
+        // 并行流
+        startTime = System.currentTimeMillis();
+        long parallelSum = numbers.parallelStream()
+            .mapToLong(n -> (long) n * n)
+            .sum();
+        long parallelTime = System.currentTimeMillis() - startTime;
+        
+        System.out.println("串行结果: " + serialSum + ", 耗时: " + serialTime + "ms");
+        System.out.println("并行结果: " + parallelSum + ", 耗时: " + parallelTime + "ms");
+        System.out.println("性能提升: " + String.format("%.2fx", (double) serialTime / parallelTime));
+        
+        // 2. 并行流创建方式
+        System.out.println("\n=== 并行流创建方式 ===");
+        
+        // 方式1: 从集合创建并行流
+        Stream<Integer> parallelStream1 = numbers.parallelStream();
+        
+        // 方式2: 将串行流转换为并行流
+        Stream<Integer> parallelStream2 = numbers.stream().parallel();
+        
+        // 方式3: 直接创建并行流
+        IntStream parallelIntStream = IntStream.range(1, 1000).parallel();
+        
+        System.out.println("并行流1是否并行: " + parallelStream1.isParallel());
+        System.out.println("并行流2是否并行: " + parallelStream2.isParallel());
+        System.out.println("并行IntStream是否并行: " + parallelIntStream.isParallel());
+        
+        // 3. 并行流转串行流
+        Stream<Integer> sequentialStream = numbers.parallelStream().sequential();
+        System.out.println("转换后是否并行: " + sequentialStream.isParallel());
+        
+        // 4. 复杂计算的并行处理
+        System.out.println("\n=== 复杂计算并行处理 ===");
+        
+        // 模拟复杂计算函数
+        Function<Integer, Double> complexCalculation = n -> {
+            double result = 0;
+            for (int i = 1; i <= 1000; i++) {
+                result += Math.sin(n * i) * Math.cos(n * i);
+            }
+            return result;
+        };
+        
+        List<Integer> smallDataset = IntStream.rangeClosed(1, 1000)
+            .boxed()
+            .collect(Collectors.toList());
+        
+        // 串行复杂计算
+        startTime = System.currentTimeMillis();
+        double serialComplexSum = smallDataset.stream()
+            .mapToDouble(complexCalculation::apply)
+            .sum();
+        long serialComplexTime = System.currentTimeMillis() - startTime;
+        
+        // 并行复杂计算
+        startTime = System.currentTimeMillis();
+        double parallelComplexSum = smallDataset.parallelStream()
+            .mapToDouble(complexCalculation::apply)
+            .sum();
+        long parallelComplexTime = System.currentTimeMillis() - startTime;
+        
+        System.out.println("串行复杂计算: " + String.format("%.2f", serialComplexSum) + 
+                          ", 耗时: " + serialComplexTime + "ms");
+        System.out.println("并行复杂计算: " + String.format("%.2f", parallelComplexSum) + 
+                          ", 耗时: " + parallelComplexTime + "ms");
+        System.out.println("复杂计算性能提升: " + 
+                          String.format("%.2fx", (double) serialComplexTime / parallelComplexTime));
+    }
+}
+```
+
+</TabItem>
+<TabItem value="parallel-performance" label="性能优化">
+
+### 并行流性能优化
+
+```java title="并行流性能优化实践"
+import java.util.*;
+import java.util.concurrent.*;
+import java.util.stream.*;
+
+public class ParallelStreamOptimization {
+    
+    // 自定义ForkJoinPool
+    private static final ForkJoinPool customThreadPool = new ForkJoinPool(8);
+    
+    public static void main(String[] args) {
+        // 1. 数据量对并行性能的影响
+        System.out.println("=== 数据量对并行性能的影响 ===");
+        testDataSizeImpact();
+        
+        // 2. 操作类型对并行性能的影响
+        System.out.println("\n=== 操作类型对并行性能的影响 ===");
+        testOperationTypeImpact();
+        
+        // 3. 自定义线程池
+        System.out.println("\n=== 自定义线程池 ===");
+        testCustomThreadPool();
+        
+        // 4. 并行流的陷阱
+        System.out.println("\n=== 并行流的陷阱 ===");
+        demonstrateParallelPitfalls();
+        
+        // 清理资源
+        customThreadPool.shutdown();
+    }
+    
+    private static void testDataSizeImpact() {
+        int[] dataSizes = {1_000, 10_000, 100_000, 1_000_000};
+        
+        for (int size : dataSizes) {
+            List<Integer> data = IntStream.rangeClosed(1, size)
+                .boxed()
+                .collect(Collectors.toList());
+            
+            // 串行处理
+            long startTime = System.nanoTime();
+            long serialSum = data.stream()
+                .mapToLong(n -> (long) n * n)
+                .sum();
+            long serialTime = System.nanoTime() - startTime;
+            
+            // 并行处理
+            startTime = System.nanoTime();
+            long parallelSum = data.parallelStream()
+                .mapToLong(n -> (long) n * n)
+                .sum();
+            long parallelTime = System.nanoTime() - startTime;
+            
+            double speedup = (double) serialTime / parallelTime;
+            
+            System.out.printf("数据量: %,d, 串行: %dms, 并行: %dms, 加速比: %.2fx%n",
+                size, serialTime / 1_000_000, parallelTime / 1_000_000, speedup);
+        }
+    }
+    
+    private static void testOperationTypeImpact() {
+        List<Integer> data = IntStream.rangeClosed(1, 100_000)
+            .boxed()
+            .collect(Collectors.toList());
+        
+        // 测试不同类型的操作
+        Map<String, Runnable> operations = new LinkedHashMap<>();
+        
+        // CPU密集型操作
+        operations.put("CPU密集型", () -> {
+            long serialTime = measureTime(() -> 
+                data.stream().mapToDouble(n -> Math.sin(n) * Math.cos(n)).sum());
+            long parallelTime = measureTime(() -> 
+                data.parallelStream().mapToDouble(n -> Math.sin(n) * Math.cos(n)).sum());
+            
+            System.out.printf("  串行: %dms, 并行: %dms, 加速比: %.2fx%n",
+                serialTime, parallelTime, (double) serialTime / parallelTime);
+        });
+        
+        // 简单操作
+        operations.put("简单操作", () -> {
+            long serialTime = measureTime(() -> 
+                data.stream().mapToLong(n -> n * 2L).sum());
+            long parallelTime = measureTime(() -> 
+                data.parallelStream().mapToLong(n -> n * 2L).sum());
+            
+            System.out.printf("  串行: %dms, 并行: %dms, 加速比: %.2fx%n",
+                serialTime, parallelTime, (double) serialTime / parallelTime);
+        });
+        
+        // 有状态操作
+        operations.put("有状态操作", () -> {
+            long serialTime = measureTime(() -> 
+                data.stream().sorted().limit(1000).count());
+            long parallelTime = measureTime(() -> 
+                data.parallelStream().sorted().limit(1000).count());
+            
+            System.out.printf("  串行: %dms, 并行: %dms, 加速比: %.2fx%n",
+                serialTime, parallelTime, (double) serialTime / parallelTime);
+        });
+        
+        operations.forEach((name, operation) -> {
+            System.out.println(name + ":");
+            operation.run();
+        });
+    }
+    
+    private static void testCustomThreadPool() {
+        List<Integer> data = IntStream.rangeClosed(1, 100_000)
+            .boxed()
+            .collect(Collectors.toList());
+        
+        // 默认ForkJoinPool
+        long defaultTime = measureTime(() -> 
+            data.parallelStream()
+                .mapToDouble(n -> Math.sin(n) * Math.cos(n))
+                .sum());
+        
+        // 自定义ForkJoinPool
+        long customTime = measureTime(() -> {
+            try {
+                return customThreadPool.submit(() ->
+                    data.parallelStream()
+                        .mapToDouble(n -> Math.sin(n) * Math.cos(n))
+                        .sum()
+                ).get();
+            } catch (Exception e) {
+                throw new RuntimeException(e);
+            }
+        });
+        
+        System.out.println("默认线程池 (并行度: " + 
+            ForkJoinPool.commonPool().getParallelism() + "): " + defaultTime + "ms");
+        System.out.println("自定义线程池 (并行度: " + 
+            customThreadPool.getParallelism() + "): " + customTime + "ms");
+    }
+    
+    private static void demonstrateParallelPitfalls() {
+        List<Integer> data = IntStream.rangeClosed(1, 10_000)
+            .boxed()
+            .collect(Collectors.toList());
+        
+        // 陷阱1: 线程安全问题
+        System.out.println("陷阱1: 线程安全问题");
+        List<Integer> unsafeList = new ArrayList<>(); // 非线程安全
+        List<Integer> safeList = Collections.synchronizedList(new ArrayList<>()); // 线程安全
+        
+        // 不安全的并行操作
+        data.parallelStream()
+            .filter(n -> n % 2 == 0)
+            .forEach(unsafeList::add); // 可能导致数据丢失或异常
+        
+        // 安全的并行操作
+        data.parallelStream()
+            .filter(n -> n % 2 == 0)
+            .forEach(safeList::add);
+        
+        System.out.println("不安全列表大小: " + unsafeList.size() + " (可能不正确)");
+        System.out.println("安全列表大小: " + safeList.size());
+        System.out.println("预期大小: " + data.stream().mapToInt(n -> n % 2 == 0 ? 1 : 0).sum());
+        
+        // 陷阱2: 装箱/拆箱开销
+        System.out.println("\n陷阱2: 装箱/拆箱开销");
+        
+        // 使用包装类型（有装箱开销）
+        long boxedTime = measureTime(() -> 
+            data.parallelStream()
+                .map(n -> n * n)
+                .reduce(0, Integer::sum));
+        
+        // 使用基本类型（无装箱开销）
+        long primitiveTime = measureTime(() -> 
+            data.parallelStream()
+                .mapToInt(n -> n * n)
+                .sum());
+        
+        System.out.println("包装类型耗时: " + boxedTime + "ms");
+        System.out.println("基本类型耗时: " + primitiveTime + "ms");
+        System.out.println("性能差异: " + String.format("%.2fx", (double) boxedTime / primitiveTime));
+        
+        // 陷阱3: 错误的归约操作
+        System.out.println("\n陷阱3: 错误的归约操作");
+        
+        // 错误的归约（非结合律）
+        String wrongResult = data.parallelStream()
+            .limit(10)
+            .map(String::valueOf)
+            .reduce("", (a, b) -> a + "-" + b); // 结果不确定
+        
+        // 正确的归约
+        String correctResult = data.parallelStream()
+            .limit(10)
+            .map(String::valueOf)
+            .collect(Collectors.joining("-"));
+        
+        System.out.println("错误归约结果: " + wrongResult);
+        System.out.println("正确归约结果: " + correctResult);
+    }
+    
+    private static long measureTime(Runnable operation) {
+        long startTime = System.currentTimeMillis();
+        operation.run();
+        return System.currentTimeMillis() - startTime;
+    }
+    
+    private static long measureTime(Supplier<Object> operation) {
+        long startTime = System.currentTimeMillis();
+        operation.get();
+        return System.currentTimeMillis() - startTime;
+    }
+}
+```
+
+</TabItem>
+</Tabs>
+
+## 5. Stream最佳实践与设计模式
+
+掌握Stream的最佳实践和常见设计模式，能够写出更优雅、高效的代码。
+
+:::tip 最佳实践原则
+1. **优先使用Stream API**：相比传统循环，Stream更简洁易读
+2. **合理选择并行流**：只在数据量大且CPU密集时使用
+3. **避免副作用**：Lambda表达式应该是纯函数
+4. **使用方法引用**：提高代码可读性
+5. **链式调用要适度**：过长的链式调用影响可读性
+:::
+
+通过掌握Stream API的这些核心概念和最佳实践，你可以编写出更加简洁、高效、易维护的Java代码，充分发挥函数式编程的优势。

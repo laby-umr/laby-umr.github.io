@@ -1,21 +1,978 @@
 ---
-sidebar_position: 1
-title: "创建型模式"
-description: "创建型设计模式详解"
+sidebar_position: 2
+title: 创建型模式详解
+description: 深入理解单例、工厂、建造者、原型等创建型模式的原理与应用
 authors: [Laby]
 last_update:
   date: 2025-08-07
   author: Laby
 ---
 
-# 创建型模式
+# 创建型模式详解
 
-## 单例模式
+创建型模式关注对象的创建过程，将对象的创建与使用分离，提供灵活的对象创建机制。本章将深入探讨五种创建型模式的原理、实现方式和实际应用。
 
-## 工厂模式
+:::tip 学习目标
+通过本章学习，你将掌握：
+- 五种创建型模式的核心原理和实现方式
+- 各种模式的适用场景和选择标准
+- 线程安全和性能优化考虑
+- 在实际项目中的应用实践
+:::
 
-## 建造者模式
+## 1. 单例模式（Singleton）
 
-## 原型模式
+### 1.1 模式定义
 
-## 面试题
+单例模式确保一个类只有一个实例，并提供一个全局访问点。
+
+### 1.2 实现方式
+
+#### 饿汉式单例
+```java title="饿汉式单例"
+public class EagerSingleton {
+    // 类加载时就初始化，线程安全
+    private static final EagerSingleton instance = new EagerSingleton();
+    
+    // 私有构造函数
+    private EagerSingleton() {
+        // 防止反射攻击
+        if (instance != null) {
+            throw new RuntimeException("单例模式不允许创建多个实例");
+        }
+    }
+    
+    // 全局访问点
+    public static EagerSingleton getInstance() {
+        return instance;
+    }
+    
+    // 业务方法
+    public void doSomething() {
+        System.out.println("饿汉式单例执行操作");
+    }
+}
+```
+
+**特点**：
+- 线程安全，无需同步
+- 类加载时就初始化，可能造成不必要的内存占用
+- 无法处理异常
+
+#### 懒汉式单例
+```java title="懒汉式单例"
+public class LazySingleton {
+    // 延迟初始化
+    private static volatile LazySingleton instance;
+    
+    private LazySingleton() {}
+    
+    // 双重检查锁定（Double-Checked Locking）
+    public static LazySingleton getInstance() {
+        if (instance == null) {
+            synchronized (LazySingleton.class) {
+                if (instance == null) {
+                    instance = new LazySingleton();
+                }
+            }
+        }
+        return instance;
+    }
+    
+    public void doSomething() {
+        System.out.println("懒汉式单例执行操作");
+    }
+}
+```
+
+**特点**：
+- 延迟加载，节省内存
+- 双重检查锁定保证线程安全
+- 使用volatile防止指令重排
+
+#### 静态内部类单例
+```java title="静态内部类单例"
+public class StaticInnerSingleton {
+    private StaticInnerSingleton() {}
+    
+    // 静态内部类
+    private static class SingletonHolder {
+        private static final StaticInnerSingleton INSTANCE = new StaticInnerSingleton();
+    }
+    
+    public static StaticInnerSingleton getInstance() {
+        return SingletonHolder.INSTANCE;
+    }
+    
+    public void doSomething() {
+        System.out.println("静态内部类单例执行操作");
+    }
+}
+```
+
+**特点**：
+- 延迟加载，线程安全
+- 利用类加载机制保证线程安全
+- 推荐使用的方式
+
+#### 枚举单例（推荐）
+```java title="枚举单例"
+public enum EnumSingleton {
+    INSTANCE;
+    
+    public void doSomething() {
+        System.out.println("枚举单例执行操作");
+    }
+    
+    // 可以添加其他方法
+    public void anotherMethod() {
+        System.out.println("枚举单例的其他方法");
+    }
+}
+```
+
+**特点**：
+- 自动线程安全
+- 自动序列化安全
+- 防止反射攻击
+- 代码最简洁
+
+### 1.3 应用场景
+
+```java title="单例模式应用示例"
+// 配置管理器
+public class ConfigurationManager {
+    private static volatile ConfigurationManager instance;
+    private Properties properties;
+    
+    private ConfigurationManager() {
+        loadConfiguration();
+    }
+    
+    public static ConfigurationManager getInstance() {
+        if (instance == null) {
+            synchronized (ConfigurationManager.class) {
+                if (instance == null) {
+                    instance = new ConfigurationManager();
+                }
+            }
+        }
+        return instance;
+    }
+    
+    private void loadConfiguration() {
+        properties = new Properties();
+        try (InputStream input = getClass().getClassLoader()
+                .getResourceAsStream("config.properties")) {
+            properties.load(input);
+        } catch (IOException e) {
+            throw new RuntimeException("Failed to load configuration", e);
+        }
+    }
+    
+    public String getProperty(String key) {
+        return properties.getProperty(key);
+    }
+}
+
+// 数据库连接池
+public class DatabaseConnectionPool {
+    private static DatabaseConnectionPool instance;
+    private final Queue<Connection> connectionPool;
+    private final int maxConnections;
+    
+    private DatabaseConnectionPool(int maxConnections) {
+        this.maxConnections = maxConnections;
+        this.connectionPool = new LinkedList<>();
+        initializePool();
+    }
+    
+    public static synchronized DatabaseConnectionPool getInstance() {
+        if (instance == null) {
+            instance = new DatabaseConnectionPool(10);
+        }
+        return instance;
+    }
+    
+    private void initializePool() {
+        for (int i = 0; i < maxConnections; i++) {
+            connectionPool.offer(createConnection());
+        }
+    }
+    
+    private Connection createConnection() {
+        // 创建数据库连接的逻辑
+        return null; // 简化示例
+    }
+    
+    public Connection getConnection() {
+        return connectionPool.poll();
+    }
+    
+    public void releaseConnection(Connection connection) {
+        if (connectionPool.size() < maxConnections) {
+            connectionPool.offer(connection);
+        }
+    }
+}
+```
+
+## 2. 工厂方法模式（Factory Method）
+
+### 2.1 模式定义
+
+定义一个创建对象的接口，让子类决定实例化哪一个类。
+
+### 2.2 实现示例
+
+#### 基本工厂方法模式
+```java title="工厂方法模式"
+// 抽象产品
+public interface Product {
+    void operation();
+}
+
+// 具体产品A
+public class ConcreteProductA implements Product {
+    @Override
+    public void operation() {
+        System.out.println("产品A的操作");
+    }
+}
+
+// 具体产品B
+public class ConcreteProductB implements Product {
+    @Override
+    public void operation() {
+        System.out.println("产品B的操作");
+    }
+}
+
+// 抽象工厂
+public abstract class Creator {
+    // 工厂方法
+    public abstract Product createProduct();
+    
+    // 模板方法
+    public void someOperation() {
+        Product product = createProduct();
+        product.operation();
+    }
+}
+
+// 具体工厂A
+public class ConcreteCreatorA extends Creator {
+    @Override
+    public Product createProduct() {
+        return new ConcreteProductA();
+    }
+}
+
+// 具体工厂B
+public class ConcreteCreatorB extends Creator {
+    @Override
+    public Product createProduct() {
+        return new ConcreteProductB();
+    }
+}
+```
+
+#### 参数化工厂方法
+```java title="参数化工厂方法"
+public abstract class Creator {
+    public Product createProduct(String type) {
+        Product product = createProductImpl(type);
+        // 可以在这里添加通用的初始化逻辑
+        return product;
+    }
+    
+    protected abstract Product createProductImpl(String type);
+}
+
+public class ConcreteCreator extends Creator {
+    @Override
+    protected Product createProductImpl(String type) {
+        switch (type) {
+            case "A":
+                return new ConcreteProductA();
+            case "B":
+                return new ConcreteProductB();
+            default:
+                throw new IllegalArgumentException("Unknown product type: " + type);
+        }
+    }
+}
+```
+
+### 2.3 应用场景
+
+```java title="工厂方法应用示例"
+// 数据库连接工厂
+public interface DatabaseConnection {
+    void connect();
+    void disconnect();
+}
+
+public class MySQLConnection implements DatabaseConnection {
+    @Override
+    public void connect() {
+        System.out.println("连接MySQL数据库");
+    }
+    
+    @Override
+    public void disconnect() {
+        System.out.println("断开MySQL数据库连接");
+    }
+}
+
+public class PostgreSQLConnection implements DatabaseConnection {
+    @Override
+    public void connect() {
+        System.out.println("连接PostgreSQL数据库");
+    }
+    
+    @Override
+    public void disconnect() {
+        System.out.println("断开PostgreSQL数据库连接");
+    }
+}
+
+public abstract class DatabaseConnectionFactory {
+    public abstract DatabaseConnection createConnection();
+    
+    public DatabaseConnection getConnection() {
+        DatabaseConnection connection = createConnection();
+        // 可以在这里添加连接池管理逻辑
+        return connection;
+    }
+}
+
+public class MySQLConnectionFactory extends DatabaseConnectionFactory {
+    @Override
+    public DatabaseConnection createConnection() {
+        return new MySQLConnection();
+    }
+}
+
+public class PostgreSQLConnectionFactory extends DatabaseConnectionFactory {
+    @Override
+    public DatabaseConnection createConnection() {
+        return new PostgreSQLConnection();
+    }
+}
+```
+
+## 3. 抽象工厂模式（Abstract Factory）
+
+### 3.1 模式定义
+
+提供一个创建一系列相关或相互依赖对象的接口，而无需指定它们的具体类。
+
+### 3.2 实现示例
+
+```java title="抽象工厂模式"
+// 抽象产品A
+public interface AbstractProductA {
+    void operationA();
+}
+
+// 抽象产品B
+public interface AbstractProductB {
+    void operationB();
+}
+
+// 具体产品A1
+public class ConcreteProductA1 implements AbstractProductA {
+    @Override
+    public void operationA() {
+        System.out.println("产品A1的操作");
+    }
+}
+
+// 具体产品A2
+public class ConcreteProductA2 implements AbstractProductA {
+    @Override
+    public void operationA() {
+        System.out.println("产品A2的操作");
+    }
+}
+
+// 具体产品B1
+public class ConcreteProductB1 implements AbstractProductB {
+    @Override
+    public void operationB() {
+        System.out.println("产品B1的操作");
+    }
+}
+
+// 具体产品B2
+public class ConcreteProductB2 implements AbstractProductB {
+    @Override
+    public void operationB() {
+        System.out.println("产品B2的操作");
+    }
+}
+
+// 抽象工厂
+public interface AbstractFactory {
+    AbstractProductA createProductA();
+    AbstractProductB createProductB();
+}
+
+// 具体工厂1
+public class ConcreteFactory1 implements AbstractFactory {
+    @Override
+    public AbstractProductA createProductA() {
+        return new ConcreteProductA1();
+    }
+    
+    @Override
+    public AbstractProductB createProductB() {
+        return new ConcreteProductB1();
+    }
+}
+
+// 具体工厂2
+public class ConcreteFactory2 implements AbstractFactory {
+    @Override
+    public AbstractProductA createProductA() {
+        return new ConcreteProductA2();
+    }
+    
+    @Override
+    public AbstractProductB createProductB() {
+        return new ConcreteProductB2();
+    }
+}
+```
+
+### 3.3 应用场景
+
+```java title="抽象工厂应用示例"
+// UI组件抽象工厂
+public interface Button {
+    void render();
+}
+
+public interface Checkbox {
+    void render();
+}
+
+public class WindowsButton implements Button {
+    @Override
+    public void render() {
+        System.out.println("渲染Windows风格按钮");
+    }
+}
+
+public class MacButton implements Button {
+    @Override
+    public void render() {
+        System.out.println("渲染Mac风格按钮");
+    }
+}
+
+public class WindowsCheckbox implements Checkbox {
+    @Override
+    public void render() {
+        System.out.println("渲染Windows风格复选框");
+    }
+}
+
+public class MacCheckbox implements Checkbox {
+    @Override
+    public void render() {
+        System.out.println("渲染Mac风格复选框");
+    }
+}
+
+public interface UIFactory {
+    Button createButton();
+    Checkbox createCheckbox();
+}
+
+public class WindowsUIFactory implements UIFactory {
+    @Override
+    public Button createButton() {
+        return new WindowsButton();
+    }
+    
+    @Override
+    public Checkbox createCheckbox() {
+        return new WindowsCheckbox();
+    }
+}
+
+public class MacUIFactory implements UIFactory {
+    @Override
+    public Button createButton() {
+        return new MacButton();
+    }
+    
+    @Override
+    public Checkbox createCheckbox() {
+        return new MacCheckbox();
+    }
+}
+
+// 使用示例
+public class Application {
+    private UIFactory factory;
+    
+    public Application(UIFactory factory) {
+        this.factory = factory;
+    }
+    
+    public void createUI() {
+        Button button = factory.createButton();
+        Checkbox checkbox = factory.createCheckbox();
+        
+        button.render();
+        checkbox.render();
+    }
+}
+```
+
+## 4. 建造者模式（Builder）
+
+### 4.1 模式定义
+
+将一个复杂对象的构建与它的表示分离，使得同样的构建过程可以创建不同的表示。
+
+### 4.2 实现示例
+
+#### 基本建造者模式
+```java title="建造者模式"
+// 产品类
+public class Computer {
+    private String cpu;
+    private String memory;
+    private String storage;
+    private String graphics;
+    private String motherboard;
+    
+    // 私有构造函数
+    private Computer() {}
+    
+    // Getter方法
+    public String getCpu() { return cpu; }
+    public String getMemory() { return memory; }
+    public String getStorage() { return storage; }
+    public String getGraphics() { return graphics; }
+    public String getMotherboard() { return motherboard; }
+    
+    @Override
+    public String toString() {
+        return String.format("Computer{cpu='%s', memory='%s', storage='%s', graphics='%s', motherboard='%s'}", 
+                           cpu, memory, storage, graphics, motherboard);
+    }
+    
+    // 静态内部建造者类
+    public static class Builder {
+        private Computer computer = new Computer();
+        
+        public Builder cpu(String cpu) {
+            computer.cpu = cpu;
+            return this;
+        }
+        
+        public Builder memory(String memory) {
+            computer.memory = memory;
+            return this;
+        }
+        
+        public Builder storage(String storage) {
+            computer.storage = storage;
+            return this;
+        }
+        
+        public Builder graphics(String graphics) {
+            computer.graphics = graphics;
+            return this;
+        }
+        
+        public Builder motherboard(String motherboard) {
+            computer.motherboard = motherboard;
+            return this;
+        }
+        
+        public Computer build() {
+            // 参数校验
+            validate();
+            return computer;
+        }
+        
+        private void validate() {
+            if (computer.cpu == null) {
+                throw new IllegalArgumentException("CPU不能为空");
+            }
+            if (computer.memory == null) {
+                throw new IllegalArgumentException("内存不能为空");
+            }
+            if (computer.storage == null) {
+                throw new IllegalArgumentException("存储不能为空");
+            }
+        }
+    }
+}
+```
+
+#### 使用示例
+```java title="建造者模式使用"
+public class BuilderExample {
+    public static void main(String[] args) {
+        // 构建高性能电脑
+        Computer gamingComputer = new Computer.Builder()
+                .cpu("Intel i9-12900K")
+                .memory("32GB DDR5")
+                .storage("2TB NVMe SSD")
+                .graphics("RTX 4090")
+                .motherboard("Z690")
+                .build();
+        
+        System.out.println("游戏电脑: " + gamingComputer);
+        
+        // 构建办公电脑
+        Computer officeComputer = new Computer.Builder()
+                .cpu("Intel i5-12400")
+                .memory("16GB DDR4")
+                .storage("512GB SSD")
+                .graphics("集成显卡")
+                .motherboard("B660")
+                .build();
+        
+        System.out.println("办公电脑: " + officeComputer);
+    }
+}
+```
+
+### 4.3 应用场景
+
+```java title="建造者模式应用示例"
+// 数据库连接配置建造者
+public class DatabaseConfig {
+    private String host;
+    private int port;
+    private String database;
+    private String username;
+    private String password;
+    private int maxConnections;
+    private int timeout;
+    
+    private DatabaseConfig() {}
+    
+    // Getter方法...
+    
+    public static class Builder {
+        private DatabaseConfig config = new DatabaseConfig();
+        
+        public Builder host(String host) {
+            config.host = host;
+            return this;
+        }
+        
+        public Builder port(int port) {
+            config.port = port;
+            return this;
+        }
+        
+        public Builder database(String database) {
+            config.database = database;
+            return this;
+        }
+        
+        public Builder username(String username) {
+            config.username = username;
+            return this;
+        }
+        
+        public Builder password(String password) {
+            config.password = password;
+            return this;
+        }
+        
+        public Builder maxConnections(int maxConnections) {
+            config.maxConnections = maxConnections;
+            return this;
+        }
+        
+        public Builder timeout(int timeout) {
+            config.timeout = timeout;
+            return this;
+        }
+        
+        public DatabaseConfig build() {
+            // 设置默认值
+            if (config.port == 0) {
+                config.port = 3306;
+            }
+            if (config.maxConnections == 0) {
+                config.maxConnections = 10;
+            }
+            if (config.timeout == 0) {
+                config.timeout = 30;
+            }
+            
+            validate();
+            return config;
+        }
+        
+        private void validate() {
+            if (config.host == null || config.host.trim().isEmpty()) {
+                throw new IllegalArgumentException("主机地址不能为空");
+            }
+            if (config.database == null || config.database.trim().isEmpty()) {
+                throw new IllegalArgumentException("数据库名不能为空");
+            }
+            if (config.username == null || config.username.trim().isEmpty()) {
+                throw new IllegalArgumentException("用户名不能为空");
+            }
+        }
+    }
+}
+```
+
+## 5. 原型模式（Prototype）
+
+### 5.1 模式定义
+
+用原型实例指定创建对象的种类，并且通过拷贝这些原型创建新的对象。
+
+### 5.2 实现示例
+
+#### 基本原型模式
+```java title="原型模式"
+// 原型接口
+public interface Prototype extends Cloneable {
+    Prototype clone();
+    void display();
+}
+
+// 具体原型
+public class ConcretePrototype implements Prototype {
+    private String name;
+    private List<String> attributes = new ArrayList<>();
+    
+    public ConcretePrototype(String name) {
+        this.name = name;
+        this.attributes.add("属性1");
+        this.attributes.add("属性2");
+    }
+    
+    @Override
+    public Prototype clone() {
+        try {
+            ConcretePrototype clone = (ConcretePrototype) super.clone();
+            // 深拷贝
+            clone.attributes = new ArrayList<>(this.attributes);
+            return clone;
+        } catch (CloneNotSupportedException e) {
+            throw new RuntimeException(e);
+        }
+    }
+    
+    @Override
+    public void display() {
+        System.out.println("原型名称: " + name);
+        System.out.println("属性: " + attributes);
+    }
+    
+    public void addAttribute(String attribute) {
+        this.attributes.add(attribute);
+    }
+    
+    public void setName(String name) {
+        this.name = name;
+    }
+}
+```
+
+#### 原型管理器
+```java title="原型管理器"
+public class PrototypeManager {
+    private Map<String, Prototype> prototypes = new HashMap<>();
+    
+    public void addPrototype(String key, Prototype prototype) {
+        prototypes.put(key, prototype);
+    }
+    
+    public Prototype getPrototype(String key) {
+        Prototype prototype = prototypes.get(key);
+        if (prototype != null) {
+            return prototype.clone();
+        }
+        return null;
+    }
+    
+    public void removePrototype(String key) {
+        prototypes.remove(key);
+    }
+}
+
+// 使用示例
+public class PrototypeExample {
+    public static void main(String[] args) {
+        PrototypeManager manager = new PrototypeManager();
+        
+        // 添加原型
+        ConcretePrototype prototype1 = new ConcretePrototype("原型1");
+        manager.addPrototype("type1", prototype1);
+        
+        // 克隆原型
+        Prototype clone1 = manager.getPrototype("type1");
+        Prototype clone2 = manager.getPrototype("type1");
+        
+        // 修改克隆对象
+        if (clone1 instanceof ConcretePrototype) {
+            ((ConcretePrototype) clone1).setName("克隆1");
+            ((ConcretePrototype) clone1).addAttribute("新属性");
+        }
+        
+        // 显示结果
+        prototype1.display();
+        clone1.display();
+        clone2.display();
+    }
+}
+```
+
+### 5.3 应用场景
+
+```java title="原型模式应用示例"
+// 文档模板系统
+public abstract class Document implements Cloneable {
+    protected String title;
+    protected String content;
+    protected List<String> sections = new ArrayList<>();
+    
+    public abstract void display();
+    
+    @Override
+    public Document clone() {
+        try {
+            Document clone = (Document) super.clone();
+            // 深拷贝
+            clone.sections = new ArrayList<>(this.sections);
+            return clone;
+        } catch (CloneNotSupportedException e) {
+            throw new RuntimeException(e);
+        }
+    }
+    
+    public void setTitle(String title) {
+        this.title = title;
+    }
+    
+    public void setContent(String content) {
+        this.content = content;
+    }
+    
+    public void addSection(String section) {
+        this.sections.add(section);
+    }
+}
+
+public class ReportDocument extends Document {
+    @Override
+    public void display() {
+        System.out.println("报告文档: " + title);
+        System.out.println("内容: " + content);
+        System.out.println("章节: " + sections);
+    }
+}
+
+public class ProposalDocument extends Document {
+    @Override
+    public void display() {
+        System.out.println("提案文档: " + title);
+        System.out.println("内容: " + content);
+        System.out.println("章节: " + sections);
+    }
+}
+
+// 文档模板管理器
+public class DocumentTemplateManager {
+    private Map<String, Document> templates = new HashMap<>();
+    
+    public void addTemplate(String name, Document template) {
+        templates.put(name, template);
+    }
+    
+    public Document createDocument(String templateName) {
+        Document template = templates.get(templateName);
+        if (template != null) {
+            return template.clone();
+        }
+        return null;
+    }
+}
+```
+
+## 6. 创建型模式对比
+
+### 6.1 模式选择指南
+
+| 模式 | 适用场景 | 优点 | 缺点 |
+|------|----------|------|------|
+| **单例模式** | 全局唯一实例 | 节省内存，全局访问 | 可能成为全局状态 |
+| **工厂方法** | 延迟实例化 | 符合开闭原则 | 增加类的数量 |
+| **抽象工厂** | 产品族创建 | 保证产品兼容性 | 扩展新产品族困难 |
+| **建造者** | 复杂对象构建 | 参数校验，链式调用 | 增加代码复杂度 |
+| **原型** | 对象克隆 | 避免重复初始化 | 深拷贝开销 |
+
+### 6.2 性能考虑
+
+```java title="性能对比示例"
+// 单例模式 - 内存占用最小
+public class SingletonExample {
+    private static SingletonExample instance;
+    
+    public static SingletonExample getInstance() {
+        if (instance == null) {
+            instance = new SingletonExample();
+        }
+        return instance;
+    }
+}
+
+// 工厂模式 - 对象创建开销
+public class FactoryExample {
+    public Product createProduct(String type) {
+        // 每次调用都可能创建新对象
+        switch (type) {
+            case "A": return new ProductA();
+            case "B": return new ProductB();
+            default: throw new IllegalArgumentException();
+        }
+    }
+}
+
+// 原型模式 - 克隆开销
+public class PrototypeExample implements Cloneable {
+    private List<String> data = new ArrayList<>();
+    
+    @Override
+    public PrototypeExample clone() {
+        try {
+            PrototypeExample clone = (PrototypeExample) super.clone();
+            // 深拷贝开销
+            clone.data = new ArrayList<>(this.data);
+            return clone;
+        } catch (CloneNotSupportedException e) {
+            throw new RuntimeException(e);
+        }
+    }
+}
+```
+
+:::tip 创建型模式选择原则
+1. **单例模式**：需要全局唯一实例时使用
+2. **工厂方法**：需要延迟实例化时使用
+3. **抽象工厂**：需要创建产品族时使用
+4. **建造者模式**：需要构建复杂对象时使用
+5. **原型模式**：需要对象克隆时使用
+:::
+
+---
+
+通过本章的学习，你应该已经掌握了五种创建型模式的原理、实现方式和应用场景。在实际项目中，要根据具体需求选择合适的创建型模式，并注意线程安全和性能优化问题。

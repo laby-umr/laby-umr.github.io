@@ -1,707 +1,1486 @@
 ---
-sidebar_position: 6
-title: "反射"
-description: "Java反射机制与应用"
+sidebar_position: 3
+title: Java反射机制完全指南
+description: 深入解析Java反射机制的原理、应用场景、性能优化与最佳实践
 authors: [Laby]
+tags: [Java, 反射, Reflection, 动态编程, 框架开发, 元编程]
 last_update:
-  date: 2025-08-07
+  date: 2025-08-14
   author: Laby
 ---
 
-# 反射
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+import CodeBlock from '@theme/CodeBlock';
 
-Java反射（Reflection）是指在运行时检查、访问和修改类、接口、字段和方法的能力。反射使程序能够在运行时获取任何类的内部信息，并直接操作任何对象的内部属性及方法。
+# Java反射机制完全指南
 
-## 反射基础
+Java反射（Reflection）是Java语言最强大的特性之一，它允许程序在运行时检查和操作类、接口、字段和方法的信息。反射机制为Java提供了强大的动态编程能力，是Spring、Hibernate等主流框架的核心技术基础。
 
-### 什么是反射？
+:::tip 核心价值
+**反射机制 = 运行时类型信息 + 动态操作能力 + 框架基础 + 元编程支持**
+- 🔍 **类型检查**：运行时获取类的完整信息和元数据
+- 🛠️ **动态操作**：动态创建对象、调用方法、访问字段
+- 🏗️ **框架基础**：Spring IoC、Hibernate ORM等框架的核心
+- 🔧 **工具支持**：IDE、调试器、序列化工具的基础技术
+- 📊 **元编程**：基于元数据的编程模式和代码生成
+- 🎯 **灵活性**：突破编译时限制，实现高度灵活的程序设计
+:::
 
-反射是Java语言的一个重要特性，它提供了在运行时动态获取类型的信息和动态调用对象方法的能力。通过反射，我们可以：
+## 1. 反射基础概念与原理
 
-- 在运行时识别类的属性和方法
-- 在运行时检查对象的类型
-- 在运行时构造新的对象
-- 在运行时调用任意方法，即使方法或类是私有的
+### 1.1 反射机制深度解析
 
-### 反射的核心类
+反射是指程序可以访问、检测和修改它本身状态或行为的一种能力。在Java中，反射主要通过`java.lang.reflect`包实现。
 
-Java反射API主要由以下几个类组成，这些类都位于`java.lang.reflect`包中：
-
-1. **Class**：代表类的实体，在运行的Java应用程序中表示类和接口
-2. **Field**：代表类的成员变量（属性）
-3. **Method**：代表类的方法
-4. **Constructor**：代表类的构造方法
-5. **Array**：提供动态创建和访问Java数组的方法
-6. **Modifier**：提供静态方法和常量来解码类和成员访问修饰符
-7. **Parameter**：代表方法或构造函数的参数
-8. **Annotation**：提供访问注解的接口
-
-### 获取Class对象的方式
-
-在使用反射之前，首先需要获取代表类的`Class`对象。Java提供了三种方式来获取`Class`对象：
-
-1. **通过对象获取**：使用对象的`getClass()`方法
-   ```java
-   String str = "Hello";
-   Class<?> clazz = str.getClass();
-   ```
-
-2. **通过类名获取**：使用类的`.class`属性
-   ```java
-   Class<?> clazz = String.class;
-   ```
-
-3. **通过完全限定类名获取**：使用`Class.forName()`静态方法
-   ```java
-   Class<?> clazz = Class.forName("java.lang.String");
-   ```
-
-## 反射的基本操作
-
-### 获取类的信息
-
-一旦获取到`Class`对象，就可以访问类的各种信息：
-
-```java
-Class<?> clazz = Class.forName("java.lang.String");
-
-// 获取类名
-String className = clazz.getName(); // 完全限定名
-String simpleName = clazz.getSimpleName(); // 简单类名
-
-// 获取修饰符
-int modifiers = clazz.getModifiers();
-boolean isPublic = Modifier.isPublic(modifiers);
-boolean isFinal = Modifier.isFinal(modifiers);
-
-// 获取父类
-Class<?> superClass = clazz.getSuperclass();
-
-// 获取实现的接口
-Class<?>[] interfaces = clazz.getInterfaces();
-
-// 获取包信息
-Package pkg = clazz.getPackage();
+```mermaid
+graph TB
+    subgraph "Java反射体系架构"
+        A["Class对象"] --> B["Field字段反射"]
+        A --> C["Method方法反射"]
+        A --> D["Constructor构造器反射"]
+        A --> E["Annotation注解反射"]
+        A --> F["Array数组反射"]
+        
+        B --> B1["字段访问控制"]
+        B --> B2["字段值操作"]
+        
+        C --> C1["方法调用"]
+        C --> C2["参数处理"]
+        
+        D --> D1["对象创建"]
+        D --> D2["构造参数"]
+        
+        E --> E1["注解读取"]
+        E --> E2["元数据处理"]
+        
+        F --> F1["数组创建"]
+        F --> F2["数组操作"]
+    end
 ```
 
-### 获取构造方法
+#### 反射核心类对比表
 
-```java
-// 获取所有公共构造方法
-Constructor<?>[] constructors = clazz.getConstructors();
+| 核心类 | 作用 | 主要方法 | 使用场景 | 性能影响 |
+|--------|------|----------|----------|----------|
+| **Class** | 类信息表示 | `forName()`, `newInstance()` | 类加载、实例创建 | 中等 |
+| **Field** | 字段操作 | `get()`, `set()`, `setAccessible()` | 属性注入、序列化 | 较高 |
+| **Method** | 方法调用 | `invoke()`, `getParameterTypes()` | 动态方法调用 | 高 |
+| **Constructor** | 构造器操作 | `newInstance()`, `getParameters()` | 对象创建 | 中等 |
+| **Parameter** | 参数信息 | `getName()`, `getType()` | 参数解析 | 低 |
+<Tabs>
+<TabItem value="class-object" label="Class对象获取">
 
-// 获取特定的公共构造方法
-Constructor<?> constructor = clazz.getConstructor(String.class);
+### 获取Class对象的多种方式
 
-// 获取所有构造方法（包括私有的）
-Constructor<?>[] allConstructors = clazz.getDeclaredConstructors();
-
-// 获取特定的构造方法（包括私有的）
-Constructor<?> privateConstructor = clazz.getDeclaredConstructor(char[].class);
-```
-
-### 创建对象实例
-
-```java
-// 使用无参构造方法创建实例
-Object obj = clazz.newInstance(); // 过时的方法
-
-// 推荐的方式
-Constructor<?> constructor = clazz.getConstructor();
-Object obj = constructor.newInstance();
-
-// 使用有参构造方法创建实例
-Constructor<?> strConstructor = clazz.getConstructor(String.class);
-Object strObj = strConstructor.newInstance("Hello Reflection");
-
-// 访问私有构造方法
-Constructor<?> privateConstructor = clazz.getDeclaredConstructor(char[].class);
-privateConstructor.setAccessible(true); // 必须设置可访问
-Object privateObj = privateConstructor.newInstance(new char[]{'H', 'i'});
-```
-
-### 获取和调用方法
-
-```java
-// 获取所有公共方法（包括继承的）
-Method[] methods = clazz.getMethods();
-
-// 获取特定的公共方法
-Method method = clazz.getMethod("substring", int.class);
-
-// 获取所有方法（包括私有的，不包括继承的）
-Method[] declaredMethods = clazz.getDeclaredMethods();
-
-// 获取特定的方法（包括私有的）
-Method privateMethod = clazz.getDeclaredMethod("privateMethod");
-
-// 调用方法
-String str = "Hello World";
-Method substringMethod = str.getClass().getMethod("substring", int.class);
-String result = (String) substringMethod.invoke(str, 6); // 结果: "World"
-
-// 调用私有方法
-privateMethod.setAccessible(true); // 必须设置可访问
-privateMethod.invoke(obj);
-```
-
-### 访问字段
-
-```java
-// 获取所有公共字段（包括继承的）
-Field[] fields = clazz.getFields();
-
-// 获取特定的公共字段
-Field field = clazz.getField("publicField");
-
-// 获取所有字段（包括私有的，不包括继承的）
-Field[] declaredFields = clazz.getDeclaredFields();
-
-// 获取特定的字段（包括私有的）
-Field privateField = clazz.getDeclaredField("privateField");
-
-// 访问字段值
-Object obj = clazz.newInstance();
-field.set(obj, "new value"); // 设置字段值
-Object value = field.get(obj); // 获取字段值
-
-// 访问私有字段
-privateField.setAccessible(true); // 必须设置可访问
-privateField.set(obj, "new private value");
-Object privateValue = privateField.get(obj);
-```
-
-### 数组操作
-
-```java
-// 创建数组
-int[] dimensions = {5}; // 一维数组，长度为5
-Object array = Array.newInstance(int.class, dimensions);
-
-// 设置数组元素
-Array.setInt(array, 0, 10);
-Array.setInt(array, 1, 20);
-
-// 获取数组元素
-int value = Array.getInt(array, 1); // 结果: 20
-```
-
-## 反射应用场景
-
-### 框架和库开发
-
-反射广泛应用于各种Java框架和库的开发中，例如：
-
-1. **ORM框架**（如Hibernate、MyBatis）：通过反射将数据库记录映射到Java对象
-2. **依赖注入框架**（如Spring）：自动装配bean并注入依赖
-3. **JSON处理库**（如Jackson、Gson）：对象序列化和反序列化
-4. **测试框架**（如JUnit、TestNG）：发现和执行测试方法
-
-### 动态代理
-
-反射是Java动态代理的基础，可用于实现AOP（面向切面编程）：
-
-```java
-// 接口
-interface UserService {
-    void addUser(String name);
-    void deleteUser(int id);
+```java title="Class对象获取方式对比"
+public class ClassObjectDemo {
+    public static void main(String[] args) throws ClassNotFoundException {
+        // 方式1：通过类名.class获取（编译时确定）
+        Class<String> clazz1 = String.class;
+        System.out.println("方式1: " + clazz1.getName());
+        
+        // 方式2：通过对象.getClass()获取（运行时确定）
+        String str = "Hello";
+        Class<?> clazz2 = str.getClass();
+        System.out.println("方式2: " + clazz2.getName());
+        
+        // 方式3：通过Class.forName()获取（动态加载）
+        Class<?> clazz3 = Class.forName("java.lang.String");
+        System.out.println("方式3: " + clazz3.getName());
+        
+        // 方式4：通过类加载器获取
+        ClassLoader classLoader = Thread.currentThread().getContextClassLoader();
+        Class<?> clazz4 = classLoader.loadClass("java.lang.String");
+        System.out.println("方式4: " + clazz4.getName());
+        
+        // 验证是否为同一个Class对象
+        System.out.println("是否为同一个Class对象: " + (clazz1 == clazz2));
+        System.out.println("是否为同一个Class对象: " + (clazz2 == clazz3));
+    }
 }
+```
 
-// 实现类
-class UserServiceImpl implements UserService {
-    @Override
-    public void addUser(String name) {
-        System.out.println("Adding user: " + name);
+#### Class对象获取方式对比
+
+| 获取方式 | 语法 | 使用场景 | 性能 | 异常处理 |
+|----------|------|----------|------|----------|
+| **类名.class** | `String.class` | 编译时已知类型 | 最快 | 无异常 |
+| **对象.getClass()** | `obj.getClass()` | 运行时获取对象类型 | 快 | 无异常 |
+| **Class.forName()** | `Class.forName("类名")` | 动态加载类 | 较慢 | ClassNotFoundException |
+| **类加载器** | `classLoader.loadClass()` | 自定义类加载 | 较慢 | ClassNotFoundException |
+
+</TabItem>
+<TabItem value="class-info" label="类信息获取">
+
+### 获取类的详细信息
+
+```java title="类信息获取完整示例"
+import java.lang.reflect.*;
+import java.util.Arrays;
+
+public class ClassInfoDemo {
+    public static void analyzeClass(Class<?> clazz) {
+        System.out.println("=== 分析类: " + clazz.getName() + " ===");
+        
+        // 1. 基本信息
+        System.out.println("简单名称: " + clazz.getSimpleName());
+        System.out.println("包名: " + clazz.getPackage().getName());
+        System.out.println("是否为接口: " + clazz.isInterface());
+        System.out.println("是否为抽象类: " + Modifier.isAbstract(clazz.getModifiers()));
+        System.out.println("是否为final类: " + Modifier.isFinal(clazz.getModifiers()));
+        
+        // 2. 继承关系
+        Class<?> superClass = clazz.getSuperclass();
+        if (superClass != null) {
+            System.out.println("父类: " + superClass.getName());
+        }
+        
+        // 3. 实现的接口
+        Class<?>[] interfaces = clazz.getInterfaces();
+        if (interfaces.length > 0) {
+            System.out.println("实现的接口: " + Arrays.toString(interfaces));
+        }
+        
+        // 4. 泛型信息
+        TypeVariable<?>[] typeParameters = clazz.getTypeParameters();
+        if (typeParameters.length > 0) {
+            System.out.println("泛型参数: " + Arrays.toString(typeParameters));
+        }
+        
+        // 5. 注解信息
+        Annotation[] annotations = clazz.getAnnotations();
+        if (annotations.length > 0) {
+            System.out.println("类注解: " + Arrays.toString(annotations));
+        }
+        
+        // 6. 内部类
+        Class<?>[] innerClasses = clazz.getDeclaredClasses();
+        if (innerClasses.length > 0) {
+            System.out.println("内部类: " + Arrays.toString(innerClasses));
+        }
+        
+        System.out.println();
+    }
+    
+    public static void main(String[] args) {
+        // 分析不同类型的类
+        analyzeClass(String.class);
+        analyzeClass(java.util.ArrayList.class);
+        analyzeClass(java.util.List.class);
+        analyzeClass(Thread.class);
+    }
+}
+```
+
+</TabItem>
+<TabItem value="performance" label="性能考虑">
+
+### 反射性能优化策略
+
+```java title="反射性能优化实践"
+import java.lang.reflect.*;
+import java.util.concurrent.ConcurrentHashMap;
+
+public class ReflectionPerformanceOptimizer {
+    // 缓存Class对象
+    private static final ConcurrentHashMap<String, Class<?>> CLASS_CACHE = new ConcurrentHashMap<>();
+    
+    // 缓存Method对象
+    private static final ConcurrentHashMap<String, Method> METHOD_CACHE = new ConcurrentHashMap<>();
+    
+    // 缓存Field对象
+    private static final ConcurrentHashMap<String, Field> FIELD_CACHE = new ConcurrentHashMap<>();
+    
+    /**
+     * 优化的Class获取方法
+     */
+    public static Class<?> getClassOptimized(String className) throws ClassNotFoundException {
+        return CLASS_CACHE.computeIfAbsent(className, key -> {
+            try {
+                return Class.forName(key);
+            } catch (ClassNotFoundException e) {
+                throw new RuntimeException(e);
+            }
+        });
+    }
+    
+    /**
+     * 优化的Method获取方法
+     */
+    public static Method getMethodOptimized(Class<?> clazz, String methodName, Class<?>... parameterTypes) 
+            throws NoSuchMethodException {
+        String key = clazz.getName() + "#" + methodName + "#" + Arrays.toString(parameterTypes);
+        return METHOD_CACHE.computeIfAbsent(key, k -> {
+            try {
+                Method method = clazz.getDeclaredMethod(methodName, parameterTypes);
+                method.setAccessible(true); // 预先设置访问权限
+                return method;
+            } catch (NoSuchMethodException e) {
+                throw new RuntimeException(e);
+            }
+        });
+    }
+    
+    /**
+     * 优化的Field获取方法
+     */
+    public static Field getFieldOptimized(Class<?> clazz, String fieldName) throws NoSuchFieldException {
+        String key = clazz.getName() + "#" + fieldName;
+        return FIELD_CACHE.computeIfAbsent(key, k -> {
+            try {
+                Field field = clazz.getDeclaredField(fieldName);
+                field.setAccessible(true); // 预先设置访问权限
+                return field;
+            } catch (NoSuchFieldException e) {
+                throw new RuntimeException(e);
+            }
+        });
+    }
+    
+    /**
+     * 性能测试对比
+     */
+    public static void performanceTest() throws Exception {
+        int iterations = 100000;
+        Class<?> clazz = String.class;
+        
+        // 测试直接调用 vs 反射调用
+        String testStr = "Hello World";
+        
+        // 直接调用性能测试
+        long startTime = System.nanoTime();
+        for (int i = 0; i < iterations; i++) {
+            testStr.length();
+        }
+        long directCallTime = System.nanoTime() - startTime;
+        
+        // 反射调用性能测试（未优化）
+        Method lengthMethod = clazz.getMethod("length");
+        startTime = System.nanoTime();
+        for (int i = 0; i < iterations; i++) {
+            lengthMethod.invoke(testStr);
+        }
+        long reflectionCallTime = System.nanoTime() - startTime;
+        
+        // 反射调用性能测试（优化后）
+        Method cachedMethod = getMethodOptimized(clazz, "length");
+        startTime = System.nanoTime();
+        for (int i = 0; i < iterations; i++) {
+            cachedMethod.invoke(testStr);
+        }
+        long optimizedReflectionTime = System.nanoTime() - startTime;
+        
+        System.out.println("性能测试结果 (" + iterations + " 次调用):");
+        System.out.println("直接调用: " + directCallTime / 1_000_000 + " ms");
+        System.out.println("反射调用(未优化): " + reflectionCallTime / 1_000_000 + " ms");
+        System.out.println("反射调用(优化后): " + optimizedReflectionTime / 1_000_000 + " ms");
+        System.out.println("反射性能损失: " + (reflectionCallTime / (double) directCallTime) + "x");
+        System.out.println("优化后性能损失: " + (optimizedReflectionTime / (double) directCallTime) + "x");
+    }
+    
+    public static void main(String[] args) throws Exception {
+        performanceTest();
+    }
+}
+```
+
+:::warning 性能注意事项
+1. **缓存反射对象**：Method、Field、Constructor对象应该缓存复用
+2. **预设访问权限**：提前调用`setAccessible(true)`避免重复检查
+3. **避免频繁反射**：在性能敏感的代码路径中谨慎使用反射
+4. **使用MethodHandle**：Java 7+可以考虑使用MethodHandle替代反射
+:::
+
+</TabItem>
+</Tabs>
+
+## 2. 字段（Field）操作详解
+
+字段反射允许我们在运行时访问和修改对象的字段值，包括私有字段。
+
+```mermaid
+graph TB
+    subgraph "字段反射操作流程"
+        A["获取Class对象"] --> B["获取Field对象"]
+        B --> C["设置访问权限"]
+        C --> D["字段操作"]
+        
+        D --> D1["获取字段值 get()"]
+        D --> D2["设置字段值 set()"]
+        D --> D3["获取字段类型 getType()"]
+        D --> D4["获取字段注解 getAnnotations()"]
+    end
+```
+
+<Tabs>
+<TabItem value="field-access" label="字段访问操作">
+
+### 字段访问与操作
+
+```java title="字段反射操作完整示例"
+import java.lang.reflect.*;
+
+// 示例类
+class Person {
+    private String name;
+    protected int age;
+    public String email;
+    private static final String SPECIES = "Homo sapiens";
+    
+    public Person(String name, int age, String email) {
+        this.name = name;
+        this.age = age;
+        this.email = email;
     }
     
     @Override
-    public void deleteUser(int id) {
-        System.out.println("Deleting user with id: " + id);
+    public String toString() {
+        return String.format("Person{name='%s', age=%d, email='%s'}", name, age, email);
     }
 }
 
-// 动态代理处理器
-class LoggingHandler implements InvocationHandler {
-    private Object target;
-    
-    public LoggingHandler(Object target) {
-        this.target = target;
-    }
-    
-    @Override
-    public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
-        System.out.println("Before method: " + method.getName());
-        Object result = method.invoke(target, args);
-        System.out.println("After method: " + method.getName());
-        return result;
+public class FieldReflectionDemo {
+    public static void main(String[] args) throws Exception {
+        Person person = new Person("张三", 25, "zhangsan@example.com");
+        Class<?> personClass = person.getClass();
+        
+        System.out.println("原始对象: " + person);
+        
+        // 1. 获取所有字段（包括私有字段）
+        System.out.println("\n=== 所有声明的字段 ===");
+        Field[] declaredFields = personClass.getDeclaredFields();
+        for (Field field : declaredFields) {
+            System.out.printf("字段: %s, 类型: %s, 修饰符: %s%n", 
+                field.getName(), 
+                field.getType().getSimpleName(),
+                Modifier.toString(field.getModifiers())
+            );
+        }
+        
+        // 2. 获取公共字段
+        System.out.println("\n=== 公共字段 ===");
+        Field[] publicFields = personClass.getFields();
+        for (Field field : publicFields) {
+            System.out.println("公共字段: " + field.getName());
+        }
+        
+        // 3. 访问私有字段
+        System.out.println("\n=== 访问私有字段 ===");
+        Field nameField = personClass.getDeclaredField("name");
+        nameField.setAccessible(true); // 突破访问控制
+        
+        String originalName = (String) nameField.get(person);
+        System.out.println("原始姓名: " + originalName);
+        
+        // 修改私有字段值
+        nameField.set(person, "李四");
+        System.out.println("修改后对象: " + person);
+        
+        // 4. 访问静态字段
+        System.out.println("\n=== 访问静态字段 ===");
+        Field speciesField = personClass.getDeclaredField("SPECIES");
+        speciesField.setAccessible(true);
+        String species = (String) speciesField.get(null); // 静态字段传null
+        System.out.println("物种: " + species);
+        
+        // 5. 字段类型判断
+        System.out.println("\n=== 字段类型判断 ===");
+        for (Field field : declaredFields) {
+            System.out.printf("字段 %s: ", field.getName());
+            System.out.printf("是否静态=%s, ", Modifier.isStatic(field.getModifiers()));
+            System.out.printf("是否final=%s, ", Modifier.isFinal(field.getModifiers()));
+            System.out.printf("是否私有=%s%n", Modifier.isPrivate(field.getModifiers()));
+        }
     }
 }
-
-// 使用动态代理
-UserService userService = new UserServiceImpl();
-UserService proxy = (UserService) Proxy.newProxyInstance(
-    UserService.class.getClassLoader(),
-    new Class[]{UserService.class},
-    new LoggingHandler(userService)
-);
-
-proxy.addUser("John"); // 输出日志，然后调用实际方法
 ```
 
-### 插件和扩展系统
+</TabItem>
+<TabItem value="field-utils" label="字段工具类">
 
-反射可以用来实现灵活的插件系统：
+### 通用字段操作工具类
 
-```java
-// 插件接口
-interface Plugin {
-    void execute();
-}
+```java title="字段反射工具类"
+import java.lang.reflect.*;
+import java.util.*;
 
-// 插件加载器
-class PluginLoader {
-    public static Plugin loadPlugin(String className) throws Exception {
-        Class<?> pluginClass = Class.forName(className);
-        return (Plugin) pluginClass.newInstance();
+public class FieldUtils {
+    
+    /**
+     * 获取对象的所有字段值（包括继承的字段）
+     */
+    public static Map<String, Object> getAllFieldValues(Object obj) {
+        Map<String, Object> fieldValues = new HashMap<>();
+        Class<?> clazz = obj.getClass();
+        
+        // 遍历类层次结构
+        while (clazz != null && clazz != Object.class) {
+            Field[] fields = clazz.getDeclaredFields();
+            for (Field field : fields) {
+                if (!Modifier.isStatic(field.getModifiers())) {
+                    try {
+                        field.setAccessible(true);
+                        Object value = field.get(obj);
+                        fieldValues.put(field.getName(), value);
+                    } catch (IllegalAccessException e) {
+                        System.err.println("无法访问字段: " + field.getName());
+                    }
+                }
+            }
+            clazz = clazz.getSuperclass();
+        }
+        
+        return fieldValues;
+    }
+    
+    /**
+     * 复制对象字段值
+     */
+    public static void copyFields(Object source, Object target) {
+        Class<?> sourceClass = source.getClass();
+        Class<?> targetClass = target.getClass();
+        
+        Field[] sourceFields = sourceClass.getDeclaredFields();
+        
+        for (Field sourceField : sourceFields) {
+            if (Modifier.isStatic(sourceField.getModifiers()) || 
+                Modifier.isFinal(sourceField.getModifiers())) {
+                continue;
+            }
+            
+            try {
+                Field targetField = targetClass.getDeclaredField(sourceField.getName());
+                
+                // 检查类型兼容性
+                if (targetField.getType().isAssignableFrom(sourceField.getType())) {
+                    sourceField.setAccessible(true);
+                    targetField.setAccessible(true);
+                    
+                    Object value = sourceField.get(source);
+                    targetField.set(target, value);
+                    
+                    System.out.println("复制字段: " + sourceField.getName() + " = " + value);
+                }
+            } catch (NoSuchFieldException e) {
+                System.out.println("目标对象没有字段: " + sourceField.getName());
+            } catch (IllegalAccessException e) {
+                System.err.println("无法访问字段: " + sourceField.getName());
+            }
+        }
+    }
+    
+    /**
+     * 将对象转换为Map
+     */
+    public static Map<String, Object> objectToMap(Object obj) {
+        Map<String, Object> map = new HashMap<>();
+        Class<?> clazz = obj.getClass();
+        
+        Field[] fields = clazz.getDeclaredFields();
+        for (Field field : fields) {
+            if (!Modifier.isStatic(field.getModifiers())) {
+                try {
+                    field.setAccessible(true);
+                    Object value = field.get(obj);
+                    map.put(field.getName(), value);
+                } catch (IllegalAccessException e) {
+                    System.err.println("无法访问字段: " + field.getName());
+                }
+            }
+        }
+        
+        return map;
+    }
+    
+    /**
+     * 从Map创建对象
+     */
+    public static <T> T mapToObject(Map<String, Object> map, Class<T> clazz) throws Exception {
+        T instance = clazz.getDeclaredConstructor().newInstance();
+        
+        for (Map.Entry<String, Object> entry : map.entrySet()) {
+            try {
+                Field field = clazz.getDeclaredField(entry.getKey());
+                field.setAccessible(true);
+                field.set(instance, entry.getValue());
+            } catch (NoSuchFieldException e) {
+                System.out.println("字段不存在: " + entry.getKey());
+            }
+        }
+        
+        return instance;
+    }
+    
+    /**
+     * 查找带有特定注解的字段
+     */
+    public static List<Field> findFieldsWithAnnotation(Class<?> clazz, Class<? extends Annotation> annotationClass) {
+        List<Field> annotatedFields = new ArrayList<>();
+        
+        Field[] fields = clazz.getDeclaredFields();
+        for (Field field : fields) {
+            if (field.isAnnotationPresent(annotationClass)) {
+                annotatedFields.add(field);
+            }
+        }
+        
+        return annotatedFields;
+    }
+    
+    // 使用示例
+    public static void main(String[] args) throws Exception {
+        Person person1 = new Person("张三", 25, "zhangsan@example.com");
+        Person person2 = new Person("", 0, "");
+        
+        System.out.println("=== 获取所有字段值 ===");
+        Map<String, Object> fieldValues = getAllFieldValues(person1);
+        fieldValues.forEach((name, value) -> System.out.println(name + " = " + value));
+        
+        System.out.println("\n=== 复制字段值 ===");
+        System.out.println("复制前 person2: " + person2);
+        copyFields(person1, person2);
+        System.out.println("复制后 person2: " + person2);
+        
+        System.out.println("\n=== 对象转Map ===");
+        Map<String, Object> personMap = objectToMap(person1);
+        System.out.println("Person Map: " + personMap);
+        
+        System.out.println("\n=== Map转对象 ===");
+        Person person3 = mapToObject(personMap, Person.class);
+        System.out.println("从Map创建的对象: " + person3);
     }
 }
-
-// 使用插件
-Plugin plugin = PluginLoader.loadPlugin("com.example.MyPlugin");
-plugin.execute();
 ```
 
-### 注解处理
+</TabItem>
+<TabItem value="field-annotations" label="字段注解处理">
 
-反射与注解结合，可以实现强大的元编程功能：
+### 字段注解处理
 
-```java
+```java title="字段注解处理示例"
+import java.lang.annotation.*;
+import java.lang.reflect.*;
+
 // 自定义注解
 @Retention(RetentionPolicy.RUNTIME)
-@Target(ElementType.METHOD)
-@interface Test {
-    boolean enabled() default true;
+@Target(ElementType.FIELD)
+@interface Validate {
+    String message() default "验证失败";
+    int min() default 0;
+    int max() default Integer.MAX_VALUE;
+    boolean required() default false;
 }
 
-// 测试类
-class MyTestClass {
-    @Test
-    public void testMethod1() {
-        System.out.println("Test method 1");
-    }
-    
-    @Test(enabled = false)
-    public void testMethod2() {
-        System.out.println("Test method 2");
-    }
-    
-    public void regularMethod() {
-        System.out.println("Regular method");
-    }
+@Retention(RetentionPolicy.RUNTIME)
+@Target(ElementType.FIELD)
+@interface JsonProperty {
+    String value() default "";
 }
 
-// 注解处理
-class TestRunner {
-    public static void runTests(Class<?> testClass) throws Exception {
-        Object instance = testClass.newInstance();
+// 使用注解的示例类
+class User {
+    @Validate(required = true, message = "用户名不能为空")
+    @JsonProperty("username")
+    private String name;
+    
+    @Validate(min = 18, max = 100, message = "年龄必须在18-100之间")
+    private int age;
+    
+    @Validate(required = true, message = "邮箱不能为空")
+    @JsonProperty("email_address")
+    private String email;
+    
+    public User(String name, int age, String email) {
+        this.name = name;
+        this.age = age;
+        this.email = email;
+    }
+    
+    // getters and setters...
+}
+
+public class FieldAnnotationProcessor {
+    
+    /**
+     * 验证对象字段
+     */
+    public static boolean validateObject(Object obj) {
+        Class<?> clazz = obj.getClass();
+        Field[] fields = clazz.getDeclaredFields();
+        boolean isValid = true;
         
-        for (Method method : testClass.getDeclaredMethods()) {
-            if (method.isAnnotationPresent(Test.class)) {
-                Test annotation = method.getAnnotation(Test.class);
-                if (annotation.enabled()) {
-                    method.invoke(instance);
-                } else {
-                    System.out.println("Test disabled: " + method.getName());
+        for (Field field : fields) {
+            if (field.isAnnotationPresent(Validate.class)) {
+                Validate validate = field.getAnnotation(Validate.class);
+                
+                try {
+                    field.setAccessible(true);
+                    Object value = field.get(obj);
+                    
+                    // 检查必填项
+                    if (validate.required() && (value == null || value.toString().trim().isEmpty())) {
+                        System.err.println("验证失败 - " + field.getName() + ": " + validate.message());
+                        isValid = false;
+                        continue;
+                    }
+                    
+                    // 检查数值范围
+                    if (value instanceof Integer) {
+                        int intValue = (Integer) value;
+                        if (intValue < validate.min() || intValue > validate.max()) {
+                            System.err.println("验证失败 - " + field.getName() + ": " + validate.message());
+                            isValid = false;
+                        }
+                    }
+                    
+                } catch (IllegalAccessException e) {
+                    System.err.println("无法访问字段: " + field.getName());
+                    isValid = false;
                 }
             }
+        }
+        
+        return isValid;
+    }
+    
+    /**
+     * 将对象转换为JSON格式的Map（基于注解）
+     */
+    public static Map<String, Object> toJsonMap(Object obj) {
+        Map<String, Object> jsonMap = new HashMap<>();
+        Class<?> clazz = obj.getClass();
+        Field[] fields = clazz.getDeclaredFields();
+        
+        for (Field field : fields) {
+            try {
+                field.setAccessible(true);
+                Object value = field.get(obj);
+                
+                String jsonKey = field.getName();
+                if (field.isAnnotationPresent(JsonProperty.class)) {
+                    JsonProperty jsonProperty = field.getAnnotation(JsonProperty.class);
+                    if (!jsonProperty.value().isEmpty()) {
+                        jsonKey = jsonProperty.value();
+                    }
+                }
+                
+                jsonMap.put(jsonKey, value);
+                
+            } catch (IllegalAccessException e) {
+                System.err.println("无法访问字段: " + field.getName());
+            }
+        }
+        
+        return jsonMap;
+    }
+    
+    public static void main(String[] args) {
+        // 测试验证功能
+        User validUser = new User("张三", 25, "zhangsan@example.com");
+        User invalidUser = new User("", 15, "");
+        
+        System.out.println("=== 验证有效用户 ===");
+        boolean isValid1 = validateObject(validUser);
+        System.out.println("验证结果: " + (isValid1 ? "通过" : "失败"));
+        
+        System.out.println("\n=== 验证无效用户 ===");
+        boolean isValid2 = validateObject(invalidUser);
+        System.out.println("验证结果: " + (isValid2 ? "通过" : "失败"));
+        
+        System.out.println("\n=== JSON转换 ===");
+        Map<String, Object> jsonMap = toJsonMap(validUser);
+        System.out.println("JSON Map: " + jsonMap);
+    }
+}
+```
+
+</TabItem>
+</Tabs>
+
+## 3. 方法（Method）操作详解
+
+方法反射是反射机制中最复杂也是最强大的部分，它允许我们在运行时动态调用对象的方法。
+
+```mermaid
+graph TB
+    subgraph "方法反射操作流程"
+        A["获取Class对象"] --> B["获取Method对象"]
+        B --> C["设置访问权限"]
+        C --> D["准备参数"]
+        D --> E["调用方法 invoke()"]
+        E --> F["处理返回值"]
+        
+        B --> B1["getMethod 公共方法"]
+        B --> B2["getDeclaredMethod 所有方法"]
+        B --> B3["getMethods 继承的公共方法"]
+        B --> B4["getDeclaredMethods 所有声明方法"]
+    end
+```
+
+<Tabs>
+<TabItem value="method-invoke" label="方法调用">
+
+### 方法调用与参数处理
+
+```java title="方法反射调用完整示例"
+import java.lang.reflect.*;
+import java.util.*;
+
+// 示例服务类
+class CalculatorService {
+    public int add(int a, int b) {
+        System.out.println("执行加法: " + a + " + " + b);
+        return a + b;
+    }
+    
+    public double multiply(double a, double b) {
+        System.out.println("执行乘法: " + a + " * " + b);
+        return a * b;
+    }
+    
+    private String formatResult(String operation, Object result) {
+        return String.format("运算结果: %s = %s", operation, result);
+    }
+    
+    public static String getServiceInfo() {
+        return "计算器服务 v1.0";
+    }
+    
+    // 重载方法
+    public String process(String input) {
+        return "处理字符串: " + input;
+    }
+    
+    public String process(int input) {
+        return "处理整数: " + input;
+    }
+    
+    // 可变参数方法
+    public int sum(int... numbers) {
+        int total = 0;
+        for (int num : numbers) {
+            total += num;
+        }
+        return total;
+    }
+}
+
+public class MethodReflectionDemo {
+    public static void main(String[] args) throws Exception {
+        CalculatorService calculator = new CalculatorService();
+        Class<?> calculatorClass = calculator.getClass();
+        
+        // 1. 调用公共方法
+        System.out.println("=== 调用公共方法 ===");
+        Method addMethod = calculatorClass.getMethod("add", int.class, int.class);
+        Object result1 = addMethod.invoke(calculator, 10, 20);
+        System.out.println("反射调用结果: " + result1);
+        
+        // 2. 调用私有方法
+        System.out.println("\n=== 调用私有方法 ===");
+        Method formatMethod = calculatorClass.getDeclaredMethod("formatResult", String.class, Object.class);
+        formatMethod.setAccessible(true);
+        Object result2 = formatMethod.invoke(calculator, "10 + 20", 30);
+        System.out.println("私有方法结果: " + result2);
+        
+        // 3. 调用静态方法
+        System.out.println("\n=== 调用静态方法 ===");
+        Method staticMethod = calculatorClass.getMethod("getServiceInfo");
+        Object result3 = staticMethod.invoke(null); // 静态方法传null
+        System.out.println("静态方法结果: " + result3);
+        
+        // 4. 处理重载方法
+        System.out.println("\n=== 处理重载方法 ===");
+        Method processString = calculatorClass.getMethod("process", String.class);
+        Method processInt = calculatorClass.getMethod("process", int.class);
+        
+        Object result4 = processString.invoke(calculator, "Hello");
+        Object result5 = processInt.invoke(calculator, 42);
+        System.out.println("重载方法结果1: " + result4);
+        System.out.println("重载方法结果2: " + result5);
+        
+        // 5. 处理可变参数方法
+        System.out.println("\n=== 处理可变参数方法 ===");
+        Method sumMethod = calculatorClass.getMethod("sum", int[].class);
+        Object result6 = sumMethod.invoke(calculator, new int[]{1, 2, 3, 4, 5});
+        System.out.println("可变参数方法结果: " + result6);
+        
+        // 6. 获取方法信息
+        System.out.println("\n=== 方法信息分析 ===");
+        analyzeMethod(addMethod);
+        analyzeMethod(formatMethod);
+    }
+    
+    private static void analyzeMethod(Method method) {
+        System.out.println("方法名: " + method.getName());
+        System.out.println("返回类型: " + method.getReturnType().getSimpleName());
+        System.out.println("参数类型: " + Arrays.toString(method.getParameterTypes()));
+        System.out.println("修饰符: " + Modifier.toString(method.getModifiers()));
+        System.out.println("是否可变参数: " + method.isVarArgs());
+        System.out.println("异常类型: " + Arrays.toString(method.getExceptionTypes()));
+        System.out.println("---");
+    }
+}
+```
+
+</TabItem>
+<TabItem value="method-utils" label="方法工具类">
+
+### 通用方法操作工具类
+
+```java title="方法反射工具类"
+import java.lang.reflect.*;
+import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
+
+public class MethodUtils {
+    // 方法缓存
+    private static final Map<String, Method> METHOD_CACHE = new ConcurrentHashMap<>();
+    
+    /**
+     * 安全调用方法（带异常处理）
+     */
+    public static Object safeInvoke(Object target, String methodName, Object... args) {
+        try {
+            Class<?> clazz = target.getClass();
+            Class<?>[] paramTypes = getParameterTypes(args);
+            
+            Method method = findMethod(clazz, methodName, paramTypes);
+            if (method == null) {
+                throw new NoSuchMethodException("找不到方法: " + methodName);
+            }
+            
+            method.setAccessible(true);
+            return method.invoke(target, args);
+            
+        } catch (Exception e) {
+            System.err.println("方法调用失败: " + methodName + " - " + e.getMessage());
+            return null;
+        }
+    }
+    
+    /**
+     * 查找方法（支持继承和重载）
+     */
+    public static Method findMethod(Class<?> clazz, String methodName, Class<?>... paramTypes) {
+        String cacheKey = clazz.getName() + "#" + methodName + "#" + Arrays.toString(paramTypes);
+        
+        return METHOD_CACHE.computeIfAbsent(cacheKey, key -> {
+            // 首先尝试精确匹配
+            try {
+                return clazz.getDeclaredMethod(methodName, paramTypes);
+            } catch (NoSuchMethodException e) {
+                // 尝试在父类中查找
+                return findMethodInHierarchy(clazz, methodName, paramTypes);
+            }
+        });
+    }
+    
+    /**
+     * 在类层次结构中查找方法
+     */
+    private static Method findMethodInHierarchy(Class<?> clazz, String methodName, Class<?>[] paramTypes) {
+        Class<?> currentClass = clazz;
+        
+        while (currentClass != null && currentClass != Object.class) {
+            try {
+                return currentClass.getDeclaredMethod(methodName, paramTypes);
+            } catch (NoSuchMethodException e) {
+                // 尝试模糊匹配（参数类型兼容）
+                Method[] methods = currentClass.getDeclaredMethods();
+                for (Method method : methods) {
+                    if (method.getName().equals(methodName) && 
+                        isParameterTypesCompatible(method.getParameterTypes(), paramTypes)) {
+                        return method;
+                    }
+                }
+                currentClass = currentClass.getSuperclass();
+            }
+        }
+        
+        return null;
+    }
+    
+    /**
+     * 检查参数类型兼容性
+     */
+    private static boolean isParameterTypesCompatible(Class<?>[] methodParams, Class<?>[] actualParams) {
+        if (methodParams.length != actualParams.length) {
+            return false;
+        }
+        
+        for (int i = 0; i < methodParams.length; i++) {
+            if (!methodParams[i].isAssignableFrom(actualParams[i])) {
+                return false;
+            }
+        }
+        
+        return true;
+    }
+    
+    /**
+     * 获取参数类型数组
+     */
+    private static Class<?>[] getParameterTypes(Object... args) {
+        if (args == null || args.length == 0) {
+            return new Class<?>[0];
+        }
+        
+        Class<?>[] types = new Class<?>[args.length];
+        for (int i = 0; i < args.length; i++) {
+            types[i] = args[i] != null ? args[i].getClass() : Object.class;
+        }
+        
+        return types;
+    }
+    
+    /**
+     * 获取所有方法（包括继承的）
+     */
+    public static List<Method> getAllMethods(Class<?> clazz) {
+        List<Method> allMethods = new ArrayList<>();
+        Class<?> currentClass = clazz;
+        
+        while (currentClass != null && currentClass != Object.class) {
+            Method[] methods = currentClass.getDeclaredMethods();
+            allMethods.addAll(Arrays.asList(methods));
+            currentClass = currentClass.getSuperclass();
+        }
+        
+        return allMethods;
+    }
+    
+    /**
+     * 查找带有特定注解的方法
+     */
+    public static List<Method> findMethodsWithAnnotation(Class<?> clazz, Class<? extends Annotation> annotationClass) {
+        List<Method> annotatedMethods = new ArrayList<>();
+        List<Method> allMethods = getAllMethods(clazz);
+        
+        for (Method method : allMethods) {
+            if (method.isAnnotationPresent(annotationClass)) {
+                annotatedMethods.add(method);
+            }
+        }
+        
+        return annotatedMethods;
+    }
+    
+    /**
+     * 方法签名比较
+     */
+    public static boolean isSameSignature(Method method1, Method method2) {
+        return method1.getName().equals(method2.getName()) &&
+               Arrays.equals(method1.getParameterTypes(), method2.getParameterTypes());
+    }
+    
+    /**
+     * 创建方法代理
+     */
+    public static Object createMethodProxy(Object target, String methodName, Object... args) {
+        return new Object() {
+            public Object invoke() {
+                return safeInvoke(target, methodName, args);
+            }
+        };
+    }
+    
+    // 使用示例
+    public static void main(String[] args) {
+        CalculatorService calculator = new CalculatorService();
+        
+        System.out.println("=== 安全方法调用 ===");
+        Object result1 = safeInvoke(calculator, "add", 10, 20);
+        System.out.println("结果: " + result1);
+        
+        Object result2 = safeInvoke(calculator, "nonExistentMethod", "test");
+        System.out.println("不存在的方法结果: " + result2);
+        
+        System.out.println("\n=== 查找所有方法 ===");
+        List<Method> allMethods = getAllMethods(CalculatorService.class);
+        allMethods.forEach(method -> System.out.println("方法: " + method.getName()));
+        
+        System.out.println("\n=== 方法签名比较 ===");
+        try {
+            Method method1 = CalculatorService.class.getMethod("add", int.class, int.class);
+            Method method2 = CalculatorService.class.getMethod("multiply", double.class, double.class);
+            System.out.println("方法签名相同: " + isSameSignature(method1, method2));
+        } catch (NoSuchMethodException e) {
+            e.printStackTrace();
+        }
+    }
+}
+```
+
+</TabItem>
+<TabItem value="method-interceptor" label="方法拦截器">
+
+### 方法拦截器实现
+
+```java title="方法拦截器和AOP实现"
+import java.lang.annotation.*;
+import java.lang.reflect.*;
+import java.util.Arrays;
+
+// 方法执行时间注解
+@Retention(RetentionPolicy.RUNTIME)
+@Target(ElementType.METHOD)
+@interface Timed {
+    String value() default "";
+}
+
+// 日志注解
+@Retention(RetentionPolicy.RUNTIME)
+@Target(ElementType.METHOD)
+@interface Logged {
+    boolean logParameters() default true;
+    boolean logResult() default true;
+}
+
+// 方法拦截器接口
+interface MethodInterceptor {
+    Object intercept(Object target, Method method, Object[] args) throws Exception;
+}
+
+// 执行时间拦截器
+class TimingInterceptor implements MethodInterceptor {
+    @Override
+    public Object intercept(Object target, Method method, Object[] args) throws Exception {
+        long startTime = System.nanoTime();
+        
+        try {
+            Object result = method.invoke(target, args);
+            return result;
+        } finally {
+            long endTime = System.nanoTime();
+            long duration = (endTime - startTime) / 1_000_000; // 转换为毫秒
+            
+            Timed timed = method.getAnnotation(Timed.class);
+            String methodName = timed.value().isEmpty() ? method.getName() : timed.value();
+            System.out.println(String.format("[TIMING] %s 执行时间: %d ms", methodName, duration));
         }
     }
 }
 
-// 运行测试
-TestRunner.runTests(MyTestClass.class);
-```
-
-## 反射的性能考虑
-
-### 性能开销
-
-反射操作比直接代码慢，主要原因：
-
-1. **类型检查**：反射需要在运行时进行类型检查
-2. **访问权限检查**：每次反射操作都需要进行权限检查
-3. **无法优化**：JIT编译器无法对反射调用进行优化
-
-### 优化建议
-
-1. **缓存反射对象**：重用`Class`、`Method`、`Field`等反射对象
-2. **减少反射调用**：只在必要时使用反射
-3. **使用`setAccessible(true)`**：可以提高访问私有成员的性能
-4. **适当的场景**：在初始化阶段使用反射，而不是在性能敏感的循环中
-
-```java
-// 优化前：反复获取Method
-for (int i = 0; i < 1000; i++) {
-    Method method = obj.getClass().getMethod("someMethod");
-    method.invoke(obj);
-}
-
-// 优化后：缓存Method对象
-Method method = obj.getClass().getMethod("someMethod");
-method.setAccessible(true); // 提高性能
-for (int i = 0; i < 1000; i++) {
-    method.invoke(obj);
-}
-```
-
-### 反射的替代方案
-
-1. **代码生成**：编译时生成代码而非运行时使用反射
-2. **方法引用和Lambda**（Java 8+）：在一些场景下可以替代简单的反射用法
-3. **设计模式**：如工厂模式、命令模式等可以实现类似的灵活性
-
-## 反射的安全性
-
-### 安全管理器
-
-在启用安全管理器的环境中，反射操作会受到限制，需要适当的权限：
-
-- `accessDeclaredMembers`：访问类的所有成员
-- `suppressAccessChecks`：访问非公共成员
-
-### 绕过封装
-
-反射可以绕过Java的访问控制机制，因此需要谨慎使用：
-
-- 不要随意修改标记为`private`或`final`的字段
-- 不要调用不是为外部使用设计的私有方法
-- 考虑敏感代码的安全性防御措施
-
-## 面试题
-
-### 1. 什么是Java的反射机制？为什么要使用反射？
-
-**答**：Java反射是指在运行时检查、访问和修改类、接口、字段和方法的能力。它允许程序在运行时获取任何类的信息，并操作类的属性和方法。
-
-使用反射的主要原因：
-- 在运行时检查类、方法和字段
-- 在运行时调用方法，即使这些方法在编译时是未知的
-- 创建动态代码，如动态代理
-- 使框架更加灵活和可扩展，如Spring依赖注入、ORM框架
-- 支持可插拔架构，允许在运行时加载和使用新组件
-
-### 2. Java反射API的核心类有哪些？
-
-**答**：Java反射API的核心类主要包括：
-- **Class**：代表类或接口的类型信息
-- **Constructor**：提供关于类构造方法的信息和访问
-- **Method**：提供关于类或接口方法的信息和访问
-- **Field**：提供关于类或接口字段的信息和访问
-- **Array**：提供动态创建和访问数组的静态方法
-- **Modifier**：提供解码类和成员访问修饰符的静态方法和常量
-- **Parameter**：代表方法或构造函数的参数
-- **Annotation**：提供访问注解的接口
-
-### 3. 获取Class对象有哪几种方式？
-
-**答**：获取Class对象有三种主要方式：
-
-1. **使用对象的getClass()方法**
-   ```java
-   String str = "Hello";
-   Class<?> clazz = str.getClass();
-   ```
-
-2. **使用类的.class语法**
-   ```java
-   Class<?> clazz = String.class;
-   ```
-
-3. **使用Class.forName()方法**
-   ```java
-   Class<?> clazz = Class.forName("java.lang.String");
-   ```
-
-每种方法各有用途：第一种用于已有对象，第二种在编译时类型已知时使用，第三种在运行时动态加载类时使用。
-
-### 4. 反射如何创建对象？
-
-**答**：使用反射创建对象主要有以下方法：
-
-1. **使用Class.newInstance()方法**（已过时）
-   ```java
-   Class<?> clazz = Class.forName("java.lang.String");
-   Object obj = clazz.newInstance(); // 调用无参构造方法
-   ```
-
-2. **使用Constructor.newInstance()方法**（推荐）
-   ```java
-   Class<?> clazz = Class.forName("java.lang.String");
-   Constructor<?> constructor = clazz.getConstructor(); // 获取无参构造方法
-   Object obj = constructor.newInstance(); // 创建实例
-   ```
-
-3. **带参数构造对象**
-   ```java
-   Constructor<?> constructor = clazz.getConstructor(String.class);
-   Object obj = constructor.newInstance("Hello");
-   ```
-
-4. **访问私有构造方法**
-   ```java
-   Constructor<?> constructor = clazz.getDeclaredConstructor(String.class);
-   constructor.setAccessible(true); // 设置可访问
-   Object obj = constructor.newInstance("Hello");
-   ```
-
-### 5. 如何使用反射调用方法？
-
-**答**：使用反射调用方法的步骤：
-
-1. 获取Class对象
-2. 通过Class对象获取Method对象
-3. 使用Method对象的invoke方法调用方法
-
-```java
-// 获取Class对象
-Class<?> clazz = Class.forName("java.lang.String");
-
-// 获取方法（参数为方法名和参数类型）
-Method method = clazz.getMethod("substring", int.class, int.class);
-
-// 调用方法（第一个参数是方法所属的对象，后面是方法的实际参数）
-String str = "Hello World";
-Object result = method.invoke(str, 0, 5); // 结果: "Hello"
-
-// 调用静态方法
-Method staticMethod = Integer.class.getMethod("parseInt", String.class);
-Object staticResult = staticMethod.invoke(null, "123"); // 结果: 123
-```
-
-### 6. 如何使用反射获取和修改字段值？
-
-**答**：获取和修改字段值的步骤：
-
-1. 获取Class对象
-2. 通过Class对象获取Field对象
-3. 使用Field对象的get和set方法获取和修改字段值
-
-```java
-// 获取Class对象
-Class<?> clazz = Class.forName("com.example.Person");
-
-// 获取公共字段
-Field nameField = clazz.getField("name");
-
-// 获取所有字段（包括私有字段）
-Field ageField = clazz.getDeclaredField("age");
-ageField.setAccessible(true); // 设置可访问私有字段
-
-// 创建对象
-Object person = clazz.newInstance();
-
-// 设置字段值
-nameField.set(person, "John");
-ageField.set(person, 30);
-
-// 获取字段值
-String name = (String) nameField.get(person);
-int age = (int) ageField.get(person);
-```
-
-### 7. 反射的优缺点是什么？
-
-**答**：
-
-**优点**：
-- 增加程序的灵活性，可以在运行时动态加载类和调用方法
-- 支持动态代理、依赖注入等高级特性
-- 使框架更加通用和可扩展
-- 允许访问类的私有成员，有助于测试和调试
-
-**缺点**：
-- 性能开销大，反射操作比直接代码调用慢很多
-- 安全限制，在安全管理器下反射受限
-- 破坏封装，可以访问私有成员
-- 代码可读性降低，难以理解和维护
-- 编译时类型检查失效，可能导致运行时错误
-
-### 8. 动态代理是什么？如何使用Java反射实现？
-
-**答**：动态代理是一种在运行时创建实现了指定接口的代理类的机制，它可以拦截对目标对象方法的调用。
-
-使用Java反射API实现动态代理的步骤：
-
-1. 定义一个接口
-2. 提供接口的实现类
-3. 创建一个实现InvocationHandler接口的处理器
-4. 使用Proxy.newProxyInstance创建代理实例
-
-```java
-// 接口
-interface Calculator {
-    int add(int a, int b);
-    int subtract(int a, int b);
-}
-
-// 实现类
-class CalculatorImpl implements Calculator {
+// 日志拦截器
+class LoggingInterceptor implements MethodInterceptor {
     @Override
-    public int add(int a, int b) { return a + b; }
-    
-    @Override
-    public int subtract(int a, int b) { return a - b; }
-}
-
-// 调用处理器
-class LoggingHandler implements InvocationHandler {
-    private Object target;
-    
-    public LoggingHandler(Object target) {
-        this.target = target;
-    }
-    
-    @Override
-    public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
-        System.out.println("Before method: " + method.getName());
+    public Object intercept(Object target, Method method, Object[] args) throws Exception {
+        Logged logged = method.getAnnotation(Logged.class);
+        
+        if (logged.logParameters()) {
+            System.out.println(String.format("[LOG] 调用方法: %s, 参数: %s", 
+                method.getName(), Arrays.toString(args)));
+        }
+        
         Object result = method.invoke(target, args);
-        System.out.println("After method: " + method.getName() + ", result: " + result);
+        
+        if (logged.logResult()) {
+            System.out.println(String.format("[LOG] 方法: %s, 返回值: %s", 
+                method.getName(), result));
+        }
+        
         return result;
     }
 }
 
-// 创建代理
-Calculator calculator = new CalculatorImpl();
-Calculator proxy = (Calculator) Proxy.newProxyInstance(
-    Calculator.class.getClassLoader(),
-    new Class[]{Calculator.class},
-    new LoggingHandler(calculator)
-);
-
-// 调用代理方法
-int result = proxy.add(1, 2); // 会触发日志记录
-```
-
-### 9. 反射与注解如何结合使用？
-
-**答**：反射与注解结合是Java元编程的强大工具，可用于框架开发、配置管理、代码生成等场景。
-
-基本步骤：
-1. 定义注解类型（使用`@Retention(RetentionPolicy.RUNTIME)`确保运行时可见）
-2. 在类、方法或字段上应用注解
-3. 在运行时使用反射API检查和处理注解
-
-示例：简单的单元测试框架
-```java
-// 定义注解
-@Retention(RetentionPolicy.RUNTIME)
-@Target(ElementType.METHOD)
-@interface Test {
-    boolean enabled() default true;
+// 代理工厂
+class ProxyFactory {
+    public static <T> T createProxy(T target, MethodInterceptor... interceptors) {
+        Class<?> targetClass = target.getClass();
+        
+        return (T) Proxy.newProxyInstance(
+            targetClass.getClassLoader(),
+            targetClass.getInterfaces(),
+            new InvocationHandler() {
+                @Override
+                public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
+                    // 检查方法是否需要拦截
+                    boolean needsInterception = method.isAnnotationPresent(Timed.class) || 
+                                              method.isAnnotationPresent(Logged.class);
+                    
+                    if (!needsInterception) {
+                        return method.invoke(target, args);
+                    }
+                    
+                    // 应用拦截器
+                    Object result = null;
+                    for (MethodInterceptor interceptor : interceptors) {
+                        if ((interceptor instanceof TimingInterceptor && method.isAnnotationPresent(Timed.class)) ||
+                            (interceptor instanceof LoggingInterceptor && method.isAnnotationPresent(Logged.class))) {
+                            result = interceptor.intercept(target, method, args);
+                        }
+                    }
+                    
+                    return result != null ? result : method.invoke(target, args);
+                }
+            }
+        );
+    }
 }
 
-// 使用注解
-class MyTests {
-    @Test
-    public void testFeature1() {
-        // 测试代码
+// 业务服务接口
+interface BusinessService {
+    String processData(String data);
+    int calculate(int a, int b);
+    void doSomething();
+}
+
+// 业务服务实现
+class BusinessServiceImpl implements BusinessService {
+    
+    @Timed("数据处理")
+    @Logged(logParameters = true, logResult = true)
+    @Override
+    public String processData(String data) {
+        // 模拟耗时操作
+        try {
+            Thread.sleep(100);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+        return "处理后的数据: " + data.toUpperCase();
     }
     
-    @Test(enabled = false)
-    public void testFeature2() {
-        // 暂时禁用的测试
+    @Timed
+    @Override
+    public int calculate(int a, int b) {
+        // 模拟复杂计算
+        try {
+            Thread.sleep(50);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+        return a * b + (a + b);
+    }
+    
+    @Logged(logParameters = false, logResult = false)
+    @Override
+    public void doSomething() {
+        System.out.println("执行某些操作...");
     }
 }
 
-// 处理注解
-public class TestRunner {
-    public static void runTests(Class<?> testClass) throws Exception {
-        Object testInstance = testClass.newInstance();
+public class MethodInterceptorDemo {
+    public static void main(String[] args) {
+        // 创建原始服务
+        BusinessService originalService = new BusinessServiceImpl();
         
-        for (Method method : testClass.getDeclaredMethods()) {
-            if (method.isAnnotationPresent(Test.class)) {
-                Test testAnnotation = method.getAnnotation(Test.class);
+        // 创建代理服务
+        BusinessService proxyService = ProxyFactory.createProxy(
+            originalService,
+            new TimingInterceptor(),
+            new LoggingInterceptor()
+        );
+        
+        System.out.println("=== 使用代理服务 ===");
+        
+        // 测试带时间和日志的方法
+        String result1 = proxyService.processData("hello world");
+        System.out.println("最终结果: " + result1);
+        
+        System.out.println();
+        
+        // 测试只带时间的方法
+        int result2 = proxyService.calculate(10, 20);
+        System.out.println("计算结果: " + result2);
+        
+        System.out.println();
+        
+        // 测试只带日志的方法
+        proxyService.doSomething();
+    }
+}
+```
+
+</TabItem>
+</Tabs>
+
+## 4. 构造器（Constructor）操作详解
+
+构造器反射允许我们在运行时动态创建对象实例，这是依赖注入框架的核心技术。
+
+```mermaid
+graph TB
+    subgraph "构造器反射操作"
+        A["获取Class对象"] --> B["获取Constructor对象"]
+        B --> C["设置访问权限"]
+        C --> D["准备构造参数"]
+        D --> E["创建实例 newInstance()"]
+        
+        B --> B1["getConstructor 公共构造器"]
+        B --> B2["getDeclaredConstructor 所有构造器"]
+        B --> B3["getConstructors 所有公共构造器"]
+        B --> B4["getDeclaredConstructors 所有声明构造器"]
+    end
+```
+# 5. 注解（Annotation）反射处理
+
+注解反射是现代Java框架的核心技术，Spring、Hibernate等框架大量使用注解来简化配置。
+
+```mermaid
+graph TB
+    subgraph "注解反射处理流程"
+        A["定义注解"] --> B["使用注解标记"]
+        B --> C["运行时获取注解"]
+        C --> D["处理注解信息"]
+        D --> E["执行相应逻辑"]
+        
+        C --> C1["getAnnotation"]
+        C --> C2["getAnnotations"]
+        C --> C3["isAnnotationPresent"]
+        C --> C4["getDeclaredAnnotations"]
+    end
+```
+
+<Tabs>
+<TabItem value="annotation-basics" label="注解基础">
+
+### 注解定义与使用
+
+```java title="自定义注解完整示例"
+import java.lang.annotation.*;
+import java.lang.reflect.*;
+import java.util.*;
+
+// 1. 字段验证注解
+@Retention(RetentionPolicy.RUNTIME)
+@Target(ElementType.FIELD)
+@interface Validate {
+    String message() default "验证失败";
+    int min() default 0;
+    int max() default Integer.MAX_VALUE;
+    boolean required() default false;
+    String pattern() default "";
+}
+
+// 2. 方法级注解
+@Retention(RetentionPolicy.RUNTIME)
+@Target(ElementType.METHOD)
+@interface Cacheable {
+    String key() default "";
+    int expireTime() default 3600; // 秒
+}
+
+@Retention(RetentionPolicy.RUNTIME)
+@Target(ElementType.METHOD)
+@interface Transactional {
+    String value() default "default";
+    boolean readOnly() default false;
+}
+
+// 3. 类级注解
+@Retention(RetentionPolicy.RUNTIME)
+@Target(ElementType.TYPE)
+@interface Entity {
+    String tableName() default "";
+}
+
+@Retention(RetentionPolicy.RUNTIME)
+@Target(ElementType.TYPE)
+@interface Service {
+    String value() default "";
+}
+
+// 使用注解的示例类
+@Entity(tableName = "users")
+class User {
+    @Validate(required = true, message = "用户名不能为空")
+    private String username;
+    
+    @Validate(min = 18, max = 100, message = "年龄必须在18-100之间")
+    private int age;
+    
+    @Validate(required = true, pattern = "^[\\w-\\.]+@([\\w-]+\\.)+[\\w-]{2,4}$", message = "邮箱格式不正确")
+    private String email;
+    
+    private String password;
+    
+    public User(String username, int age, String email, String password) {
+        this.username = username;
+        this.age = age;
+        this.email = email;
+        this.password = password;
+    }
+    
+    // getters and setters...
+    public String getUsername() { return username; }
+    public int getAge() { return age; }
+    public String getEmail() { return email; }
+    public String getPassword() { return password; }
+    
+    @Override
+    public String toString() {
+        return String.format("User{username='%s', age=%d, email='%s'}", username, age, email);
+    }
+}
+
+@Service("userService")
+class UserService {
+    
+    @Cacheable(key = "user:{0}", expireTime = 1800)
+    @Transactional(readOnly = true)
+    public User findById(Long id) {
+        System.out.println("从数据库查询用户: " + id);
+        // 模拟数据库查询
+        return new User("user" + id, 25, "user" + id + "@example.com", "password");
+    }
+    
+    @Transactional
+    public void saveUser(User user) {
+        System.out.println("保存用户到数据库: " + user);
+        // 模拟保存操作
+    }
+    
+    @Cacheable(key = "userList", expireTime = 600)
+    public List<User> findAll() {
+        System.out.println("从数据库查询所有用户");
+        // 模拟查询所有用户
+        return Arrays.asList(
+            new User("alice", 28, "alice@example.com", "pass1"),
+            new User("bob", 32, "bob@example.com", "pass2")
+        );
+    }
+}
+
+public class AnnotationReflectionDemo {
+    
+    /**
+     * 验证对象字段
+     */
+    public static boolean validateObject(Object obj) {
+        Class<?> clazz = obj.getClass();
+        Field[] fields = clazz.getDeclaredFields();
+        boolean isValid = true;
+        
+        System.out.println("验证对象: " + obj.getClass().getSimpleName());
+        
+        for (Field field : fields) {
+            if (field.isAnnotationPresent(Validate.class)) {
+                Validate validate = field.getAnnotation(Validate.class);
                 
-                if (testAnnotation.enabled()) {
-                    try {
-                        method.invoke(testInstance);
-                        System.out.println(method.getName() + ": PASSED");
-                    } catch (InvocationTargetException e) {
-                        System.out.println(method.getName() + ": FAILED - " + e.getCause());
+                try {
+                    field.setAccessible(true);
+                    Object value = field.get(obj);
+                    
+                    // 检查必填项
+                    if (validate.required()) {
+                        if (value == null || (value instanceof String && ((String) value).trim().isEmpty())) {
+                            System.err.println("  ❌ " + field.getName() + ": " + validate.message());
+                            isValid = false;
+                            continue;
+                        }
                     }
-                } else {
-                    System.out.println(method.getName() + ": DISABLED");
+                    
+                    // 检查数值范围
+                    if (value instanceof Integer) {
+                        int intValue = (Integer) value;
+                        if (intValue < validate.min() || intValue > validate.max()) {
+                            System.err.println("  ❌ " + field.getName() + ": " + validate.message());
+                            isValid = false;
+                        }
+                    }
+                    
+                    // 检查正则表达式
+                    if (!validate.pattern().isEmpty() && value instanceof String) {
+                        String strValue = (String) value;
+                        if (!strValue.matches(validate.pattern())) {
+                            System.err.println("  ❌ " + field.getName() + ": " + validate.message());
+                            isValid = false;
+                        }
+                    }
+                    
+                    if (isValid) {
+                        System.out.println("  ✅ " + field.getName() + ": 验证通过");
+                    }
+                    
+                } catch (IllegalAccessException e) {
+                    System.err.println("无法访问字段: " + field.getName());
+                    isValid = false;
+                }
+            }
+        }
+        
+        return isValid;
+    }
+    
+    /**
+     * 分析类的注解信息
+     */
+    public static void analyzeClassAnnotations(Class<?> clazz) {
+        System.out.println("\n=== 分析类注解: " + clazz.getSimpleName() + " ===");
+        
+        // 类级注解
+        Annotation[] classAnnotations = clazz.getAnnotations();
+        if (classAnnotations.length > 0) {
+            System.out.println("类注解:");
+            for (Annotation annotation : classAnnotations) {
+                System.out.println("  " + annotation);
+                
+                // 处理特定注解
+                if (annotation instanceof Entity) {
+                    Entity entity = (Entity) annotation;
+                    String tableName = entity.tableName().isEmpty() ? 
+                        clazz.getSimpleName().toLowerCase() : entity.tableName();
+                    System.out.println("    表名: " + tableName);
+                }
+                
+                if (annotation instanceof Service) {
+                    Service service = (Service) annotation;
+                    String serviceName = service.value().isEmpty() ? 
+                        clazz.getSimpleName() : service.value();
+                    System.out.println("    服务名: " + serviceName);
+                }
+            }
+        }
+        
+        // 方法注解
+        Method[] methods = clazz.getDeclaredMethods();
+        for (Method method : methods) {
+            Annotation[] methodAnnotations = method.getAnnotations();
+            if (methodAnnotations.length > 0) {
+                System.out.println("方法 " + method.getName() + " 的注解:");
+                for (Annotation annotation : methodAnnotations) {
+                    System.out.println("  " + annotation);
                 }
             }
         }
     }
+    
+    public static void main(String[] args) {
+        // 测试对象验证
+        User validUser = new User("alice", 25, "alice@example.com", "password123");
+        User invalidUser = new User("", 15, "invalid-email", "pass");
+        
+        System.out.println("=== 验证有效用户 ===");
+        boolean isValid1 = validateObject(validUser);
+        System.out.println("验证结果: " + (isValid1 ? "✅ 通过" : "❌ 失败"));
+        
+        System.out.println("\n=== 验证无效用户 ===");
+        boolean isValid2 = validateObject(invalidUser);
+        System.out.println("验证结果: " + (isValid2 ? "✅ 通过" : "❌ 失败"));
+        
+        // 分析类注解
+        analyzeClassAnnotations(User.class);
+        analyzeClassAnnotations(UserService.class);
+    }
 }
 ```
 
-### 10. 如何提高反射的性能？
+</TabItem>
+</Tabs>
 
-**答**：提高反射性能的主要方法：
+## 6. 反射在框架中的应用
 
-1. **缓存反射对象**：重用Class、Method、Field等对象，避免重复查找
-   ```java
-   // 缓存Method对象
-   private static final Method method;
-   static {
-       try {
-           method = MyClass.class.getMethod("myMethod", String.class);
-       } catch (NoSuchMethodException e) {
-           throw new RuntimeException(e);
-       }
-   }
-   ```
+反射是Java框架开发的核心技术，Spring、Hibernate等框架都大量使用反射。
 
-2. **使用setAccessible(true)**：跳过Java语言的访问检查
-   ```java
-   method.setAccessible(true); // 显著提高访问私有成员的性能
-   ```
+:::tip 框架应用场景
+- **依赖注入**：Spring IoC容器通过反射创建和注入对象
+- **ORM映射**：Hibernate通过反射实现对象关系映射
+- **AOP切面**：动态代理和字节码增强
+- **序列化**：JSON、XML序列化框架
+- **测试框架**：JUnit通过反射发现和执行测试方法
+:::
 
-3. **批量操作**：一次获取所有需要的反射对象，而不是逐个获取
-   ```java
-   // 一次获取所有方法
-   Method[] methods = clazz.getDeclaredMethods();
-   ```
-
-4. **避免在性能敏感代码中使用反射**：在初始化阶段使用反射，然后缓存结果
-
-5. **使用方法句柄**（Java 7+）：`java.lang.invoke.MethodHandle`比传统反射更高效
-   ```java
-   MethodHandles.Lookup lookup = MethodHandles.lookup();
-   MethodHandle handle = lookup.findVirtual(String.class, "concat", 
-       MethodType.methodType(String.class, String.class));
-   String result = (String) handle.invoke("Hello, ", "World");
-   ```
-
-### 11. 反射如何访问和修改数组？
-
-**答**：使用`java.lang.reflect.Array`类来动态创建和操作数组：
-
-```java
-// 创建数组
-int[] dimensions = {5}; // 一维数组，长度为5
-Object array = Array.newInstance(int.class, dimensions);
-
-// 设置数组元素
-Array.setInt(array, 0, 10);
-Array.setInt(array, 1, 20);
-
-// 获取数组元素
-int value = Array.getInt(array, 1); // 结果: 20
-
-// 获取数组长度
-int length = Array.getLength(array);
-
-// 创建多维数组
-int[] dimensions2D = {3, 4}; // 3行4列
-Object matrix = Array.newInstance(int.class, dimensions2D);
-
-// 获取第一行
-Object row = Array.get(matrix, 0);
-```
-
-这种方式特别有用于处理未知类型或维度的数组，或者在运行时动态创建数组。
+通过掌握Java反射机制的核心概念和实践技巧，你可以更好地理解和使用各种Java框架，同时具备开发自己的框架和工具的能力。

@@ -18,13 +18,16 @@ last_update:
 ```javascript
 // webpack.config.js
 const path = require('path');
+const HtmlWebpackPlugin = require('html-webpack-plugin');
+const MiniCssExtractPlugin = require('mini-css-extract-plugin');
 
 module.exports = {
   entry: './src/index.js',
   output: {
     path: path.resolve(__dirname, 'dist'),
-    filename: 'bundle.js',
-    clean: true
+    filename: '[name].[contenthash].js',
+    clean: true,
+    publicPath: '/'
   },
   module: {
     rules: [
@@ -34,20 +37,527 @@ module.exports = {
         use: {
           loader: 'babel-loader',
           options: {
-            presets: ['@babel/preset-env']
+            presets: ['@babel/preset-env', '@babel/preset-react']
           }
         }
       },
       {
         test: /\.css$/,
-        use: ['style-loader', 'css-loader']
+        use: [
+          process.env.NODE_ENV === 'production' 
+            ? MiniCssExtractPlugin.loader 
+            : 'style-loader',
+          'css-loader',
+          'postcss-loader'
+        ]
+      },
+      {
+        test: /\.(png|svg|jpg|jpeg|gif)$/i,
+        type: 'asset/resource'
+      },
+      {
+        test: /\.(woff|woff2|eot|ttf|otf)$/i,
+        type: 'asset/resource'
       }
     ]
   },
-  plugins: [],
-  mode: 'development'
+  plugins: [
+    new HtmlWebpackPlugin({
+      template: './public/index.html'
+    }),
+    new MiniCssExtractPlugin({
+      filename: '[name].[contenthash].css'
+    })
+  ],
+  optimization: {
+    splitChunks: {
+      chunks: 'all',
+      cacheGroups: {
+        vendor: {
+          test: /[\\/]node_modules[\\/]/,
+          name: 'vendors',
+          chunks: 'all'
+        }
+      }
+    }
+  },
+  devServer: {
+    contentBase: path.join(__dirname, 'dist'),
+    compress: true,
+    port: 3000,
+    hot: true,
+    historyApiFallback: true
+  },
+  mode: process.env.NODE_ENV || 'development'
 };
 ```
+
+### 高级配置
+```javascript
+// webpack.prod.js - 生产环境配置
+const { merge } = require('webpack-merge');
+const common = require('./webpack.common.js');
+const TerserPlugin = require('terser-webpack-plugin');
+const CssMinimizerPlugin = require('css-minimizer-webpack-plugin');
+const { BundleAnalyzerPlugin } = require('webpack-bundle-analyzer');
+
+module.exports = merge(common, {
+  mode: 'production',
+  devtool: 'source-map',
+  optimization: {
+    minimize: true,
+    minimizer: [
+      new TerserPlugin({
+        terserOptions: {
+          compress: {
+            drop_console: true,
+            drop_debugger: true
+          }
+        }
+      }),
+      new CssMinimizerPlugin()
+    ],
+    splitChunks: {
+      chunks: 'all',
+      cacheGroups: {
+        default: {
+          minChunks: 2,
+          priority: -20,
+          reuseExistingChunk: true
+        },
+        vendor: {
+          test: /[\\/]node_modules[\\/]/,
+          name: 'vendors',
+          priority: -10,
+          chunks: 'all'
+        },
+        react: {
+          test: /[\\/]node_modules[\\/](react|react-dom)[\\/]/,
+          name: 'react',
+          chunks: 'all'
+        }
+      }
+    }
+  },
+  plugins: [
+    new BundleAnalyzerPlugin({
+      analyzerMode: 'static',
+      openAnalyzer: false
+    })
+  ]
+});
+```
+
+## Vite
+
+Vite是新一代前端构建工具，以其快速的开发服务器和优化的构建性能而闻名。
+
+### 基础配置
+```javascript
+// vite.config.js
+import { defineConfig } from 'vite';
+import react from '@vitejs/plugin-react';
+import { resolve } from 'path';
+
+export default defineConfig({
+  plugins: [react()],
+  resolve: {
+    alias: {
+      '@': resolve(__dirname, 'src'),
+      '@components': resolve(__dirname, 'src/components'),
+      '@utils': resolve(__dirname, 'src/utils')
+    }
+  },
+  css: {
+    preprocessorOptions: {
+      scss: {
+        additionalData: `@import "@/styles/variables.scss";`
+      }
+    },
+    modules: {
+      localsConvention: 'camelCase'
+    }
+  },
+  build: {
+    outDir: 'dist',
+    sourcemap: true,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          vendor: ['react', 'react-dom'],
+          router: ['react-router-dom']
+        }
+      }
+    }
+  },
+  server: {
+    port: 3000,
+    open: true,
+    proxy: {
+      '/api': {
+        target: 'http://localhost:8080',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api/, '')
+      }
+    }
+  }
+});
+```
+
+### 环境配置
+```javascript
+// vite.config.ts - TypeScript配置
+import { defineConfig, loadEnv } from 'vite';
+import react from '@vitejs/plugin-react';
+import { resolve } from 'path';
+
+export default defineConfig(({ command, mode }) => {
+  const env = loadEnv(mode, process.cwd(), '');
+  
+  return {
+    plugins: [
+      react({
+        jsxImportSource: '@emotion/react',
+        babel: {
+          plugins: ['@emotion/babel-plugin']
+        }
+      })
+    ],
+    define: {
+      __APP_ENV__: JSON.stringify(env.APP_ENV)
+    },
+    resolve: {
+      alias: {
+        '@': resolve(__dirname, 'src')
+      }
+    },
+    build: {
+      target: 'es2015',
+      minify: 'terser',
+      terserOptions: {
+        compress: {
+          drop_console: command === 'build',
+          drop_debugger: command === 'build'
+        }
+      }
+    }
+  };
+});
+```
+
+## Rollup
+
+Rollup专注于ES模块打包，特别适合库的构建。
+
+### 基础配置
+```javascript
+// rollup.config.js
+import resolve from '@rollup/plugin-node-resolve';
+import commonjs from '@rollup/plugin-commonjs';
+import babel from '@rollup/plugin-babel';
+import { terser } from 'rollup-plugin-terser';
+import peerDepsExternal from 'rollup-plugin-peer-deps-external';
+
+export default {
+  input: 'src/index.js',
+  output: [
+    {
+      file: 'dist/index.cjs.js',
+      format: 'cjs',
+      sourcemap: true
+    },
+    {
+      file: 'dist/index.esm.js',
+      format: 'esm',
+      sourcemap: true
+    },
+    {
+      file: 'dist/index.umd.js',
+      format: 'umd',
+      name: 'MyLibrary',
+      sourcemap: true
+    }
+  ],
+  plugins: [
+    peerDepsExternal(),
+    resolve({
+      browser: true
+    }),
+    commonjs(),
+    babel({
+      babelHelpers: 'bundled',
+      exclude: 'node_modules/**',
+      presets: ['@babel/preset-env', '@babel/preset-react']
+    }),
+    terser()
+  ],
+  external: ['react', 'react-dom']
+};
+```
+
+## esbuild
+
+esbuild是用Go编写的极快的JavaScript打包器和压缩器。
+
+### 基础使用
+```javascript
+// build.js
+const esbuild = require('esbuild');
+
+esbuild.build({
+  entryPoints: ['src/index.js'],
+  bundle: true,
+  outfile: 'dist/bundle.js',
+  minify: true,
+  sourcemap: true,
+  target: ['es2015'],
+  loader: {
+    '.png': 'dataurl',
+    '.svg': 'text'
+  },
+  define: {
+    'process.env.NODE_ENV': '"production"'
+  }
+}).catch(() => process.exit(1));
+```
+
+### 开发服务器
+```javascript
+// dev-server.js
+const esbuild = require('esbuild');
+
+esbuild.serve({
+  servedir: 'public',
+  port: 3000
+}, {
+  entryPoints: ['src/index.js'],
+  bundle: true,
+  outdir: 'public/dist',
+  loader: {
+    '.js': 'jsx'
+  }
+}).then(server => {
+  console.log(`Server running at http://localhost:${server.port}`);
+});
+```
+
+## Parcel
+
+Parcel是零配置的Web应用打包器。
+
+### 基础使用
+```json
+{
+  "name": "my-app",
+  "scripts": {
+    "start": "parcel src/index.html",
+    "build": "parcel build src/index.html"
+  },
+  "devDependencies": {
+    "parcel": "^2.0.0"
+  }
+}
+```
+
+### 配置文件
+```json
+// .parcelrc
+{
+  "extends": "@parcel/config-default",
+  "transformers": {
+    "*.{ts,tsx}": ["@parcel/transformer-typescript-tsc"]
+  },
+  "resolvers": ["@parcel/resolver-default"],
+  "bundler": "@parcel/bundler-default",
+  "namers": ["@parcel/namer-default"],
+  "runtimes": ["@parcel/runtime-js", "@parcel/runtime-browser-hmr"],
+  "optimizers": {
+    "*.js": ["@parcel/optimizer-terser"],
+    "*.css": ["@parcel/optimizer-cssnano"]
+  },
+  "packagers": {
+    "*.html": "@parcel/packager-html",
+    "*.js": "@parcel/packager-js",
+    "*.css": "@parcel/packager-css"
+  },
+  "compressors": {
+    "*.{html,css,js,svg,map}": ["@parcel/compressor-gzip"]
+  }
+}
+```
+
+## 构建优化策略
+
+### 1. 代码分割
+```javascript
+// 动态导入实现代码分割
+const LazyComponent = React.lazy(() => import('./LazyComponent'));
+
+// Webpack魔法注释
+const LazyComponent = React.lazy(() => 
+  import(/* webpackChunkName: "lazy-component" */ './LazyComponent')
+);
+
+// 路由级别分割
+const routes = [
+  {
+    path: '/',
+    component: React.lazy(() => import('./pages/Home'))
+  },
+  {
+    path: '/about',
+    component: React.lazy(() => import('./pages/About'))
+  }
+];
+```
+
+### 2. Tree Shaking
+```javascript
+// 确保使用ES模块
+import { debounce } from 'lodash-es'; // ✅ 支持tree shaking
+// import _ from 'lodash'; // ❌ 不支持tree shaking
+
+// package.json中标记副作用
+{
+  "sideEffects": false, // 或者 ["*.css", "*.scss"]
+}
+
+// 使用具名导出
+export const utils = {
+  debounce,
+  throttle
+};
+
+// 而不是默认导出
+export default {
+  debounce,
+  throttle
+};
+```
+
+### 3. 缓存策略
+```javascript
+// Webpack缓存配置
+module.exports = {
+  cache: {
+    type: 'filesystem',
+    buildDependencies: {
+      config: [__filename]
+    }
+  },
+  output: {
+    filename: '[name].[contenthash].js',
+    chunkFilename: '[name].[contenthash].chunk.js'
+  }
+};
+```
+
+### 4. 性能监控
+```javascript
+// webpack-bundle-analyzer
+const BundleAnalyzerPlugin = require('webpack-bundle-analyzer').BundleAnalyzerPlugin;
+
+module.exports = {
+  plugins: [
+    new BundleAnalyzerPlugin({
+      analyzerMode: 'static',
+      openAnalyzer: false,
+      reportFilename: 'bundle-report.html'
+    })
+  ]
+};
+
+// 性能预算
+module.exports = {
+  performance: {
+    maxAssetSize: 250000,
+    maxEntrypointSize: 250000,
+    hints: 'warning'
+  }
+};
+```
+
+## 构建工具对比
+
+| 特性 | Webpack | Vite | Rollup | esbuild | Parcel |
+|------|---------|------|--------|---------|--------|
+| **配置复杂度** | 高 | 低 | 中 | 低 | 极低 |
+| **构建速度** | 中 | 快 | 中 | 极快 | 快 |
+| **开发服务器** | 支持 | 极快 | 需插件 | 支持 | 支持 |
+| **代码分割** | 强大 | 支持 | 支持 | 支持 | 支持 |
+| **插件生态** | 丰富 | 快速增长 | 丰富 | 有限 | 中等 |
+| **学习成本** | 高 | 低 | 中 | 低 | 极低 |
+| **适用场景** | 大型项目 | 现代项目 | 库开发 | 快速构建 | 快速原型 |
+
+## 最佳实践
+
+### 1. 选择合适的工具
+- **大型复杂项目**：Webpack + 详细配置
+- **现代React/Vue项目**：Vite
+- **库开发**：Rollup
+- **快速原型**：Parcel
+- **性能要求极高**：esbuild
+
+### 2. 优化构建性能
+```javascript
+// 并行处理
+const TerserPlugin = require('terser-webpack-plugin');
+
+module.exports = {
+  optimization: {
+    minimizer: [
+      new TerserPlugin({
+        parallel: true, // 启用并行压缩
+        cache: true     // 启用缓存
+      })
+    ]
+  }
+};
+
+// 减少解析范围
+module.exports = {
+  resolve: {
+    modules: [path.resolve(__dirname, 'src'), 'node_modules'],
+    extensions: ['.js', '.jsx', '.ts', '.tsx']
+  },
+  module: {
+    rules: [
+      {
+        test: /\.js$/,
+        include: path.resolve(__dirname, 'src'), // 只处理src目录
+        exclude: /node_modules/
+      }
+    ]
+  }
+};
+```
+
+### 3. 环境区分
+```javascript
+// 开发环境
+const devConfig = {
+  mode: 'development',
+  devtool: 'eval-source-map',
+  devServer: {
+    hot: true,
+    open: true
+  }
+};
+
+// 生产环境
+const prodConfig = {
+  mode: 'production',
+  devtool: 'source-map',
+  optimization: {
+    minimize: true,
+    splitChunks: {
+      chunks: 'all'
+    }
+  }
+};
+```
+
+通过合理选择和配置构建工具，可以显著提升开发效率和应用性能。
 
 ### 常用Loader
 ```javascript

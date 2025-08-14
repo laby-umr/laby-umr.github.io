@@ -1,38 +1,610 @@
 ---
 sidebar_position: 2
-title: "加载优化"
-description: "前端资源加载优化策略"
+title: 前端加载优化策略详解
+description: 深入解析前端资源加载优化、代码分割、缓存策略与性能监控最佳实践
 authors: [Laby]
+tags: [性能优化, 加载优化, 代码分割, 缓存策略, 懒加载, 预加载]
 last_update:
-  date: 2025-08-07
+  date: 2025-08-14
   author: Laby
 ---
 
-# 加载优化
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+import CodeBlock from '@theme/CodeBlock';
 
-加载优化是前端性能优化的核心，主要目标是减少页面加载时间和提升用户体验。
+# 前端加载优化策略详解
 
-## 资源压缩与合并
+加载优化是前端性能优化的核心环节，直接影响用户的首次体验和页面可交互时间。通过系统化的加载优化策略，可以显著提升页面性能，改善用户体验，提高业务转化率。
 
-### 文件压缩
-```javascript
-// webpack配置示例
+:::tip 核心价值
+**加载优化 = 资源压缩 + 代码分割 + 缓存策略 + 预加载技术**
+- 📦 **资源压缩**：减少文件体积，降低传输时间
+- ✂️ **代码分割**：按需加载，减少初始包大小
+- 🗄️ **缓存策略**：合理利用浏览器和CDN缓存
+- ⚡ **预加载技术**：提前加载关键资源
+- 🔄 **懒加载**：延迟加载非关键资源
+- 📊 **性能监控**：持续监控和优化加载性能
+:::
+
+## 1. 资源优化策略
+
+### 1.1 资源压缩与合并
+
+资源压缩是减少文件体积的基础手段，包括JavaScript、CSS、图片等各类资源的优化。
+
+```mermaid
+graph TB
+    subgraph "资源优化流程"
+        A[原始资源] --> B[压缩处理]
+        B --> C[格式转换]
+        C --> D[CDN分发]
+        D --> E[浏览器缓存]
+        
+        B --> B1[JavaScript压缩]
+        B --> B2[CSS压缩]
+        B --> B3[图片压缩]
+        
+        C --> C1[WebP/AVIF]
+        C --> C2[Gzip/Brotli]
+        C --> C3[Tree Shaking]
+    end
+```
+
+#### 资源压缩对比表
+
+| 资源类型 | 压缩技术 | 压缩率 | 工具推荐 | 适用场景 |
+|---------|----------|--------|----------|----------|
+| **JavaScript** | Terser/UglifyJS | 60-80% | Webpack, Rollup | 生产环境必备 |
+| **CSS** | cssnano/clean-css | 40-60% | PostCSS, Webpack | 样式文件优化 |
+| **HTML** | html-minifier | 20-40% | Webpack插件 | 模板文件压缩 |
+| **图片** | WebP/AVIF | 25-50% | imagemin, squoosh | 现代浏览器 |
+| **字体** | WOFF2 | 30-50% | fonttools | Web字体优化 |
+
+<Tabs>
+<TabItem value="js-compression" label="JavaScript压缩">
+
+#### JavaScript压缩优化
+
+```javascript title="Webpack JavaScript压缩配置"
+const TerserPlugin = require('terser-webpack-plugin');
+const CompressionPlugin = require('compression-webpack-plugin');
+
 module.exports = {
+  mode: 'production',
   optimization: {
     minimize: true,
     minimizer: [
       new TerserPlugin({
         terserOptions: {
           compress: {
+            // 移除console语句
             drop_console: true,
-            drop_debugger: true
+            drop_debugger: true,
+            // 移除未使用的代码
+            pure_funcs: ['console.log', 'console.info'],
+            // 压缩条件语句
+            conditionals: true,
+            // 移除死代码
+            dead_code: true,
+            // 优化if语句
+            if_return: true,
+            // 合并变量声明
+            join_vars: true,
+            // 压缩循环
+            loops: true
+          },
+          mangle: {
+            // 混淆变量名
+            toplevel: true,
+            // 保留类名
+            keep_classnames: true,
+            // 保留函数名
+            keep_fnames: false
+          },
+          format: {
+            // 移除注释
+            comments: false
           }
+        },
+        // 并行压缩
+        parallel: true,
+        // 提取注释到单独文件
+        extractComments: false
+      })
+    ],
+    // 代码分割
+    splitChunks: {
+      chunks: 'all',
+      cacheGroups: {
+        vendor: {
+          test: /[\\/]node_modules[\\/]/,
+          name: 'vendors',
+          chunks: 'all',
+          priority: 10
+        },
+        common: {
+          name: 'common',
+          minChunks: 2,
+          chunks: 'all',
+          priority: 5,
+          reuseExistingChunk: true
+        }
+      }
+    }
+  },
+  plugins: [
+    // Gzip压缩
+    new CompressionPlugin({
+      algorithm: 'gzip',
+      test: /\.(js|css|html|svg)$/,
+      threshold: 8192,
+      minRatio: 0.8
+    }),
+    // Brotli压缩
+    new CompressionPlugin({
+      filename: '[path][base].br',
+      algorithm: 'brotliCompress',
+      test: /\.(js|css|html|svg)$/,
+      compressionOptions: {
+        params: {
+          [require('zlib').constants.BROTLI_PARAM_QUALITY]: 11,
+        },
+      },
+      threshold: 8192,
+      minRatio: 0.8
+    })
+  ]
+};
+
+// 自定义压缩函数
+class CustomMinifier {
+  static minifyJS(code, options = {}) {
+    const defaultOptions = {
+      removeComments: true,
+      removeConsole: true,
+      minifyVariables: true,
+      ...options
+    };
+    
+    let minified = code;
+    
+    if (defaultOptions.removeComments) {
+      // 移除单行注释
+      minified = minified.replace(/\/\/.*$/gm, '');
+      // 移除多行注释
+      minified = minified.replace(/\/\*[\s\S]*?\*\//g, '');
+    }
+    
+    if (defaultOptions.removeConsole) {
+      // 移除console语句
+      minified = minified.replace(/console\.(log|info|warn|error|debug)\([^)]*\);?/g, '');
+    }
+    
+    if (defaultOptions.minifyVariables) {
+      // 简单的变量名压缩（生产环境建议使用专业工具）
+      const varMap = new Map();
+      let varCounter = 0;
+      
+      minified = minified.replace(/\b(var|let|const)\s+([a-zA-Z_$][a-zA-Z0-9_$]*)/g, (match, keyword, varName) => {
+        if (!varMap.has(varName)) {
+          varMap.set(varName, `v${varCounter++}`);
+        }
+        return `${keyword} ${varMap.get(varName)}`;
+      });
+    }
+    
+    // 移除多余空白
+    minified = minified.replace(/\s+/g, ' ').trim();
+    
+    return minified;
+  }
+}
+
+// 使用示例
+const originalCode = `
+// 这是一个示例函数
+function calculateTotal(items) {
+  console.log('Calculating total for items:', items);
+  let total = 0;
+  for (let i = 0; i < items.length; i++) {
+    total += items[i].price;
+  }
+  return total;
+}
+`;
+
+const minifiedCode = CustomMinifier.minifyJS(originalCode);
+console.log('压缩后代码:', minifiedCode);
+```
+
+</TabItem>
+<TabItem value="css-compression" label="CSS压缩">
+
+#### CSS压缩优化
+
+```javascript title="CSS压缩配置与实现"
+// PostCSS配置
+module.exports = {
+  plugins: [
+    require('autoprefixer'),
+    require('cssnano')({
+      preset: ['default', {
+        // 移除注释
+        discardComments: {
+          removeAll: true
+        },
+        // 移除未使用的规则
+        discardUnused: true,
+        // 合并相同规则
+        mergeRules: true,
+        // 压缩颜色值
+        colormin: true,
+        // 压缩字体
+        minifyFontValues: true,
+        // 压缩选择器
+        minifySelectors: true,
+        // 标准化空白
+        normalizeWhitespace: true,
+        // 移除重复规则
+        uniqueSelectors: true
+      }]
+    })
+  ]
+};
+
+// Webpack CSS压缩配置
+const MiniCssExtractPlugin = require('mini-css-extract-plugin');
+const CssMinimizerPlugin = require('css-minimizer-webpack-plugin');
+
+module.exports = {
+  module: {
+    rules: [
+      {
+        test: /\.css$/,
+        use: [
+          MiniCssExtractPlugin.loader,
+          'css-loader',
+          {
+            loader: 'postcss-loader',
+            options: {
+              postcssOptions: {
+                plugins: [
+                  ['autoprefixer'],
+                  ['cssnano', { preset: 'default' }]
+                ]
+              }
+            }
+          }
+        ]
+      }
+    ]
+  },
+  plugins: [
+    new MiniCssExtractPlugin({
+      filename: '[name].[contenthash].css',
+      chunkFilename: '[id].[contenthash].css'
+    })
+  ],
+  optimization: {
+    minimizer: [
+      new CssMinimizerPlugin({
+        minimizerOptions: {
+          preset: [
+            'default',
+            {
+              discardComments: { removeAll: true },
+              normalizeUnicode: false
+            }
+          ]
         }
       })
     ]
   }
+};
+
+// 自定义CSS压缩工具
+class CSSMinifier {
+  static minifyCSS(css) {
+    return css
+      // 移除注释
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+      // 移除多余空白
+      .replace(/\s+/g, ' ')
+      // 移除分号前的空格
+      .replace(/\s*;\s*/g, ';')
+      // 移除花括号前后的空格
+      .replace(/\s*{\s*/g, '{')
+      .replace(/\s*}\s*/g, '}')
+      // 移除冒号后的空格
+      .replace(/:\s+/g, ':')
+      // 移除逗号后的空格
+      .replace(/,\s+/g, ',')
+      // 压缩颜色值
+      .replace(/#([0-9a-f])\1([0-9a-f])\2([0-9a-f])\3/gi, '#$1$2$3')
+      // 移除0值的单位
+      .replace(/\b0(px|em|rem|%|vh|vw|pt|pc|in|cm|mm|ex|ch|vmin|vmax)\b/g, '0')
+      // 压缩margin/padding简写
+      .replace(/margin:\s*0\s+0\s+0\s+0/g, 'margin:0')
+      .replace(/padding:\s*0\s+0\s+0\s+0/g, 'padding:0')
+      .trim();
+  }
+  
+  static optimizeSelectors(css) {
+    // 合并相同的选择器
+    const rules = new Map();
+    
+    css.replace(/([^{}]+)\{([^{}]*)\}/g, (match, selector, declarations) => {
+      const cleanSelector = selector.trim();
+      const cleanDeclarations = declarations.trim();
+      
+      if (rules.has(cleanDeclarations)) {
+        rules.set(cleanDeclarations, rules.get(cleanDeclarations) + ',' + cleanSelector);
+      } else {
+        rules.set(cleanDeclarations, cleanSelector);
+      }
+    });
+    
+    let optimizedCSS = '';
+    rules.forEach((selectors, declarations) => {
+      optimizedCSS += `${selectors}{${declarations}}`;
+    });
+    
+    return optimizedCSS;
+  }
+}
+
+// 关键CSS提取
+class CriticalCSSExtractor {
+  static extractCritical(html, css) {
+    const usedSelectors = new Set();
+    const dom = new DOMParser().parseFromString(html, 'text/html');
+    
+    // 解析CSS规则
+    const styleSheet = new CSSStyleSheet();
+    styleSheet.replaceSync(css);
+    
+    for (const rule of styleSheet.cssRules) {
+      if (rule.type === CSSRule.STYLE_RULE) {
+        try {
+          if (dom.querySelector(rule.selectorText)) {
+            usedSelectors.add(rule.cssText);
+          }
+        } catch (e) {
+          // 忽略无效选择器
+        }
+      }
+    }
+    
+    return Array.from(usedSelectors).join('\n');
+  }
 }
 ```
+
+</TabItem>
+<TabItem value="image-optimization" label="图片优化">
+
+#### 图片优化策略
+
+```javascript title="图片优化完整方案"
+// 图片压缩配置
+const ImageMinimizerPlugin = require('image-minimizer-webpack-plugin');
+
+module.exports = {
+  module: {
+    rules: [
+      {
+        test: /\.(jpe?g|png|gif|svg)$/i,
+        type: 'asset',
+        parser: {
+          dataUrlCondition: {
+            maxSize: 8 * 1024 // 8KB以下转为base64
+          }
+        },
+        generator: {
+          filename: 'images/[name].[hash:8][ext]'
+        }
+      }
+    ]
+  },
+  plugins: [
+    new ImageMinimizerPlugin({
+      minimizer: {
+        implementation: ImageMinimizerPlugin.imageminMinify,
+        options: {
+          plugins: [
+            ['imagemin-mozjpeg', { quality: 80 }],
+            ['imagemin-pngquant', { quality: [0.6, 0.8] }],
+            ['imagemin-svgo', {
+              plugins: [
+                { name: 'removeViewBox', active: false },
+                { name: 'removeDimensions', active: true }
+              ]
+            }]
+          ]
+        }
+      },
+      generator: [
+        {
+          type: 'asset',
+          preset: 'webp-custom-name',
+          implementation: ImageMinimizerPlugin.imageminGenerate,
+          options: {
+            plugins: ['imagemin-webp']
+          }
+        }
+      ]
+    })
+  ]
+};
+
+// 响应式图片组件
+class ResponsiveImage {
+  constructor(options) {
+    this.src = options.src;
+    this.alt = options.alt;
+    this.sizes = options.sizes || '100vw';
+    this.loading = options.loading || 'lazy';
+    this.formats = options.formats || ['webp', 'jpg'];
+  }
+  
+  generateSrcSet(basePath, sizes) {
+    return sizes.map(size => `${basePath}-${size}w.jpg ${size}w`).join(', ');
+  }
+  
+  generatePicture() {
+    const basePath = this.src.replace(/\.[^/.]+$/, '');
+    const sizes = [400, 800, 1200, 1600];
+    
+    let pictureHTML = '<picture>';
+    
+    // 添加现代格式
+    this.formats.forEach(format => {
+      if (format !== 'jpg' && format !== 'jpeg') {
+        const srcSet = sizes.map(size => 
+          `${basePath}-${size}w.${format} ${size}w`
+        ).join(', ');
+        
+        pictureHTML += `<source srcset="${srcSet}" sizes="${this.sizes}" type="image/${format}">`;
+      }
+    });
+    
+    // 添加fallback
+    const fallbackSrcSet = this.generateSrcSet(basePath, sizes);
+    pictureHTML += `<img src="${basePath}-800w.jpg" srcset="${fallbackSrcSet}" sizes="${this.sizes}" alt="${this.alt}" loading="${this.loading}">`;
+    pictureHTML += '</picture>';
+    
+    return pictureHTML;
+  }
+}
+
+// 图片懒加载实现
+class LazyImageLoader {
+  constructor(options = {}) {
+    this.rootMargin = options.rootMargin || '50px';
+    this.threshold = options.threshold || 0.1;
+    this.loadingClass = options.loadingClass || 'lazy-loading';
+    this.loadedClass = options.loadedClass || 'lazy-loaded';
+    this.errorClass = options.errorClass || 'lazy-error';
+    
+    this.observer = new IntersectionObserver(
+      this.handleIntersection.bind(this),
+      {
+        rootMargin: this.rootMargin,
+        threshold: this.threshold
+      }
+    );
+  }
+  
+  observe(img) {
+    this.observer.observe(img);
+  }
+  
+  handleIntersection(entries) {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        this.loadImage(entry.target);
+        this.observer.unobserve(entry.target);
+      }
+    });
+  }
+  
+  loadImage(img) {
+    img.classList.add(this.loadingClass);
+    
+    const imageLoader = new Image();
+    
+    imageLoader.onload = () => {
+      img.src = img.dataset.src;
+      img.classList.remove(this.loadingClass);
+      img.classList.add(this.loadedClass);
+      
+      // 如果是picture元素，处理srcset
+      if (img.dataset.srcset) {
+        img.srcset = img.dataset.srcset;
+      }
+    };
+    
+    imageLoader.onerror = () => {
+      img.classList.remove(this.loadingClass);
+      img.classList.add(this.errorClass);
+    };
+    
+    imageLoader.src = img.dataset.src;
+  }
+  
+  // 批量初始化
+  static init(selector = 'img[data-src]', options = {}) {
+    const loader = new LazyImageLoader(options);
+    const images = document.querySelectorAll(selector);
+    
+    images.forEach(img => loader.observe(img));
+    
+    return loader;
+  }
+}
+
+// 图片格式检测和选择
+class ImageFormatDetector {
+  static supportsWebP() {
+    return new Promise(resolve => {
+      const webP = new Image();
+      webP.onload = webP.onerror = () => {
+        resolve(webP.height === 2);
+      };
+      webP.src = 'data:image/webp;base64,UklGRjoAAABXRUJQVlA4IC4AAACyAgCdASoCAAIALmk0mk0iIiIiIgBoSygABc6WWgAA/veff/0PP8bA//LwYAAA';
+    });
+  }
+  
+  static supportsAVIF() {
+    return new Promise(resolve => {
+      const avif = new Image();
+      avif.onload = avif.onerror = () => {
+        resolve(avif.height === 2);
+      };
+      avif.src = 'data:image/avif;base64,AAAAIGZ0eXBhdmlmAAAAAGF2aWZtaWYxbWlhZk1BMUIAAADybWV0YQAAAAAAAAAoaGRscgAAAAAAAAAAcGljdAAAAAAAAAAAAAAAAGxpYmF2aWYAAAAADnBpdG0AAAAAAAEAAAAeaWxvYwAAAABEAAABAAEAAAABAAABGgAAAB0AAAAoaWluZgAAAAAAAQAAABppbmZlAgAAAAABAABhdjAxQ29sb3IAAAAAamlwcnAAAABLaXBjbwAAABRpc3BlAAAAAAAAAAIAAAACAAAAEHBpeGkAAAAAAwgICAAAAAxhdjFDgQ0MAAAAABNjb2xybmNseAACAAIAAYAAAAAXaXBtYQAAAAAAAAABAAEEAQKDBAAAACVtZGF0EgAKCBgABogQEAwgMg8f8D///8WfhwB8+ErK42A=';
+    });
+  }
+  
+  static async getBestFormat(formats = ['avif', 'webp', 'jpg']) {
+    const support = await Promise.all([
+      this.supportsAVIF(),
+      this.supportsWebP()
+    ]);
+    
+    if (support[0] && formats.includes('avif')) return 'avif';
+    if (support[1] && formats.includes('webp')) return 'webp';
+    return 'jpg';
+  }
+}
+
+// 使用示例
+document.addEventListener('DOMContentLoaded', async () => {
+  // 初始化懒加载
+  LazyImageLoader.init('img[data-src]', {
+    rootMargin: '100px',
+    loadingClass: 'img-loading',
+    loadedClass: 'img-loaded'
+  });
+  
+  // 检测最佳图片格式
+  const bestFormat = await ImageFormatDetector.getBestFormat();
+  console.log('最佳图片格式:', bestFormat);
+  
+  // 动态创建响应式图片
+  const responsiveImg = new ResponsiveImage({
+    src: '/images/hero.jpg',
+    alt: '英雄图片',
+    sizes: '(max-width: 768px) 100vw, 50vw',
+    formats: [bestFormat, 'jpg']
+  });
+  
+  document.getElementById('hero-container').innerHTML = responsiveImg.generatePicture();
+});
+```
+
+</TabItem>
+</Tabs>
 
 ### CSS压缩
 - 移除不必要的空格和注释

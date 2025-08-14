@@ -1,18 +1,426 @@
 ---
 sidebar_position: 2
-title: "单元测试"
-description: "前端单元测试实践"
+title: 前端单元测试完全指南
+description: 深入解析前端单元测试实践：Jest、React Testing Library、测试策略与最佳实践
 authors: [Laby]
+tags: [单元测试, Jest, React Testing Library, 测试驱动开发, Mock, 测试覆盖率]
 last_update:
-  date: 2025-08-07
+  date: 2025-08-14
   author: Laby
 ---
 
-# 单元测试
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+import CodeBlock from '@theme/CodeBlock';
 
-单元测试是测试金字塔的基础，主要测试单个函数、组件或模块的功能。通过单元测试可以快速验证代码逻辑，提供即时反馈。
+# 前端单元测试完全指南
 
-## Jest基础
+单元测试是测试金字塔的基础，专注于测试单个函数、组件或模块的功能。通过系统化的单元测试实践，可以快速验证代码逻辑、提供即时反馈、确保代码质量，并为重构提供安全保障。
+
+:::tip 核心价值
+**单元测试 = 快速反馈 + 代码质量 + 重构安全 + 文档价值**
+- 🚀 **快速反馈**：毫秒级测试执行，即时发现问题
+- 🎯 **代码质量**：强制思考边界条件和异常情况
+- 🛡️ **重构安全**：为代码重构提供安全网
+- 📚 **文档价值**：测试用例作为代码使用说明
+- 🔧 **开发效率**：减少手动测试时间，提高开发速度
+- 📊 **覆盖率监控**：量化测试完整性，识别测试盲点
+:::
+
+## 1. 测试环境搭建与配置
+
+### 1.1 现代测试工具链
+
+构建高效的测试环境需要选择合适的工具组合，每个工具都有其特定的职责和优势。
+
+```mermaid
+graph TB
+    subgraph "前端测试工具生态"
+        A[测试框架] --> A1[Jest]
+        A --> A2[Vitest]
+        A --> A3[Mocha]
+        
+        B[断言库] --> B1[Jest内置]
+        B --> B2[Chai]
+        B --> B3[Expect]
+        
+        C[测试工具] --> C1[React Testing Library]
+        C --> C2[Enzyme]
+        C --> C3[Vue Test Utils]
+        
+        D[Mock工具] --> D1[Jest Mock]
+        D --> D2[Sinon]
+        D --> D3[MSW]
+        
+        E[覆盖率工具] --> E1[Istanbul]
+        E --> E2[C8]
+        E --> E3[NYC]
+    end
+```
+
+#### 测试工具对比
+
+| 工具 | 类型 | 优势 | 劣势 | 适用场景 |
+|------|------|------|------|----------|
+| **Jest** | 测试框架 | 零配置、功能全面、生态丰富 | 较重、启动慢 | React项目、大型应用 |
+| **Vitest** | 测试框架 | 快速、现代、Vite集成 | 生态较新 | Vite项目、现代应用 |
+| **React Testing Library** | 测试工具 | 用户行为导向、最佳实践 | 学习曲线 | React组件测试 |
+| **MSW** | Mock工具 | 真实网络模拟、开发友好 | 配置复杂 | API测试、集成测试 |
+
+<Tabs>
+<TabItem value="jest-setup" label="Jest配置">
+
+### Jest完整配置
+
+```javascript title="jest.config.js - 完整配置示例"
+module.exports = {
+  // 基础配置
+  preset: 'ts-jest',
+  testEnvironment: 'jsdom',
+  
+  // 文件路径配置
+  roots: ['<rootDir>/src'],
+  testMatch: [
+    '<rootDir>/src/**/__tests__/**/*.{js,jsx,ts,tsx}',
+    '<rootDir>/src/**/*.(test|spec).{js,jsx,ts,tsx}'
+  ],
+  
+  // 模块解析
+  moduleNameMapping: {
+    '^@/(.*)$': '<rootDir>/src/$1',
+    '^@components/(.*)$': '<rootDir>/src/components/$1',
+    '^@utils/(.*)$': '<rootDir>/src/utils/$1',
+    '\\.(css|less|scss|sass)$': 'identity-obj-proxy',
+    '\\.(jpg|jpeg|png|gif|eot|otf|webp|svg|ttf|woff|woff2)$': 'jest-transform-stub'
+  },
+  
+  // 设置文件
+  setupFilesAfterEnv: ['<rootDir>/src/setupTests.ts'],
+  
+  // 转换配置
+  transform: {
+    '^.+\\.(js|jsx|ts|tsx)$': 'ts-jest',
+    '^.+\\.css$': 'jest-transform-css'
+  },
+  
+  // 忽略转换的模块
+  transformIgnorePatterns: [
+    'node_modules/(?!(axios|@testing-library)/)'
+  ],
+  
+  // 覆盖率配置
+  collectCoverageFrom: [
+    'src/**/*.{js,jsx,ts,tsx}',
+    '!src/**/*.d.ts',
+    '!src/index.tsx',
+    '!src/serviceWorker.ts',
+    '!src/reportWebVitals.ts',
+    '!src/**/*.stories.{js,jsx,ts,tsx}',
+    '!src/**/*.test.{js,jsx,ts,tsx}'
+  ],
+  
+  coverageThreshold: {
+    global: {
+      branches: 80,
+      functions: 80,
+      lines: 80,
+      statements: 80
+    },
+    './src/components/': {
+      branches: 90,
+      functions: 90,
+      lines: 90,
+      statements: 90
+    },
+    './src/utils/': {
+      branches: 95,
+      functions: 95,
+      lines: 95,
+      statements: 95
+    }
+  },
+  
+  coverageReporters: ['text', 'lcov', 'html', 'json-summary'],
+  
+  // 性能配置
+  maxWorkers: '50%',
+  cache: true,
+  cacheDirectory: '<rootDir>/.jest-cache',
+  
+  // 全局变量
+  globals: {
+    'ts-jest': {
+      tsconfig: 'tsconfig.json',
+      isolatedModules: true
+    }
+  },
+  
+  // 测试超时
+  testTimeout: 10000,
+  
+  // 清理配置
+  clearMocks: true,
+  restoreMocks: true,
+  
+  // 详细输出
+  verbose: true,
+  
+  // 错误处理
+  errorOnDeprecated: true
+};
+```
+
+```typescript title="setupTests.ts - 测试环境设置"
+import '@testing-library/jest-dom';
+import 'jest-canvas-mock';
+
+// 全局Mock
+global.fetch = jest.fn();
+global.ResizeObserver = jest.fn().mockImplementation(() => ({
+  observe: jest.fn(),
+  unobserve: jest.fn(),
+  disconnect: jest.fn(),
+}));
+
+global.IntersectionObserver = jest.fn().mockImplementation(() => ({
+  observe: jest.fn(),
+  unobserve: jest.fn(),
+  disconnect: jest.fn(),
+}));
+
+// Mock localStorage
+const localStorageMock = {
+  getItem: jest.fn(),
+  setItem: jest.fn(),
+  removeItem: jest.fn(),
+  clear: jest.fn(),
+  length: 0,
+  key: jest.fn(),
+};
+global.localStorage = localStorageMock;
+
+// Mock sessionStorage
+global.sessionStorage = localStorageMock;
+
+// Mock window.matchMedia
+Object.defineProperty(window, 'matchMedia', {
+  writable: true,
+  value: jest.fn().mockImplementation(query => ({
+    matches: false,
+    media: query,
+    onchange: null,
+    addListener: jest.fn(),
+    removeListener: jest.fn(),
+    addEventListener: jest.fn(),
+    removeEventListener: jest.fn(),
+    dispatchEvent: jest.fn(),
+  })),
+});
+
+// Mock console methods for cleaner test output
+const originalError = console.error;
+beforeAll(() => {
+  console.error = (...args: any[]) => {
+    if (
+      typeof args[0] === 'string' &&
+      args[0].includes('Warning: ReactDOM.render is no longer supported')
+    ) {
+      return;
+    }
+    originalError.call(console, ...args);
+  };
+});
+
+afterAll(() => {
+  console.error = originalError;
+});
+
+// 全局测试工具
+global.testUtils = {
+  // 等待异步操作完成
+  waitForAsync: (ms = 0) => new Promise(resolve => setTimeout(resolve, ms)),
+  
+  // 创建模拟事件
+  createMockEvent: (type: string, properties = {}) => ({
+    type,
+    preventDefault: jest.fn(),
+    stopPropagation: jest.fn(),
+    target: { value: '' },
+    ...properties
+  }),
+  
+  // 模拟用户输入
+  mockUserInput: (element: HTMLElement, value: string) => {
+    const event = new Event('input', { bubbles: true });
+    Object.defineProperty(event, 'target', {
+      writable: false,
+      value: { value }
+    });
+    element.dispatchEvent(event);
+  }
+};
+
+// 清理函数
+afterEach(() => {
+  jest.clearAllMocks();
+  localStorage.clear();
+  sessionStorage.clear();
+});
+```
+
+</TabItem>
+<TabItem value="vitest-setup" label="Vitest配置">
+
+### Vitest现代化配置
+
+```typescript title="vitest.config.ts - Vitest配置"
+import { defineConfig } from 'vitest/config';
+import react from '@vitejs/plugin-react';
+import path from 'path';
+
+export default defineConfig({
+  plugins: [react()],
+  
+  test: {
+    // 测试环境
+    environment: 'jsdom',
+    
+    // 全局设置
+    globals: true,
+    
+    // 设置文件
+    setupFiles: ['./src/setupTests.ts'],
+    
+    // 包含的测试文件
+    include: [
+      'src/**/*.{test,spec}.{js,jsx,ts,tsx}',
+      'src/**/__tests__/**/*.{js,jsx,ts,tsx}'
+    ],
+    
+    // 排除的文件
+    exclude: [
+      'node_modules',
+      'dist',
+      '.idea',
+      '.git',
+      '.cache'
+    ],
+    
+    // 覆盖率配置
+    coverage: {
+      provider: 'v8',
+      reporter: ['text', 'json', 'html'],
+      include: ['src/**/*.{js,jsx,ts,tsx}'],
+      exclude: [
+        'src/**/*.d.ts',
+        'src/**/*.stories.{js,jsx,ts,tsx}',
+        'src/**/*.test.{js,jsx,ts,tsx}',
+        'src/main.tsx',
+        'src/vite-env.d.ts'
+      ],
+      thresholds: {
+        global: {
+          branches: 80,
+          functions: 80,
+          lines: 80,
+          statements: 80
+        }
+      }
+    },
+    
+    // 性能配置
+    pool: 'threads',
+    poolOptions: {
+      threads: {
+        singleThread: false,
+        maxThreads: 4,
+        minThreads: 1
+      }
+    },
+    
+    // 超时配置
+    testTimeout: 10000,
+    hookTimeout: 10000,
+    
+    // 监听模式配置
+    watch: {
+      ignore: ['node_modules/**', 'dist/**']
+    },
+    
+    // 报告器配置
+    reporter: ['verbose', 'json', 'html'],
+    
+    // 并发配置
+    sequence: {
+      concurrent: true
+    }
+  },
+  
+  resolve: {
+    alias: {
+      '@': path.resolve(__dirname, './src'),
+      '@components': path.resolve(__dirname, './src/components'),
+      '@utils': path.resolve(__dirname, './src/utils'),
+      '@hooks': path.resolve(__dirname, './src/hooks'),
+      '@types': path.resolve(__dirname, './src/types')
+    }
+  }
+});
+```
+
+</TabItem>
+<TabItem value="package-scripts" label="NPM脚本">
+
+### 测试相关NPM脚本
+
+```json title="package.json - 测试脚本配置"
+{
+  "scripts": {
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage",
+    "test:ci": "jest --coverage --watchAll=false --passWithNoTests",
+    "test:debug": "node --inspect-brk node_modules/.bin/jest --runInBand",
+    "test:update": "jest --updateSnapshot",
+    "test:clear": "jest --clearCache",
+    
+    // Vitest脚本
+    "test:vitest": "vitest",
+    "test:vitest:ui": "vitest --ui",
+    "test:vitest:coverage": "vitest --coverage",
+    "test:vitest:run": "vitest run",
+    
+    // 测试相关工具
+    "lint:test": "eslint 'src/**/*.test.{js,jsx,ts,tsx}'",
+    "type-check:test": "tsc --noEmit --project tsconfig.test.json"
+  },
+  
+  "devDependencies": {
+    "@testing-library/jest-dom": "^6.1.4",
+    "@testing-library/react": "^13.4.0",
+    "@testing-library/user-event": "^14.5.1",
+    "@types/jest": "^29.5.8",
+    "jest": "^29.7.0",
+    "jest-environment-jsdom": "^29.7.0",
+    "jest-transform-stub": "^2.0.0",
+    "ts-jest": "^29.1.1",
+    
+    // Vitest相关
+    "vitest": "^1.0.0",
+    "@vitest/ui": "^1.0.0",
+    "jsdom": "^23.0.0",
+    
+    // Mock相关
+    "msw": "^2.0.0",
+    "jest-canvas-mock": "^2.5.2"
+  }
+}
+```
+
+</TabItem>
+</Tabs>
+
+## 2. 工具函数测试实践
 
 ### 安装和配置
 ```bash

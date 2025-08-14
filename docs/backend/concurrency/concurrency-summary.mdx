@@ -1,210 +1,605 @@
 ---
-sidebar_position: 1
+sidebar_position: 10
 title: "Java并发编程总结"
-description: "Java并发编程核心概念与面试重点总结"
+description: "Java并发编程核心知识总结、最佳实践与面试要点"
 authors: [Laby]
 last_update:
-  date: 2025-08-07
+  date: 2025-01-07
   author: Laby
 ---
 
-# Java并发编程总结
+# Java 并发编程总结
 
-并发编程是Java后端开发中的核心技术，掌握并发编程对于构建高性能、高可用的系统至关重要。本文档总结了Java并发编程的核心概念和面试重点。
+Java并发编程是构建高性能、高可用系统的核心技术。本文将对Java并发编程的核心知识进行全面总结，并提供实用的最佳实践和面试要点。
 
-## 并发编程核心概念
+## 1. 并发编程核心概念
 
-### 1. 进程与线程
-- **进程**：操作系统分配资源的基本单位
-- **线程**：CPU调度的基本单位，共享进程资源
-- **线程安全**：多线程环境下程序的正确性
+### 1.1 并发与并行
 
-### 2. 并发与并行
-- **并发(Concurrency)**：多个任务交替执行
-- **并行(Parallelism)**：多个任务同时执行
-- **区别**：并发关注任务的组织，并行关注任务的执行
+:::tip 核心概念
+- **并发（Concurrency）**：多个任务交替执行，在单核CPU上通过时间片轮转实现
+- **并行（Parallelism）**：多个任务同时执行，需要多核CPU支持
+:::
 
-## Java并发编程体系
+| 特性 | 并发 | 并行 |
+|------|------|------|
+| **执行方式** | 交替执行 | 同时执行 |
+| **硬件要求** | 单核即可 | 需要多核 |
+| **资源竞争** | 存在 | 较少 |
+| **实现复杂度** | 中等 | 较高 |
+| **适用场景** | I/O密集型 | CPU密集型 |
 
-### 线程基础
-```
-Thread
-├── 创建方式
-│   ├── 继承Thread类
-│   ├── 实现Runnable接口
-│   └── 实现Callable接口
-├── 生命周期
-│   ├── NEW (新建)
-│   ├── RUNNABLE (可运行)
-│   ├── BLOCKED (阻塞)
-│   ├── WAITING (等待)
-│   ├── TIMED_WAITING (超时等待)
-│   └── TERMINATED (终止)
-└── 线程控制
-    ├── start() - 启动线程
-    ├── join() - 等待线程结束
-    ├── interrupt() - 中断线程
-    └── yield() - 让出CPU
-```
+### 1.2 线程安全级别
 
-### 线程安全机制
-```
-线程安全
-├── 原子性 (Atomicity)
-│   ├── synchronized关键字
-│   ├── volatile关键字
-│   └── 原子类 (AtomicXXX)
-├── 可见性 (Visibility)
-│   ├── volatile关键字
-│   ├── synchronized关键字
-│   └── final关键字
-└── 有序性 (Ordering)
-    ├── happens-before原则
-    ├── volatile关键字
-    └── synchronized关键字
-```
-
-### 锁机制
-```
-锁机制
-├── 内置锁 (synchronized)
-│   ├── 对象锁
-│   ├── 类锁
-│   └── 方法锁
-├── 显式锁 (Lock)
-│   ├── ReentrantLock (可重入锁)
-│   ├── ReadWriteLock (读写锁)
-│   └── StampedLock (邮戳锁)
-└── 分布式锁
-    ├── Redis分布式锁
-    ├── Zookeeper分布式锁
-    └── 数据库分布式锁
-```
-
-### 并发工具类
-```
-并发工具
-├── 线程池 (ThreadPoolExecutor)
-│   ├── FixedThreadPool
-│   ├── CachedThreadPool
-│   ├── ScheduledThreadPool
-│   └── SingleThreadExecutor
-├── 同步工具
-│   ├── CountDownLatch (倒计时门闩)
-│   ├── CyclicBarrier (循环屏障)
-│   ├── Semaphore (信号量)
-│   └── Phaser (移相器)
-└── 并发集合
-    ├── ConcurrentHashMap
-    ├── CopyOnWriteArrayList
-    ├── BlockingQueue
-    └── ConcurrentLinkedQueue
+```java title="线程安全级别示例"
+public class ThreadSafetyLevels {
+    
+    /**
+     * 1. 不可变对象 - 最高级别线程安全
+     */
+    public static final class ImmutablePoint {
+        private final int x;
+        private final int y;
+        
+        public ImmutablePoint(int x, int y) {
+            this.x = x;
+            this.y = y;
+        }
+        
+        public int getX() { return x; }
+        public int getY() { return y; }
+    }
+    
+    /**
+     * 2. 无状态对象 - 天然线程安全
+     */
+    public static class StatelessCalculator {
+        public int add(int a, int b) {
+            return a + b;
+        }
+    }
+    
+    /**
+     * 3. 有状态但线程安全的对象
+     */
+    public static class ThreadSafeCounter {
+        private final AtomicInteger count = new AtomicInteger(0);
+        
+        public void increment() {
+            count.incrementAndGet();
+        }
+        
+        public int getCount() {
+            return count.get();
+        }
+    }
+    
+    /**
+     * 4. 有状态且非线程安全的对象
+     */
+    public static class UnsafeCounter {
+        private int count = 0;
+        
+        public void increment() {
+            count++; // 非原子操作
+        }
+        
+        public int getCount() {
+            return count;
+        }
+    }
+}
 ```
 
-## 核心面试重点
+## 2. 并发编程核心技术
 
-### 1. 线程安全三大问题
-- **原子性**：操作不可分割，要么全部执行，要么全部不执行
-- **可见性**：一个线程对共享变量的修改，其他线程能够立即看到
-- **有序性**：程序执行的顺序符合代码的先后顺序
+### 2.1 线程管理
 
-### 2. synchronized关键字
-- **作用**：保证原子性、可见性和有序性
-- **原理**：基于对象头的Mark Word
-- **锁升级**：无锁 → 偏向锁 → 轻量级锁 → 重量级锁
-- **使用场景**：方法、代码块、静态方法
+| 技术 | 特点 | 适用场景 | 示例 |
+|------|------|----------|------|
+| **Thread** | 基础线程类 | 简单任务 | `new Thread(() -> {}).start()` |
+| **Runnable** | 任务接口 | 无返回值任务 | `executor.submit(runnable)` |
+| **Callable** | 可返回值任务 | 需要返回结果 | `executor.submit(callable)` |
+| **ThreadPool** | 线程复用 | 大量任务 | `Executors.newFixedThreadPool(5)` |
 
-### 3. volatile关键字
-- **作用**：保证可见性和有序性，不保证原子性
-- **原理**：内存屏障和禁止指令重排
-- **使用场景**：单线程写多线程读的场景
+### 2.2 同步机制
 
-### 4. 线程池
-- **核心参数**：corePoolSize、maximumPoolSize、keepAliveTime、workQueue、threadFactory、handler
-- **工作原理**：线程复用，避免频繁创建销毁
-- **拒绝策略**：AbortPolicy、CallerRunsPolicy、DiscardPolicy、DiscardOldestPolicy
+```java title="同步机制对比"
+public class SynchronizationMechanisms {
+    
+    /**
+     * 1. synchronized 关键字
+     */
+    public static class SynchronizedExample {
+        private int counter = 0;
+        
+        public synchronized void increment() {
+            counter++;
+        }
+        
+        public synchronized int getCounter() {
+            return counter;
+        }
+    }
+    
+    /**
+     * 2. Lock 接口
+     */
+    public static class LockExample {
+        private final ReentrantLock lock = new ReentrantLock();
+        private int counter = 0;
+        
+        public void increment() {
+            lock.lock();
+            try {
+                counter++;
+            } finally {
+                lock.unlock();
+            }
+        }
+    }
+    
+    /**
+     * 3. 原子类
+     */
+    public static class AtomicExample {
+        private final AtomicInteger counter = new AtomicInteger(0);
+        
+        public void increment() {
+            counter.incrementAndGet();
+        }
+        
+        public int getCounter() {
+            return counter.get();
+        }
+    }
+    
+    /**
+     * 4. volatile 关键字
+     */
+    public static class VolatileExample {
+        private volatile boolean flag = false;
+        
+        public void setFlag() {
+            flag = true;
+        }
+        
+        public boolean getFlag() {
+            return flag;
+        }
+    }
+}
+```
 
-### 5. 死锁问题
-- **产生条件**：互斥、占有且等待、不可剥夺、循环等待
-- **预防策略**：破坏四个条件中的任意一个
-- **检测方法**：jstack、ThreadMXBean
+### 2.3 线程通信
 
-## 常见并发问题
+```java title="线程通信机制"
+public class ThreadCommunication {
+    
+    /**
+     * 1. wait/notify 机制
+     */
+    public static class WaitNotifyExample {
+        private final Object lock = new Object();
+        private boolean condition = false;
+        
+        public void waitForCondition() {
+            synchronized (lock) {
+                while (!condition) {
+                    try {
+                        lock.wait();
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                    }
+                }
+            }
+        }
+        
+        public void signalCondition() {
+            synchronized (lock) {
+                condition = true;
+                lock.notify();
+            }
+        }
+    }
+    
+    /**
+     * 2. Condition 接口
+     */
+    public static class ConditionExample {
+        private final ReentrantLock lock = new ReentrantLock();
+        private final Condition condition = lock.newCondition();
+        private boolean ready = false;
+        
+        public void await() {
+            lock.lock();
+            try {
+                while (!ready) {
+                    condition.await();
+                }
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            } finally {
+                lock.unlock();
+            }
+        }
+        
+        public void signal() {
+            lock.lock();
+            try {
+                ready = true;
+                condition.signal();
+            } finally {
+                lock.unlock();
+            }
+        }
+    }
+    
+    /**
+     * 3. BlockingQueue
+     */
+    public static class BlockingQueueExample {
+        private final BlockingQueue<String> queue = new ArrayBlockingQueue<>(10);
+        
+        public void producer() {
+            try {
+                queue.put("message");
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+        }
+        
+        public String consumer() {
+            try {
+                return queue.take();
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                return null;
+            }
+        }
+    }
+}
+```
 
-### 1. 竞态条件
-- **定义**：多个线程访问共享数据时，最终结果依赖于线程的执行时序
-- **解决方案**：使用同步机制
+## 3. 并发编程最佳实践
 
-### 2. 内存可见性
-- **问题**：一个线程的修改对其他线程不可见
-- **解决方案**：使用volatile或synchronized
+### 3.1 设计原则
 
-### 3. 指令重排
-- **问题**：编译器或处理器优化导致指令执行顺序改变
-- **解决方案**：使用volatile或synchronized
+:::tip 核心原则
+1. **优先使用不可变对象**：避免状态变化带来的复杂性
+2. **最小化同步范围**：只同步必要的代码块
+3. **使用线程安全的集合**：避免手动同步
+4. **避免嵌套锁**：防止死锁
+5. **正确使用线程池**：避免频繁创建线程
+:::
 
-### 4. 线程饥饿
-- **问题**：某些线程长时间得不到执行
-- **解决方案**：使用公平锁或调整线程优先级
+### 3.2 性能优化策略
 
-## 性能优化
+```java title="性能优化示例"
+public class PerformanceOptimization {
+    
+    /**
+     * 1. 减少锁竞争
+     */
+    public static class LockContentionOptimization {
+        private final int segments = 16;
+        private final Object[] locks = new Object[segments];
+        private final int[] counters = new int[segments];
+        
+        public LockContentionOptimization() {
+            for (int i = 0; i < segments; i++) {
+                locks[i] = new Object();
+            }
+        }
+        
+        public void increment(int key) {
+            int segment = Math.abs(key % segments);
+            synchronized (locks[segment]) {
+                counters[segment]++;
+            }
+        }
+    }
+    
+    /**
+     * 2. 使用读写锁
+     */
+    public static class ReadWriteOptimization {
+        private final ReadWriteLock lock = new ReentrantReadWriteLock();
+        private final Lock readLock = lock.readLock();
+        private final Lock writeLock = lock.writeLock();
+        private final Map<String, String> cache = new HashMap<>();
+        
+        public String get(String key) {
+            readLock.lock();
+            try {
+                return cache.get(key);
+            } finally {
+                readLock.unlock();
+            }
+        }
+        
+        public void put(String key, String value) {
+            writeLock.lock();
+            try {
+                cache.put(key, value);
+            } finally {
+                writeLock.unlock();
+            }
+        }
+    }
+    
+    /**
+     * 3. 无锁编程
+     */
+    public static class LockFreeProgramming {
+        private final AtomicInteger counter = new AtomicInteger(0);
+        
+        public void increment() {
+            counter.incrementAndGet();
+        }
+        
+        public int getCount() {
+            return counter.get();
+        }
+    }
+}
+```
 
-### 1. 减少锁竞争
-- **锁分离**：将大锁拆分为多个小锁
-- **锁粗化**：将多个小锁合并为大锁
-- **无锁编程**：使用CAS操作
+### 3.3 常见陷阱与解决方案
 
-### 2. 线程池优化
-- **合理设置线程数**：CPU密集型 vs IO密集型
-- **选择合适的队列**：有界队列 vs 无界队列
-- **监控线程池状态**：活跃线程数、队列大小
+| 问题 | 原因 | 解决方案 |
+|------|------|----------|
+| **死锁** | 多个线程互相等待 | 固定锁顺序、超时机制 |
+| **活锁** | 线程不断重试失败 | 随机退避、改变策略 |
+| **饥饿** | 某些线程无法获得资源 | 公平锁、优先级调整 |
+| **竞态条件** | 非原子操作 | 同步机制、原子类 |
+| **内存可见性** | 缓存不一致 | volatile、synchronized |
 
-### 3. 内存优化
-- **减少对象创建**：对象池、缓存
-- **避免内存泄漏**：及时释放资源
-- **合理使用缓存**：本地缓存 vs 分布式缓存
+## 4. 并发编程面试要点
 
-## 面试常见问题
+### 4.1 基础概念
 
-### 基础概念
-1. **线程和进程的区别**
-2. **synchronized和volatile的区别**
-3. **线程的生命周期**
-4. **死锁的产生和预防**
+#### Q1: 线程和进程的区别？
 
-### 深入原理
-1. **synchronized的实现原理**
-2. **volatile的实现原理**
-3. **线程池的工作原理**
-4. **CAS操作的原理**
+**答案：**
+- **进程**：操作系统分配资源的基本单位，有独立的内存空间
+- **线程**：CPU调度的基本单位，共享进程的内存空间
+- **关系**：一个进程可以包含多个线程，线程是进程的执行单元
 
-### 实际应用
-1. **如何设计线程安全的类**
-2. **如何选择合适的锁机制**
-3. **如何优化并发性能**
-4. **如何处理并发异常**
+#### Q2: synchronized和volatile的区别？
 
-## 学习建议
+**答案：**
+- **synchronized**：保证原子性、可见性和有序性，可以修饰方法和代码块
+- **volatile**：只保证可见性和有序性，不能保证原子性，只能修饰变量
 
-### 理论基础
-1. **理解并发编程的基本概念**
-2. **掌握Java内存模型(JMM)**
-3. **学习各种同步机制的原理**
-4. **了解性能优化的方法**
+#### Q3: 什么是线程安全？
 
-### 实践能力
-1. **编写多线程程序**
-2. **调试并发问题**
-3. **性能测试和优化**
-4. **阅读并发相关的源码**
+**答案：** 线程安全是指多线程环境下，程序能够正确执行，不会出现数据不一致或异常结果。
 
-### 扩展知识
-1. **分布式并发**：分布式锁、分布式事务
-2. **异步编程**：CompletableFuture、响应式编程
-3. **并发框架**：Disruptor、Fork/Join框架
+### 4.2 高级特性
 
-通过系统学习Java并发编程，你将能够：
-- 设计线程安全的程序
-- 解决复杂的并发问题
-- 优化程序的并发性能
-- 构建高并发的系统架构 
+#### Q4: 什么是CAS？有什么优缺点？
+
+**答案：**
+- **CAS（Compare-And-Swap）**：比较并交换，是一种无锁算法
+- **优点**：性能高，无阻塞
+- **缺点**：ABA问题、自旋开销、只能保证一个变量的原子性
+
+#### Q5: 什么是AQS？
+
+**答案：**
+- **AQS（AbstractQueuedSynchronizer）**：抽象队列同步器
+- 是Java并发包中锁和同步器的基础框架
+- 提供了FIFO队列和状态管理机制
+
+#### Q6: 线程池的核心参数有哪些？
+
+**答案：**
+- **corePoolSize**：核心线程数
+- **maximumPoolSize**：最大线程数
+- **keepAliveTime**：线程存活时间
+- **workQueue**：工作队列
+- **threadFactory**：线程工厂
+- **rejectedExecutionHandler**：拒绝策略
+
+### 4.3 实战问题
+
+#### Q7: 如何实现一个线程安全的单例模式？
+
+**答案：**
+```java
+public class Singleton {
+    private volatile static Singleton instance;
+    
+    private Singleton() {}
+    
+    public static Singleton getInstance() {
+        if (instance == null) {
+            synchronized (Singleton.class) {
+                if (instance == null) {
+                    instance = new Singleton();
+                }
+            }
+        }
+        return instance;
+    }
+}
+```
+
+#### Q8: 如何避免死锁？
+
+**答案：**
+1. **固定锁顺序**：所有线程按相同顺序获取锁
+2. **超时机制**：使用tryLock设置超时时间
+3. **避免嵌套锁**：减少锁的嵌套层次
+4. **使用并发工具**：使用ConcurrentHashMap等线程安全集合
+
+#### Q9: 如何监控线程池状态？
+
+**答案：**
+```java
+ThreadPoolExecutor executor = (ThreadPoolExecutor) threadPool;
+System.out.println("核心线程数: " + executor.getCorePoolSize());
+System.out.println("当前池大小: " + executor.getPoolSize());
+System.out.println("活跃线程数: " + executor.getActiveCount());
+System.out.println("队列大小: " + executor.getQueue().size());
+System.out.println("已完成任务数: " + executor.getCompletedTaskCount());
+```
+
+## 5. 并发编程工具类
+
+### 5.1 并发集合
+
+| 集合类型 | 线程安全实现 | 特点 | 适用场景 |
+|----------|--------------|------|----------|
+| **List** | CopyOnWriteArrayList | 写时复制 | 读多写少 |
+| **Set** | ConcurrentHashSet | 基于ConcurrentHashMap | 一般场景 |
+| **Map** | ConcurrentHashMap | 分段锁 | 高并发场景 |
+| **Queue** | ArrayBlockingQueue | 有界阻塞队列 | 生产者消费者 |
+| **Deque** | ConcurrentLinkedDeque | 无界双端队列 | 高并发场景 |
+
+### 5.2 同步工具
+
+```java title="同步工具示例"
+public class SynchronizationTools {
+    
+    /**
+     * 1. CountDownLatch - 倒计时门闩
+     */
+    public static class CountDownLatchExample {
+        private final CountDownLatch latch = new CountDownLatch(3);
+        
+        public void worker() {
+            try {
+                // 执行工作
+                Thread.sleep(1000);
+                System.out.println("工作完成");
+                latch.countDown();
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+        }
+        
+        public void waitForAllWorkers() {
+            try {
+                latch.await();
+                System.out.println("所有工作完成");
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+        }
+    }
+    
+    /**
+     * 2. CyclicBarrier - 循环屏障
+     */
+    public static class CyclicBarrierExample {
+        private final CyclicBarrier barrier = new CyclicBarrier(3, () -> {
+            System.out.println("所有线程到达屏障");
+        });
+        
+        public void worker() {
+            try {
+                System.out.println("线程到达屏障");
+                barrier.await();
+                System.out.println("线程继续执行");
+            } catch (InterruptedException | BrokenBarrierException e) {
+                Thread.currentThread().interrupt();
+            }
+        }
+    }
+    
+    /**
+     * 3. Semaphore - 信号量
+     */
+    public static class SemaphoreExample {
+        private final Semaphore semaphore = new Semaphore(3);
+        
+        public void worker() {
+            try {
+                semaphore.acquire();
+                System.out.println("获得许可，开始工作");
+                Thread.sleep(1000);
+                System.out.println("工作完成，释放许可");
+                semaphore.release();
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+        }
+    }
+    
+    /**
+     * 4. Exchanger - 交换器
+     */
+    public static class ExchangerExample {
+        private final Exchanger<String> exchanger = new Exchanger<>();
+        
+        public void producer() {
+            try {
+                String data = "生产者数据";
+                String received = exchanger.exchange(data);
+                System.out.println("生产者收到: " + received);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+        }
+        
+        public void consumer() {
+            try {
+                String data = "消费者数据";
+                String received = exchanger.exchange(data);
+                System.out.println("消费者收到: " + received);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+        }
+    }
+}
+```
+
+## 6. 并发编程发展趋势
+
+### 6.1 新技术趋势
+
+| 技术 | 特点 | 应用场景 |
+|------|------|----------|
+| **CompletableFuture** | 异步编程模型 | 复杂异步流程 |
+| **Fork/Join框架** | 分治并行计算 | 递归任务分解 |
+| **StampedLock** | 乐观读锁 | 读多写少场景 |
+| **VarHandle** | 变量句柄 | 低级别并发控制 |
+| **Project Loom** | 虚拟线程 | 高并发I/O应用 |
+
+### 6.2 性能优化趋势
+
+1. **无锁数据结构**：减少锁竞争，提高性能
+2. **内存模型优化**：利用硬件特性优化内存访问
+3. **异步编程**：提高系统吞吐量
+4. **响应式编程**：更好的资源利用
+
+## 7. 总结
+
+Java并发编程是构建高性能系统的核心技术，掌握并发编程需要深入理解：
+
+### 7.1 核心要点
+
+1. **基础概念**：线程、进程、并发、并行
+2. **同步机制**：synchronized、Lock、原子类、volatile
+3. **线程管理**：线程池、Executor框架
+4. **线程通信**：wait/notify、Condition、BlockingQueue
+5. **并发工具**：CountDownLatch、CyclicBarrier、Semaphore
+
+### 7.2 最佳实践
+
+1. **设计原则**：优先使用不可变对象、最小化同步范围
+2. **性能优化**：减少锁竞争、使用读写锁、无锁编程
+3. **问题避免**：防止死锁、处理竞态条件、保证可见性
+4. **工具选择**：根据场景选择合适的并发工具
+
+### 7.3 学习建议
+
+1. **理论结合实践**：理解概念后多写代码验证
+2. **循序渐进**：从简单示例开始，逐步增加复杂度
+3. **性能测试**：对比不同实现方式的性能差异
+4. **持续学习**：关注新的并发技术和最佳实践
+
+通过深入理解和熟练运用这些并发编程技术，我们能够构建出更加高效、健壮和可维护的Java应用程序。 

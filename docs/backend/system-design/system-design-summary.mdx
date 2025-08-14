@@ -1,410 +1,850 @@
 ---
 sidebar_position: 1
-title: "系统设计总结"
-description: "系统设计核心概念与面试重点总结"
+title: "系统设计详解"
+description: "深入理解系统设计核心概念、架构模式与最佳实践"
 authors: [Laby]
 last_update:
   date: 2025-08-07
   author: Laby
 ---
 
-# 系统设计总结
+# 系统设计详解
 
-系统设计是后端开发中的高级技能，涉及架构设计、性能优化、可扩展性等多个方面。本文档总结了系统设计的核心概念和面试重点。
+系统设计是后端开发中的高级技能，涉及架构设计、性能优化、可扩展性等多个方面。掌握系统设计能力对于构建高可用、高性能、可扩展的分布式系统至关重要。
 
-## 系统设计基础
+:::tip 核心价值
+系统设计 = 架构设计 + 性能优化 + 高可用性 + 可扩展性 + 安全性
+:::
 
-### 设计原则
-```
-设计原则
-├── 可扩展性 (Scalability)
-│   ├── 水平扩展
-│   ├── 垂直扩展
-│   ├── 自动扩缩容
-│   └── 负载均衡
-├── 高可用性 (Availability)
-│   ├── 故障转移
-│   ├── 冗余设计
-│   ├── 容错机制
-│   └── 监控告警
-├── 一致性 (Consistency)
-│   ├── 强一致性
-│   ├── 最终一致性
-│   ├── 因果一致性
-│   └── 数据同步
-└── 可维护性 (Maintainability)
-    ├── 模块化设计
-    ├── 松耦合
-    ├── 标准化
-    └── 文档完善
-```
+## 1. 系统设计基础
 
-### 设计模式
-```
-设计模式
-├── 分层架构
-│   ├── 表现层 (Presentation)
-│   ├── 业务层 (Business)
-│   ├── 数据层 (Data)
-│   └── 基础设施层 (Infrastructure)
-├── 微服务架构
-│   ├── 服务拆分
-│   ├── 服务治理
-│   ├── 服务通信
-│   └── 分布式事务
-├── 事件驱动架构
-│   ├── 事件发布
-│   ├── 事件订阅
-│   ├── 事件存储
-│   └── 事件溯源
-└── CQRS模式
-    ├── 命令查询分离
-    ├── 读写分离
-    ├── 事件溯源
-    └── 最终一致性
-```
+### 1.1 设计原则
 
-## 核心面试重点
+系统设计遵循以下核心原则：
 
-### 1. 需求分析
-- **功能需求**：核心功能、辅助功能、管理功能
-- **非功能需求**：性能、可用性、安全性、可扩展性
-- **约束条件**：技术栈、团队规模、时间限制、成本预算
-- **用户规模**：并发用户数、数据量、增长趋势
+| 原则 | 说明 | 实现方式 |
+|------|------|----------|
+| **可扩展性 (Scalability)** | 系统能够处理不断增长的工作负载 | 水平扩展、垂直扩展、自动扩缩容 |
+| **高可用性 (Availability)** | 系统能够持续提供服务 | 故障转移、冗余设计、容错机制 |
+| **一致性 (Consistency)** | 数据在不同节点间保持一致 | 强一致性、最终一致性、因果一致性 |
+| **可维护性 (Maintainability)** | 系统易于维护和修改 | 模块化设计、松耦合、标准化 |
 
-### 2. 容量规划
-- **存储容量**：数据量、增长率、备份需求
-- **计算容量**：CPU、内存、网络带宽
-- **并发容量**：QPS、响应时间、吞吐量
-- **扩展容量**：水平扩展、垂直扩展、自动扩缩容
+```java title="系统设计原则示例"
+// 可扩展性设计 - 无状态服务
+@Service
+public class UserService {
+    
+    @Autowired
+    private UserRepository userRepository;
+    
+    @Autowired
+    private RedisTemplate<String, Object> redisTemplate;
+    
+    public User getUserById(Long id) {
+        // 先从缓存获取
+        String cacheKey = "user:" + id;
+        User user = (User) redisTemplate.opsForValue().get(cacheKey);
+        
+        if (user == null) {
+            // 缓存未命中，从数据库获取
+            user = userRepository.findById(id).orElse(null);
+            if (user != null) {
+                // 写入缓存
+                redisTemplate.opsForValue().set(cacheKey, user, Duration.ofMinutes(30));
+            }
+        }
+        
+        return user;
+    }
+}
 
-### 3. 架构设计
-- **系统架构**：整体架构、模块划分、接口设计
-- **数据架构**：数据模型、存储方案、缓存策略
-- **网络架构**：负载均衡、CDN、网络分区
-- **安全架构**：认证授权、数据加密、安全防护
-
-### 4. 性能优化
-- **缓存策略**：多级缓存、缓存更新、缓存穿透
-- **数据库优化**：索引优化、查询优化、分库分表
-- **异步处理**：消息队列、异步调用、事件驱动
-- **CDN加速**：静态资源、动态内容、边缘计算
-
-## 详细知识点
-
-### 高可用设计
-```
-高可用设计
-├── 故障转移
-│   ├── 主从切换
-│   │   ├── 自动切换
-│   │   ├── 手动切换
-│   │   ├── 切换时间
-│   │   └── 数据一致性
-│   ├── 负载均衡
-│   │   ├── 轮询算法
-│   │   ├── 权重算法
-│   │   ├── 最少连接
-│   │   └── 一致性哈希
-│   └── 健康检查
-│       ├── 心跳检测
-│       ├── 服务探针
-│       ├── 故障检测
-│       └── 自动恢复
-├── 冗余设计
-│   ├── 硬件冗余
-│   │   ├── 服务器冗余
-│   │   ├── 网络冗余
-│   │   ├── 存储冗余
-│   │   └── 电源冗余
-│   ├── 软件冗余
-│   │   ├── 服务冗余
-│   │   ├── 数据冗余
-│   │   ├── 配置冗余
-│   │   └── 代码冗余
-│   └── 地理冗余
-│       ├── 多机房部署
-│       ├── 异地容灾
-│       ├── 数据同步
-│       └── 故障隔离
-├── 容错机制
-│   ├── 熔断器
-│   │   ├── 熔断条件
-│   │   ├── 熔断时间
-│   │   ├── 半开状态
-│   │   └── 恢复机制
-│   ├── 降级策略
-│   │   ├── 功能降级
-│   │   ├── 性能降级
-│   │   ├── 服务降级
-│   │   └── 用户体验
-│   └── 重试机制
-│       ├── 重试次数
-│       ├── 重试间隔
-│       ├── 退避策略
-│       └── 幂等性
-└── 监控告警
-    ├── 系统监控
-    │   ├── CPU使用率
-    │   ├── 内存使用率
-    │   ├── 磁盘使用率
-    │   └── 网络流量
-    ├── 应用监控
-    │   ├── 响应时间
-    │   ├── 错误率
-    │   ├── 吞吐量
-    │   └── 并发数
-    ├── 业务监控
-    │   ├── 业务指标
-    │   ├── 用户行为
-    │   ├── 异常检测
-    │   └── 趋势分析
-    └── 告警机制
-        ├── 告警规则
-        ├── 告警级别
-        ├── 告警通知
-        └── 告警处理
+// 高可用性设计 - 熔断器模式
+@Component
+public class CircuitBreaker {
+    
+    private AtomicInteger failureCount = new AtomicInteger(0);
+    private AtomicInteger successCount = new AtomicInteger(0);
+    private AtomicLong lastFailureTime = new AtomicLong(0);
+    
+    private static final int FAILURE_THRESHOLD = 5;
+    private static final long TIMEOUT = 60000; // 60秒
+    
+    public <T> T execute(Supplier<T> supplier) {
+        if (isOpen()) {
+            throw new CircuitBreakerOpenException("熔断器已打开");
+        }
+        
+        try {
+            T result = supplier.get();
+            onSuccess();
+            return result;
+        } catch (Exception e) {
+            onFailure();
+            throw e;
+        }
+    }
+    
+    private boolean isOpen() {
+        if (failureCount.get() >= FAILURE_THRESHOLD) {
+            long now = System.currentTimeMillis();
+            if (now - lastFailureTime.get() > TIMEOUT) {
+                // 尝试半开状态
+                return false;
+            }
+            return true;
+        }
+        return false;
+    }
+    
+    private void onSuccess() {
+        successCount.incrementAndGet();
+        failureCount.set(0);
+    }
+    
+    private void onFailure() {
+        failureCount.incrementAndGet();
+        lastFailureTime.set(System.currentTimeMillis());
+    }
+}
 ```
 
-### 可扩展性设计
-```
-可扩展性设计
-├── 水平扩展
-│   ├── 无状态设计
-│   │   ├── 会话外部化
-│   │   ├── 配置外部化
-│   │   ├── 数据外部化
-│   │   └── 状态管理
-│   ├── 负载均衡
-│   │   ├── 应用层负载均衡
-│   │   ├── 网络层负载均衡
-│   │   ├── 数据库负载均衡
-│   │   └── 缓存负载均衡
-│   ├── 数据分片
-│   │   ├── 水平分片
-│   │   ├── 垂直分片
-│   │   ├── 一致性哈希
-│   │   └── 分片策略
-│   └── 服务拆分
-│       ├── 按业务拆分
-│       ├── 按团队拆分
-│       ├── 按技术拆分
-│       └── 按数据拆分
-├── 垂直扩展
-│   ├── 硬件升级
-│   │   ├── CPU升级
-│   │   ├── 内存升级
-│   │   ├── 存储升级
-│   │   └── 网络升级
-│   ├── 软件优化
-│   │   ├── 算法优化
-│   │   ├── 代码优化
-│   │   ├── 配置优化
-│   │   └── 参数调优
-│   └── 架构优化
-│       ├── 缓存优化
-│       ├── 数据库优化
-│       ├── 网络优化
-│       └── 存储优化
-├── 自动扩缩容
-│   ├── 扩缩容策略
-│   │   ├── 基于CPU
-│   │   ├── 基于内存
-│   │   ├── 基于队列
-│   │   └── 基于时间
-│   ├── 扩缩容算法
-│   │   ├── 线性扩缩容
-│   │   ├── 指数扩缩容
-│   │   ├── 预测扩缩容
-│   │   └── 自适应扩缩容
-│   └── 扩缩容限制
-│       ├── 最小实例数
-│       ├── 最大实例数
-│       ├── 扩缩容速度
-│       └── 成本控制
-└── 性能优化
-    ├── 缓存优化
-    │   ├── 多级缓存
-    │   ├── 缓存预热
-    │   ├── 缓存更新
-    │   └── 缓存穿透
-    ├── 数据库优化
-    │   ├── 索引优化
-    │   ├── 查询优化
-    │   ├── 连接池优化
-    │   └── 分库分表
-    ├── 异步处理
-    │   ├── 异步调用
-    │   ├── 消息队列
-    │   ├── 事件驱动
-    │   └── 流式处理
-    └── CDN加速
-        ├── 静态资源
-        ├── 动态内容
-        ├── 边缘计算
-        └── 智能路由
+### 1.2 设计模式
+
+#### 分层架构模式
+
+```java title="分层架构示例"
+// 表现层 (Presentation Layer)
+@RestController
+@RequestMapping("/api/users")
+public class UserController {
+    
+    @Autowired
+    private UserService userService;
+    
+    @GetMapping("/{id}")
+    public ResponseEntity<User> getUser(@PathVariable Long id) {
+        User user = userService.getUserById(id);
+        return ResponseEntity.ok(user);
+    }
+    
+    @PostMapping
+    public ResponseEntity<User> createUser(@RequestBody User user) {
+        User savedUser = userService.createUser(user);
+        return ResponseEntity.status(HttpStatus.CREATED).body(savedUser);
+    }
+}
+
+// 业务层 (Business Layer)
+@Service
+@Transactional
+public class UserService {
+    
+    @Autowired
+    private UserRepository userRepository;
+    
+    @Autowired
+    private EmailService emailService;
+    
+    public User createUser(User user) {
+        // 业务逻辑验证
+        validateUser(user);
+        
+        // 保存用户
+        User savedUser = userRepository.save(user);
+        
+        // 发送欢迎邮件
+        emailService.sendWelcomeEmail(savedUser.getEmail());
+        
+        return savedUser;
+    }
+    
+    private void validateUser(User user) {
+        if (user.getName() == null || user.getName().trim().isEmpty()) {
+            throw new IllegalArgumentException("用户名不能为空");
+        }
+        if (user.getEmail() == null || !isValidEmail(user.getEmail())) {
+            throw new IllegalArgumentException("邮箱格式不正确");
+        }
+    }
+}
+
+// 数据层 (Data Layer)
+@Repository
+public interface UserRepository extends JpaRepository<User, Long> {
+    
+    Optional<User> findByEmail(String email);
+    
+    List<User> findByNameContaining(String name);
+    
+    @Query("SELECT u FROM User u WHERE u.createdAt >= :startDate")
+    List<User> findUsersCreatedAfter(@Param("startDate") LocalDateTime startDate);
+}
 ```
 
-### 数据设计
-```
-数据设计
-├── 数据模型
-│   ├── 概念模型
-│   │   ├── 实体关系
-│   │   ├── 业务规则
-│   │   ├── 约束条件
-│   │   └── 数据字典
-│   ├── 逻辑模型
-│   │   ├── 表结构设计
-│   │   ├── 字段设计
-│   │   ├── 索引设计
-│   │   └── 约束设计
-│   └── 物理模型
-│       ├── 存储引擎
-│       ├── 分区策略
-│       ├── 压缩策略
-│       └── 备份策略
-├── 存储方案
-│   ├── 关系型数据库
-│   │   ├── MySQL
-│   │   ├── PostgreSQL
-│   │   ├── Oracle
-│   │   └── SQL Server
-│   ├── NoSQL数据库
-│   │   ├── 键值存储
-│   │   ├── 文档存储
-│   │   ├── 列族存储
-│   │   └── 图数据库
-│   ├── 分布式存储
-│   │   ├── HDFS
-│   │   ├── Ceph
-│   │   ├── GlusterFS
-│   │   └── MinIO
-│   └── 云存储
-│       ├── 对象存储
-│       ├── 块存储
-│       ├── 文件存储
-│       └── 混合存储
-├── 缓存策略
-│   ├── 缓存层次
-│   │   ├── L1缓存 (CPU缓存)
-│   │   ├── L2缓存 (内存缓存)
-│   │   ├── L3缓存 (分布式缓存)
-│   │   └── L4缓存 (CDN缓存)
-│   ├── 缓存更新
-│   │   ├── 写穿策略
-│   │   ├── 写回策略
-│   │   ├── 写分配策略
-│   │   └── 写不分配策略
-│   ├── 缓存失效
-│   │   ├── 时间失效
-│   │   ├── 版本失效
-│   │   ├── 事件失效
-│   │   └── 手动失效
-│   └── 缓存穿透
-│       ├── 布隆过滤器
-│       ├── 空值缓存
-│       ├── 限流保护
-│       └── 熔断机制
-└── 数据一致性
-    ├── 强一致性
-    │   ├── 同步复制
-    │   ├── 分布式事务
-    │   ├── 性能影响
-    │   └── 适用场景
-    ├── 最终一致性
-    │   ├── 异步复制
-    │   ├── 补偿机制
-    │   ├── 时间窗口
-    │   └── 业务容忍
-    ├── 因果一致性
-    │   ├── 向量时钟
-    │   ├── 逻辑时钟
-    │   ├── 版本向量
-    │   └── 冲突解决
-    └── 一致性协议
-        ├── 2PC协议
-        ├── 3PC协议
-        ├── Paxos算法
-        └── Raft算法
+#### 微服务架构模式
+
+```java title="微服务架构示例"
+// 用户服务
+@SpringBootApplication
+@EnableDiscoveryClient
+public class UserServiceApplication {
+    public static void main(String[] args) {
+        SpringApplication.run(UserServiceApplication.class, args);
+    }
+}
+
+// 订单服务
+@SpringBootApplication
+@EnableDiscoveryClient
+public class OrderServiceApplication {
+    public static void main(String[] args) {
+        SpringApplication.run(OrderServiceApplication.class, args);
+    }
+}
+
+// 服务间通信
+@Service
+public class OrderService {
+    
+    @Autowired
+    @LoadBalanced
+    private RestTemplate restTemplate;
+    
+    public Order createOrder(OrderRequest request) {
+        // 调用用户服务验证用户
+        User user = restTemplate.getForObject(
+            "http://user-service/api/users/" + request.getUserId(),
+            User.class
+        );
+        
+        if (user == null) {
+            throw new UserNotFoundException("用户不存在");
+        }
+        
+        // 创建订单
+        Order order = new Order();
+        order.setUserId(user.getId());
+        order.setItems(request.getItems());
+        order.setTotalAmount(calculateTotal(request.getItems()));
+        
+        return orderRepository.save(order);
+    }
+}
 ```
 
-## 性能优化
+## 2. 高可用设计
 
-### 系统优化
+### 2.1 故障转移机制
+
+```java title="故障转移示例"
+// 主从切换
+@Component
+public class DatabaseFailover {
+    
+    @Autowired
+    private DataSource primaryDataSource;
+    
+    @Autowired
+    private DataSource secondaryDataSource;
+    
+    private AtomicBoolean isPrimaryHealthy = new AtomicBoolean(true);
+    
+    public DataSource getActiveDataSource() {
+        if (isPrimaryHealthy.get()) {
+            return primaryDataSource;
+        } else {
+            return secondaryDataSource;
+        }
+    }
+    
+    @Scheduled(fixedRate = 5000)
+    public void healthCheck() {
+        try (Connection conn = primaryDataSource.getConnection()) {
+            conn.createStatement().execute("SELECT 1");
+            isPrimaryHealthy.set(true);
+        } catch (Exception e) {
+            isPrimaryHealthy.set(false);
+            log.error("主数据库健康检查失败", e);
+        }
+    }
+}
+
+// 负载均衡
+@Component
+public class LoadBalancer {
+    
+    private List<String> servers = Arrays.asList(
+        "server1:8080", "server2:8080", "server3:8080"
+    );
+    
+    private AtomicInteger currentIndex = new AtomicInteger(0);
+    
+    public String getNextServer() {
+        int index = currentIndex.getAndIncrement() % servers.size();
+        return servers.get(index);
+    }
+    
+    public String getServerByWeight() {
+        // 权重轮询算法
+        return servers.get(0); // 简化实现
+    }
+}
+```
+
+### 2.2 冗余设计
+
+```java title="冗余设计示例"
+// 数据冗余
+@Entity
+public class User {
+    
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+    
+    private String name;
+    private String email;
+    
+    // 冗余字段，避免频繁关联查询
+    private String departmentName;
+    private String managerName;
+    
+    // 版本控制，用于乐观锁
+    @Version
+    private Long version;
+    
+    // 审计字段
+    @CreatedDate
+    private LocalDateTime createdAt;
+    
+    @LastModifiedDate
+    private LocalDateTime updatedAt;
+}
+
+// 服务冗余
+@Configuration
+public class ServiceRedundancyConfig {
+    
+    @Bean
+    @Primary
+    public EmailService primaryEmailService() {
+        return new PrimaryEmailService();
+    }
+    
+    @Bean
+    public EmailService backupEmailService() {
+        return new BackupEmailService();
+    }
+    
+    @Bean
+    public EmailServiceSelector emailServiceSelector() {
+        return new EmailServiceSelector();
+    }
+}
+
+@Component
+public class EmailServiceSelector {
+    
+    @Autowired
+    private EmailService primaryEmailService;
+    
+    @Autowired
+    private EmailService backupEmailService;
+    
+    public void sendEmail(String to, String subject, String content) {
+        try {
+            primaryEmailService.sendEmail(to, subject, content);
+        } catch (Exception e) {
+            log.warn("主邮件服务失败，使用备用服务", e);
+            backupEmailService.sendEmail(to, subject, content);
+        }
+    }
+}
+```
+
+## 3. 可扩展性设计
+
+### 3.1 水平扩展
+
+```java title="水平扩展示例"
+// 无状态设计
+@RestController
+public class StatelessController {
+    
+    @Autowired
+    private RedisTemplate<String, Object> redisTemplate;
+    
+    @GetMapping("/session/{sessionId}")
+    public ResponseEntity<SessionData> getSession(@PathVariable String sessionId) {
+        // 会话数据存储在外部Redis中，不依赖本地状态
+        SessionData sessionData = (SessionData) redisTemplate.opsForValue().get("session:" + sessionId);
+        return ResponseEntity.ok(sessionData);
+    }
+    
+    @PostMapping("/session")
+    public ResponseEntity<String> createSession(@RequestBody SessionData sessionData) {
+        String sessionId = UUID.randomUUID().toString();
+        redisTemplate.opsForValue().set("session:" + sessionId, sessionData, Duration.ofHours(24));
+        return ResponseEntity.ok(sessionId);
+    }
+}
+
+// 数据分片
+@Component
+public class ShardingStrategy {
+    
+    private List<DataSource> dataSources = Arrays.asList(
+        dataSource1, dataSource2, dataSource3, dataSource4
+    );
+    
+    public DataSource getDataSource(Long userId) {
+        int shardIndex = (int) (userId % dataSources.size());
+        return dataSources.get(shardIndex);
+    }
+    
+    public String getShardKey(Long userId) {
+        return "shard_" + (userId % 4);
+    }
+}
+
+// 一致性哈希
+@Component
+public class ConsistentHashing {
+    
+    private TreeMap<Integer, String> ring = new TreeMap<>();
+    private int virtualNodes = 150; // 虚拟节点数
+    
+    public ConsistentHashing(List<String> servers) {
+        for (String server : servers) {
+            for (int i = 0; i < virtualNodes; i++) {
+                String virtualNode = server + "&VN" + i;
+                int hash = hash(virtualNode);
+                ring.put(hash, server);
+            }
+        }
+    }
+    
+    public String getServer(String key) {
+        int hash = hash(key);
+        Map.Entry<Integer, String> entry = ring.ceilingEntry(hash);
+        if (entry == null) {
+            entry = ring.firstEntry();
+        }
+        return entry.getValue();
+    }
+    
+    private int hash(String key) {
+        return Math.abs(key.hashCode());
+    }
+}
+```
+
+### 3.2 垂直扩展
+
+```java title="垂直扩展示例"
+// 连接池优化
+@Configuration
+public class DataSourceConfig {
+    
+    @Bean
+    @Primary
+    public DataSource dataSource() {
+        HikariConfig config = new HikariConfig();
+        config.setJdbcUrl("jdbc:mysql://localhost:3306/test");
+        config.setUsername("root");
+        config.setPassword("password");
+        
+        // 连接池配置
+        config.setMaximumPoolSize(20);
+        config.setMinimumIdle(5);
+        config.setConnectionTimeout(30000);
+        config.setIdleTimeout(600000);
+        config.setMaxLifetime(1800000);
+        
+        return new HikariDataSource(config);
+    }
+}
+
+// 线程池优化
+@Configuration
+public class ThreadPoolConfig {
+    
+    @Bean
+    public ThreadPoolTaskExecutor asyncExecutor() {
+        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+        executor.setCorePoolSize(10);
+        executor.setMaxPoolSize(50);
+        executor.setQueueCapacity(100);
+        executor.setThreadNamePrefix("Async-");
+        executor.setRejectedExecutionHandler(new ThreadPoolExecutor.CallerRunsPolicy());
+        executor.initialize();
+        return executor;
+    }
+}
+```
+
+## 4. 性能优化
+
+### 4.1 缓存策略
+
+```java title="多级缓存示例"
+@Service
+public class MultiLevelCacheService {
+    
+    @Autowired
+    private RedisTemplate<String, Object> redisTemplate;
+    
+    private LoadingCache<String, Object> localCache = Caffeine.newBuilder()
+        .maximumSize(1000)
+        .expireAfterWrite(Duration.ofMinutes(5))
+        .build(key -> getFromRedis(key));
+    
+    public Object getData(String key) {
+        try {
+            return localCache.get(key);
+        } catch (Exception e) {
+            // 本地缓存失败，直接从Redis获取
+            return getFromRedis(key);
+        }
+    }
+    
+    private Object getFromRedis(String key) {
+        Object value = redisTemplate.opsForValue().get(key);
+        if (value == null) {
+            // Redis未命中，从数据库获取
+            value = getFromDatabase(key);
+            if (value != null) {
+                redisTemplate.opsForValue().set(key, value, Duration.ofMinutes(30));
+            }
+        }
+        return value;
+    }
+    
+    private Object getFromDatabase(String key) {
+        // 从数据库获取数据的逻辑
+        return null;
+    }
+}
+
+// 缓存预热
+@Component
+public class CacheWarmup {
+    
+    @Autowired
+    private UserService userService;
+    
+    @Autowired
+    private RedisTemplate<String, Object> redisTemplate;
+    
+    @EventListener(ApplicationReadyEvent.class)
+    public void warmupCache() {
+        log.info("开始缓存预热...");
+        
+        // 预热热门用户数据
+        List<Long> hotUserIds = Arrays.asList(1L, 2L, 3L, 4L, 5L);
+        for (Long userId : hotUserIds) {
+            try {
+                User user = userService.getUserById(userId);
+                if (user != null) {
+                    redisTemplate.opsForValue().set("user:" + userId, user, Duration.ofMinutes(30));
+                }
+            } catch (Exception e) {
+                log.error("预热用户数据失败: {}", userId, e);
+            }
+        }
+        
+        log.info("缓存预热完成");
+    }
+}
+```
+
+### 4.2 数据库优化
+
+```java title="数据库优化示例"
+// 索引优化
+@Entity
+@Table(name = "users", indexes = {
+    @Index(name = "idx_email", columnList = "email"),
+    @Index(name = "idx_name_email", columnList = "name, email"),
+    @Index(name = "idx_created_at", columnList = "created_at")
+})
+public class User {
+    
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+    
+    @Column(length = 100)
+    private String name;
+    
+    @Column(unique = true, length = 100)
+    private String email;
+    
+    @Column(name = "created_at")
+    private LocalDateTime createdAt;
+    
+    // getter和setter方法
+}
+
+// 分库分表
+@Component
+public class ShardingDataSource {
+    
+    private Map<String, DataSource> dataSources = new HashMap<>();
+    
+    public DataSource getDataSource(String shardKey) {
+        return dataSources.get(shardKey);
+    }
+    
+    public String getTableName(String baseTableName, Long id) {
+        int tableIndex = (int) (id % 10);
+        return baseTableName + "_" + tableIndex;
+    }
+}
+```
+
+## 5. 安全设计
+
+### 5.1 认证授权
+
+```java title="安全设计示例"
+// JWT认证
+@Component
+public class JwtTokenProvider {
+    
+    @Value("${jwt.secret}")
+    private String jwtSecret;
+    
+    @Value("${jwt.expiration}")
+    private long jwtExpiration;
+    
+    public String generateToken(UserDetails userDetails) {
+        Date now = new Date();
+        Date expiryDate = new Date(now.getTime() + jwtExpiration);
+        
+        return Jwts.builder()
+            .setSubject(userDetails.getUsername())
+            .setIssuedAt(now)
+            .setExpiration(expiryDate)
+            .signWith(SignatureAlgorithm.HS512, jwtSecret)
+            .compact();
+    }
+    
+    public String getUsernameFromToken(String token) {
+        Claims claims = Jwts.parser()
+            .setSigningKey(jwtSecret)
+            .parseClaimsJws(token)
+            .getBody();
+        
+        return claims.getSubject();
+    }
+    
+    public boolean validateToken(String token) {
+        try {
+            Jwts.parser().setSigningKey(jwtSecret).parseClaimsJws(token);
+            return true;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+}
+
+// RBAC权限控制
+@Entity
+@Table(name = "roles")
+public class Role {
+    
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+    
+    private String name;
+    
+    @ManyToMany(fetch = FetchType.EAGER)
+    @JoinTable(
+        name = "role_permissions",
+        joinColumns = @JoinColumn(name = "role_id"),
+        inverseJoinColumns = @JoinColumn(name = "permission_id")
+    )
+    private Set<Permission> permissions = new HashSet<>();
+}
+
+@Entity
+@Table(name = "permissions")
+public class Permission {
+    
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+    
+    private String name;
+    private String resource;
+    private String action;
+}
+```
+
+## 6. 监控告警
+
+### 6.1 系统监控
+
+```java title="监控示例"
+// 性能监控
+@Aspect
+@Component
+public class PerformanceMonitor {
+    
+    private final MeterRegistry meterRegistry;
+    
+    public PerformanceMonitor(MeterRegistry meterRegistry) {
+        this.meterRegistry = meterRegistry;
+    }
+    
+    @Around("@annotation(org.springframework.web.bind.annotation.RequestMapping)")
+    public Object monitorPerformance(ProceedingJoinPoint joinPoint) throws Throwable {
+        Timer.Sample sample = Timer.start(meterRegistry);
+        
+        try {
+            Object result = joinPoint.proceed();
+            sample.stop(Timer.builder("http.server.requests")
+                .tag("method", joinPoint.getSignature().getName())
+                .tag("status", "success")
+                .register(meterRegistry));
+            return result;
+        } catch (Exception e) {
+            sample.stop(Timer.builder("http.server.requests")
+                .tag("method", joinPoint.getSignature().getName())
+                .tag("status", "error")
+                .register(meterRegistry));
+            throw e;
+        }
+    }
+}
+
+// 健康检查
+@Component
+public class CustomHealthIndicator implements HealthIndicator {
+    
+    @Override
+    public Health health() {
+        try {
+            // 检查数据库连接
+            checkDatabase();
+            
+            // 检查外部服务
+            checkExternalService();
+            
+            return Health.up()
+                .withDetail("database", "UP")
+                .withDetail("external-service", "UP")
+                .build();
+        } catch (Exception e) {
+            return Health.down()
+                .withDetail("error", e.getMessage())
+                .build();
+        }
+    }
+    
+    private void checkDatabase() {
+        // 数据库健康检查逻辑
+    }
+    
+    private void checkExternalService() {
+        // 外部服务健康检查逻辑
+    }
+}
+```
+
+## 7. 面试题精选
+
+### 7.1 基础概念题
+
+**Q: 系统设计的基本原则有哪些？**
+
+A: 系统设计的基本原则包括：
+- **可扩展性**：系统能够处理不断增长的工作负载
+- **高可用性**：系统能够持续提供服务，具备故障恢复能力
+- **一致性**：数据在不同节点间保持一致
+- **可维护性**：系统易于维护、修改和扩展
+- **安全性**：保护系统和数据的安全
+- **性能**：满足响应时间和吞吐量要求
+
+**Q: 如何设计一个高可用系统？**
+
+A: 设计高可用系统的方法：
+- **冗余设计**：硬件冗余、软件冗余、地理冗余
+- **故障转移**：自动故障检测和切换机制
+- **负载均衡**：分散请求压力，提高系统容量
+- **容错机制**：熔断器、降级策略、重试机制
+- **监控告警**：实时监控系统状态，及时发现问题
+
+### 7.2 架构设计题
+
+**Q: 如何设计一个高并发系统？**
+
+A: 设计高并发系统的策略：
 - **缓存优化**：多级缓存、缓存预热、缓存更新
-- **数据库优化**：索引优化、查询优化、分库分表
-- **网络优化**：CDN、负载均衡、连接池
-- **存储优化**：SSD、RAID、压缩存储
+- **异步处理**：消息队列、异步调用、事件驱动
+- **数据库优化**：读写分离、分库分表、索引优化
+- **负载均衡**：应用层负载均衡、数据库负载均衡
+- **水平扩展**：无状态设计、服务拆分、数据分片
 
-### 应用优化
+**Q: 如何设计一个分布式系统？**
+
+A: 设计分布式系统的考虑：
+- **服务拆分**：按业务功能拆分服务
+- **服务治理**：服务注册发现、负载均衡、熔断降级
+- **数据一致性**：分布式事务、最终一致性、补偿机制
+- **网络通信**：RPC、消息队列、事件总线
+- **监控追踪**：分布式链路追踪、性能监控
+
+### 7.3 实际应用题
+
+**Q: 如何设计一个电商系统？**
+
+A: 电商系统设计要点：
+- **用户系统**：注册登录、用户管理、权限控制
+- **商品系统**：商品管理、库存管理、价格管理
+- **订单系统**：订单创建、支付处理、物流跟踪
+- **支付系统**：支付网关、风控系统、对账系统
+- **推荐系统**：个性化推荐、搜索优化、营销活动
+
+**Q: 如何设计一个社交网络？**
+
+A: 社交网络设计要点：
+- **用户关系**：好友关系、关注关系、群组管理
+- **内容管理**：动态发布、内容审核、推荐算法
+- **消息系统**：即时消息、推送通知、消息队列
+- **存储方案**：关系数据、内容数据、媒体文件
+- **隐私控制**：权限管理、数据保护、内容可见性
+
+### 7.4 性能优化题
+
+**Q: 如何优化系统性能？**
+
+A: 系统性能优化方法：
+- **缓存优化**：多级缓存、缓存策略、缓存穿透防护
+- **数据库优化**：索引优化、查询优化、连接池优化
 - **代码优化**：算法优化、内存管理、并发控制
-- **架构优化**：异步处理、事件驱动、微服务
-- **配置优化**：JVM参数、数据库参数、网络参数
-- **监控优化**：性能监控、瓶颈分析、容量规划
+- **架构优化**：异步处理、微服务、事件驱动
+- **基础设施**：CDN、负载均衡、容器化部署
 
-## 安全设计
+**Q: 如何进行容量规划？**
 
-### 安全架构
-- **认证授权**：身份认证、权限控制、单点登录
-- **数据安全**：数据加密、传输加密、存储加密
-- **网络安全**：防火墙、VPN、入侵检测
-- **应用安全**：输入验证、SQL注入防护、XSS防护
+A: 容量规划步骤：
+- **需求分析**：用户规模、业务增长、性能要求
+- **资源评估**：CPU、内存、存储、网络需求
+- **性能测试**：压力测试、性能基准、瓶颈分析
+- **扩展策略**：水平扩展、垂直扩展、自动扩缩容
+- **成本控制**：资源利用率、成本优化、预算管理
 
-### 安全策略
-- **访问控制**：RBAC、ABAC、最小权限原则
-- **数据保护**：数据脱敏、数据备份、数据恢复
-- **安全监控**：安全日志、异常检测、威胁情报
-- **应急响应**：安全事件、应急处理、恢复计划
+:::tip 系统设计学习要点
+1. **掌握基础概念**：理解可扩展性、高可用性、一致性等核心概念
+2. **熟悉架构模式**：学会分层架构、微服务、事件驱动等模式
+3. **掌握设计原则**：遵循SOLID原则、DRY原则、KISS原则
+4. **学会性能优化**：掌握缓存、数据库、代码优化技术
+5. **了解最佳实践**：学习业界成熟的设计模式和解决方案
+:::
 
-## 常见面试问题
+---
 
-### 基础概念
-1. **系统设计的基本原则**
-2. **高可用性的设计策略**
-3. **可扩展性的实现方案**
-4. **性能优化的方法**
-
-### 架构设计
-1. **如何设计高并发系统**
-2. **如何设计分布式系统**
-3. **如何设计微服务架构**
-4. **如何设计数据存储方案**
-
-### 实际应用
-1. **如何设计电商系统**
-2. **如何设计社交网络**
-3. **如何设计搜索引擎**
-4. **如何设计推荐系统**
-
-### 性能优化
-1. **如何优化系统性能**
-2. **如何处理高并发**
-3. **如何设计缓存策略**
-4. **如何进行容量规划**
-
-## 学习建议
-
-### 理论基础
-1. **理解系统设计的基本概念**
-2. **掌握架构设计的原则和方法**
-3. **学习分布式系统的设计模式**
-4. **了解性能优化的技术手段**
-
-### 实践能力
-1. **参与系统设计项目**
-2. **进行性能测试和优化**
-3. **处理系统故障和问题**
-4. **进行技术选型和评估**
-
-### 扩展知识
-1. **云原生架构**
-2. **DevOps和SRE**
-3. **大数据和AI**
-4. **物联网和边缘计算**
-
-通过系统学习系统设计，你将能够：
-- 设计高可用、高性能的系统架构
-- 解决复杂的技术问题
-- 优化系统的性能和可靠性
-- 构建可扩展的分布式系统 
+通过本章的学习，你应该已经掌握了系统设计的核心概念、架构模式和最佳实践。系统设计是构建高质量软件系统的重要技能，掌握系统设计能力可以帮助你设计出高可用、高性能、可扩展的分布式系统。在实际项目中，合理运用系统设计原则和方法可以大大提高系统的质量和可靠性。 

@@ -1,110 +1,1889 @@
 ---
 sidebar_position: 2
-title: "服务网关"
-description: "微服务网关实现与配置"
+title: API网关详解与最佳实践
+description: 深入理解微服务API网关的设计原理、实现方案与实战应用
 authors: [Laby]
 last_update:
   date: 2025-08-07
   author: Laby
 ---
 
-# 服务网关
+# API网关详解与最佳实践
 
-网关是微服务的统一入口，提供路由、鉴权、限流、熔断、观测等能力。
+API网关是微服务架构中的核心组件，作为所有客户端请求的统一入口，负责路由转发、负载均衡、认证授权、限流熔断、监控日志等关键功能。它不仅是技术架构的重要组成部分，更是业务架构的重要支撑。
 
-## Spring Cloud Gateway
+:::tip 核心价值
+API网关 = 统一入口 + 路由转发 + 安全防护 + 流量控制 + 监控观测
+:::
 
-### 路由与断言
+## 1. API网关基础概念
 
-```yaml
+### 1.1 什么是API网关？
+
+API网关是微服务架构中的一个服务，它作为所有客户端请求的统一入口，负责将请求路由到相应的微服务，并在请求处理过程中提供横切关注点（cross-cutting concerns）的处理。
+
+#### API网关的核心职责
+```java title="API网关职责示例"
+public class ApiGatewayResponsibilities {
+    /*
+     * API网关的核心职责
+     * 1. 路由转发：将请求路由到正确的微服务
+     * 2. 负载均衡：在多个服务实例间分发请求
+     * 3. 认证授权：验证用户身份和权限
+     * 4. 限流熔断：控制请求流量和故障隔离
+     * 5. 协议转换：支持不同协议间的转换
+     * 6. 日志监控：记录请求日志和性能指标
+     * 7. 安全防护：防止恶意攻击和数据泄露
+     */
+    
+    // 路由转发
+    public class RoutingService {
+        public RouteResult routeRequest(HttpRequest request) {
+            // 根据请求路径和方法确定目标服务
+            String targetService = determineTargetService(request.getPath());
+            String targetUrl = buildTargetUrl(targetService, request);
+            return forwardRequest(targetUrl, request);
+        }
+        
+        private String determineTargetService(String path) {
+            if (path.startsWith("/api/users")) {
+                return "user-service";
+            } else if (path.startsWith("/api/orders")) {
+                return "order-service";
+            } else if (path.startsWith("/api/products")) {
+                return "product-service";
+            }
+            return "default-service";
+        }
+    }
+    
+    // 负载均衡
+    public class LoadBalancer {
+        public ServiceInstance chooseInstance(String serviceName) {
+            List<ServiceInstance> instances = discoveryClient.getInstances(serviceName);
+            return loadBalancerStrategy.choose(instances);
+        }
+    }
+    
+    // 认证授权
+    public class AuthenticationService {
+        public AuthResult authenticate(HttpRequest request) {
+            String token = extractToken(request);
+            if (token == null) {
+                return AuthResult.unauthorized("Missing token");
+            }
+            
+            try {
+                Claims claims = jwtUtil.parseToken(token);
+                return AuthResult.success(claims);
+            } catch (Exception e) {
+                return AuthResult.unauthorized("Invalid token");
+            }
+        }
+    }
+    
+    // 限流控制
+    public class RateLimiter {
+        public boolean allowRequest(String key) {
+            return rateLimiter.tryAcquire(key);
+        }
+    }
+    
+    // 熔断器
+    public class CircuitBreaker {
+        public boolean isOpen(String serviceName) {
+            return circuitBreakerRegistry.get(serviceName).getState() == CircuitBreaker.State.OPEN;
+        }
+    }
+}
+```
+
+### 1.2 API网关的架构模式
+
+#### 网关架构模式对比
+| 架构模式 | 特点 | 优势 | 劣势 | 适用场景 |
+|----------|------|------|------|----------|
+| **集中式网关** | 单一网关处理所有请求 | 统一管理、配置简单 | 单点故障、性能瓶颈 | 中小型系统 |
+| **分布式网关** | 多个网关实例 | 高可用、可扩展 | 配置复杂、一致性难保证 | 大型系统 |
+| **边缘网关** | 部署在网络边缘 | 就近访问、延迟低 | 运维复杂、成本高 | 全球化部署 |
+| **服务网格** | 与微服务集成 | 细粒度控制、透明代理 | 复杂度高、学习成本大 | 云原生应用 |
+
+#### 网关部署架构
+```
+客户端请求流程:
+Client → Load Balancer → API Gateway → Microservices
+
+详细架构:
+┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
+│   Client Apps   │    │  Load Balancer  │    │  API Gateway    │
+│                 │───▶│                 │───▶│                 │
+│ - Web App       │    │ - Nginx         │    │ - Spring Cloud  │
+│ - Mobile App    │    │ - HAProxy       │    │   Gateway       │
+│ - Third Party   │    │ - ALB/CLB       │    │ - Zuul          │
+└─────────────────┘    └─────────────────┘    └─────────────────┘
+                                                           │
+                                                           ▼
+                                              ┌─────────────────┐
+                                              │  Microservices  │
+                                              │                 │
+                                              │ ┌─────────────┐ │
+                                              │ │User Service │ │
+                                              │ └─────────────┘ │
+                                              │ ┌─────────────┐ │
+                                              │ │Order Service│ │
+                                              │ └─────────────┘ │
+                                              │ ┌─────────────┐ │
+                                              │ │Product Svc  │ │
+                                              │ └─────────────┘ │
+                                              └─────────────────┘
+```
+
+### 1.3 API网关的优势与挑战
+
+#### 核心优势
+```java title="API网关优势示例"
+public class ApiGatewayAdvantages {
+    /*
+     * API网关的核心优势
+     * 1. 统一入口：所有客户端通过统一入口访问服务
+     * 2. 安全防护：集中处理认证、授权、加密等安全需求
+     * 3. 流量控制：统一进行限流、熔断、降级等流量控制
+     * 4. 协议转换：支持不同协议间的转换和适配
+     * 5. 监控观测：统一收集请求日志和性能指标
+     * 6. 服务聚合：将多个服务的响应聚合为单个响应
+     */
+    
+    // 统一入口
+    public class UnifiedEntry {
+        public void handleRequest(HttpRequest request) {
+            // 所有请求都通过网关处理
+            // 客户端不需要知道具体的服务地址
+            // 简化了客户端的配置和管理
+        }
+    }
+    
+    // 安全防护
+    public class SecurityProtection {
+        public void applySecurity(HttpRequest request) {
+            // 统一的认证授权
+            authenticate(request);
+            
+            // 统一的加密解密
+            decrypt(request);
+            
+            // 统一的防攻击措施
+            applyWAF(request);
+        }
+    }
+    
+    // 流量控制
+    public class TrafficControl {
+        public void controlTraffic(HttpRequest request) {
+            // 统一的限流控制
+            if (!rateLimiter.allowRequest(request.getClientId())) {
+                throw new RateLimitExceededException();
+            }
+            
+            // 统一的熔断控制
+            if (circuitBreaker.isOpen(request.getServiceName())) {
+                throw new CircuitBreakerOpenException();
+            }
+        }
+    }
+    
+    // 协议转换
+    public class ProtocolConversion {
+        public HttpResponse convertProtocol(HttpRequest request) {
+            // 支持HTTP、gRPC、WebSocket等协议转换
+            if (request.getProtocol() == Protocol.GRPC) {
+                return convertGrpcToHttp(request);
+            } else if (request.getProtocol() == Protocol.WEBSOCKET) {
+                return convertWebSocketToHttp(request);
+            }
+            return processHttpRequest(request);
+        }
+    }
+}
+```
+
+#### 主要挑战
+```java title="API网关挑战示例"
+public class ApiGatewayChallenges {
+    /*
+     * API网关面临的主要挑战
+     * 1. 性能瓶颈：所有请求都经过网关，可能成为性能瓶颈
+     * 2. 单点故障：网关故障会影响所有服务
+     * 3. 配置复杂：路由规则、过滤器配置复杂
+     * 4. 版本管理：API版本管理复杂
+     * 5. 调试困难：问题定位和调试困难
+     * 6. 运维复杂：监控、部署、升级复杂
+     */
+    
+    // 性能瓶颈
+    public class PerformanceBottleneck {
+        public void handleHighTraffic() {
+            // 高并发场景下网关可能成为瓶颈
+            // 需要水平扩展和性能优化
+            // 可能需要缓存和异步处理
+        }
+    }
+    
+    // 单点故障
+    public class SinglePointOfFailure {
+        public void handleGatewayFailure() {
+            // 网关故障会影响所有服务
+            // 需要高可用部署
+            // 需要故障转移机制
+        }
+    }
+    
+    // 配置复杂
+    public class ComplexConfiguration {
+        public void manageConfiguration() {
+            // 路由规则配置复杂
+            // 过滤器链配置复杂
+            // 需要配置管理工具
+        }
+    }
+}
+```
+
+## 2. Spring Cloud Gateway详解
+
+### 2.1 Spring Cloud Gateway架构
+
+Spring Cloud Gateway是基于Spring WebFlux构建的响应式网关，提供了强大的路由、过滤和监控功能。
+
+#### 核心组件架构
+```java title="Spring Cloud Gateway架构示例"
+public class SpringCloudGatewayArchitecture {
+    /*
+     * Spring Cloud Gateway核心组件
+     * 1. Route（路由）：定义请求如何转发到目标服务
+     * 2. Predicate（断言）：定义请求匹配的条件
+     * 3. Filter（过滤器）：处理请求和响应的逻辑
+     * 4. LoadBalancer（负载均衡器）：在多个服务实例间分发请求
+     */
+    
+    // 路由定义
+    public class RouteDefinition {
+        private String id;                    // 路由ID
+        private String uri;                   // 目标URI
+        private List<PredicateDefinition> predicates;  // 断言列表
+        private List<FilterDefinition> filters;        // 过滤器列表
+        private int order;                    // 路由顺序
+        
+        // 构造函数、getter、setter方法
+    }
+    
+    // 断言定义
+    public class PredicateDefinition {
+        private String name;                  // 断言名称
+        private Map<String, String> args;     // 断言参数
+        
+        // 构造函数、getter、setter方法
+    }
+    
+    // 过滤器定义
+    public class FilterDefinition {
+        private String name;                  // 过滤器名称
+        private Map<String, String> args;     // 过滤器参数
+        
+        // 构造函数、getter、setter方法
+    }
+    
+    // 请求处理流程
+    public class RequestProcessingFlow {
+        public Mono<Void> processRequest(ServerWebExchange exchange) {
+            // 1. 匹配路由
+            Route route = routeLocator.findRoute(exchange);
+            
+            // 2. 执行断言
+            if (!route.getPredicate().test(exchange)) {
+                return handleNoRoute(exchange);
+            }
+            
+            // 3. 执行过滤器链
+            return filterChain.filter(exchange);
+            
+            // 4. 转发请求
+            return forwardRequest(exchange, route);
+        }
+    }
+}
+```
+
+### 2.2 路由配置与断言
+
+#### 路由配置示例
+```yaml title="Spring Cloud Gateway路由配置"
 spring:
   cloud:
     gateway:
       routes:
-        - id: user_route
-          uri: http://localhost:8081
+        # 用户服务路由
+        - id: user-service-route
+          uri: lb://user-service
           predicates:
             - Path=/api/users/**
-            - Method=GET,POST
+            - Method=GET,POST,PUT,DELETE
+            - Header=X-Request-Source, gateway
+            - Query=version, v1
           filters:
             - StripPrefix=1
-            - AddRequestHeader=X-Request-Source, gateway
-        - id: order_route
-          uri: lb://order-service  # 与注册中心联动
-          predicates:
-            - Path=/api/orders/**
-```
-
-### 全局过滤器（鉴权示例）
-
-```java
-@org.springframework.stereotype.Component
-public class AuthGlobalFilter implements org.springframework.cloud.gateway.filter.GlobalFilter, org.springframework.core.Ordered {
-    @Override
-    public reactor.core.publisher.Mono`<Void>` filter(org.springframework.web.server.ServerWebExchange exchange,
-            org.springframework.cloud.gateway.filter.GatewayFilterChain chain) {
-        String token = exchange.getRequest().getHeaders().getFirst("Authorization");
-        if (token == null || token.isEmpty()) {
-            exchange.getResponse().setStatusCode(org.springframework.http.HttpStatus.UNAUTHORIZED);
-            return exchange.getResponse().setComplete();
-        }
-        return chain.filter(exchange);
-    }
-    @Override
-    public int getOrder() { return -1; }
-}
-```
-
-### 限流（RedisRateLimiter）
-
-```yaml
-spring:
-  cloud:
-    gateway:
-      routes:
-        - id: api_limited
-          uri: http://localhost:8080
-          predicates:
-            - Path=/api/**
-          filters:
+            - AddRequestHeader=X-User-Service, true
+            - AddResponseHeader=X-Response-Time, ${responseTime}
             - name: RequestRateLimiter
               args:
-                redis-rate-limiter.replenishRate: 10  # 每秒令牌
-                redis-rate-limiter.burstCapacity: 20  # 桶容量
-                key-resolver: "#{@ipKeyResolver}"
+                redis-rate-limiter.replenishRate: 10
+                redis-rate-limiter.burstCapacity: 20
+                key-resolver: "#{@userKeyResolver}"
+          order: 1
+        
+        # 订单服务路由
+        - id: order-service-route
+          uri: lb://order-service
+          predicates:
+            - Path=/api/orders/**
+            - Method=GET,POST,PUT,DELETE
+            - After=2023-01-01T00:00:00+08:00[Asia/Shanghai]
+          filters:
+            - StripPrefix=1
+            - AddRequestHeader=X-Order-Service, true
+            - name: CircuitBreaker
+              args:
+                name: order-service-circuit-breaker
+                fallbackUri: forward:/fallback/order-service
+          order: 2
+        
+        # 商品服务路由
+        - id: product-service-route
+          uri: lb://product-service
+          predicates:
+            - Path=/api/products/**
+            - Method=GET,POST,PUT,DELETE
+            - Weight=group1, 8
+          filters:
+            - StripPrefix=1
+            - AddRequestHeader=X-Product-Service, true
+            - name: Retry
+              args:
+                retries: 3
+                statuses: BAD_GATEWAY
+          order: 3
+        
+        # 支付服务路由
+        - id: payment-service-route
+          uri: lb://payment-service
+          predicates:
+            - Path=/api/payments/**
+            - Method=POST
+            - RemoteAddr=192.168.1.0/24
+          filters:
+            - StripPrefix=1
+            - AddRequestHeader=X-Payment-Service, true
+            - name: RequestRateLimiter
+              args:
+                redis-rate-limiter.replenishRate: 5
+                redis-rate-limiter.burstCapacity: 10
+                key-resolver: "#{@paymentKeyResolver}"
+          order: 4
 ```
 
-```java
-@org.springframework.context.annotation.Configuration
-public class RateLimitConfig {
-    @org.springframework.context.annotation.Bean
-    public org.springframework.cloud.gateway.support.KeyResolver ipKeyResolver() {
-        return exchange -> reactor.core.publisher.Mono.just(
-            exchange.getRequest().getRemoteAddress().getAddress().getHostAddress());
+#### 自定义断言实现
+```java title="自定义断言示例"
+// 自定义断言：检查请求来源
+@Component
+public class SourcePredicateFactory extends AbstractRoutePredicateFactory<SourcePredicateFactory.Config> {
+    
+    public SourcePredicateFactory() {
+        super(Config.class);
+    }
+    
+    @Override
+    public Predicate<ServerWebExchange> apply(Config config) {
+        return exchange -> {
+            String source = exchange.getRequest().getHeaders().getFirst("X-Source");
+            return config.getSources().contains(source);
+        };
+    }
+    
+    @Override
+    public List<String> shortcutFieldOrder() {
+        return Arrays.asList("sources");
+    }
+    
+    public static class Config {
+        private List<String> sources;
+        
+        public List<String> getSources() {
+            return sources;
+        }
+        
+        public void setSources(List<String> sources) {
+            this.sources = sources;
+        }
+    }
+}
+
+// 自定义断言：检查用户权限
+@Component
+public class PermissionPredicateFactory extends AbstractRoutePredicateFactory<PermissionPredicateFactory.Config> {
+    
+    public PermissionPredicateFactory() {
+        super(Config.class);
+    }
+    
+    @Override
+    public Predicate<ServerWebExchange> apply(Config config) {
+        return exchange -> {
+            String token = exchange.getRequest().getHeaders().getFirst("Authorization");
+            if (token == null) {
+                return false;
+            }
+            
+            try {
+                Claims claims = JwtUtil.parseToken(token);
+                String userRole = claims.get("role", String.class);
+                return config.getRequiredRoles().contains(userRole);
+            } catch (Exception e) {
+                return false;
+            }
+        };
+    }
+    
+    public static class Config {
+        private List<String> requiredRoles;
+        
+        public List<String> getRequiredRoles() {
+            return requiredRoles;
+        }
+        
+        public void setRequiredRoles(List<String> requiredRoles) {
+            this.requiredRoles = requiredRoles;
+        }
+    }
+}
+
+// 使用自定义断言的路由配置
+@Configuration
+public class CustomPredicateConfig {
+    
+    @Bean
+    public RouteLocator customRouteLocator(RouteLocatorBuilder builder) {
+        return builder.routes()
+            .route("admin-route", r -> r
+                .path("/api/admin/**")
+                .and()
+                .predicate("Source", "admin-panel")
+                .and()
+                .predicate("Permission", "admin")
+                .filters(f -> f
+                    .stripPrefix(1)
+                    .addRequestHeader("X-Admin-Route", "true"))
+                .uri("lb://admin-service"))
+            .build();
     }
 }
 ```
 
-### 与熔断/监控集成
+### 2.3 过滤器链与自定义过滤器
 
-- 集成Resilience4j：超时、重试、熔断
-- 集成Prometheus/Grafana：网关指标
-- Trace上下文透传：`X-B3-TraceId`/`traceparent`
+#### 过滤器类型
+```java title="过滤器类型示例"
+public class GatewayFilters {
+    /*
+     * Spring Cloud Gateway过滤器类型
+     * 1. Global Filter（全局过滤器）：对所有请求生效
+     * 2. Gateway Filter（网关过滤器）：对特定路由生效
+     * 3. Default Filter（默认过滤器）：对所有路由生效
+     */
+    
+    // 全局过滤器：认证授权
+    @Component
+    public class AuthenticationGlobalFilter implements GlobalFilter, Ordered {
+        
+        @Override
+        public Mono<Void> filter(ServerWebExchange exchange, GatewayFilterChain chain) {
+            ServerHttpRequest request = exchange.getRequest();
+            String path = request.getPath().value();
+            
+            // 跳过不需要认证的路径
+            if (isPublicPath(path)) {
+                return chain.filter(exchange);
+            }
+            
+            // 验证Token
+            String token = extractToken(request);
+            if (token == null || !isValidToken(token)) {
+                return unauthorized(exchange);
+            }
+            
+            // 添加用户信息到请求头
+            Claims claims = JwtUtil.parseToken(token);
+            ServerHttpRequest modifiedRequest = request.mutate()
+                .header("X-User-Id", claims.getSubject())
+                .header("X-User-Role", claims.get("role", String.class))
+                .build();
+            
+            return chain.filter(exchange.mutate().request(modifiedRequest).build());
+        }
+        
+        @Override
+        public int getOrder() {
+            return -100; // 高优先级
+        }
+        
+        private boolean isPublicPath(String path) {
+            return path.startsWith("/api/public") || 
+                   path.startsWith("/api/auth") ||
+                   path.equals("/health");
+        }
+        
+        private String extractToken(ServerHttpRequest request) {
+            String authHeader = request.getHeaders().getFirst("Authorization");
+            if (authHeader != null && authHeader.startsWith("Bearer ")) {
+                return authHeader.substring(7);
+            }
+            return null;
+        }
+        
+        private boolean isValidToken(String token) {
+            try {
+                JwtUtil.parseToken(token);
+                return true;
+            } catch (Exception e) {
+                return false;
+            }
+        }
+        
+        private Mono<Void> unauthorized(ServerWebExchange exchange) {
+            exchange.getResponse().setStatusCode(HttpStatus.UNAUTHORIZED);
+            return exchange.getResponse().setComplete();
+        }
+    }
+    
+    // 全局过滤器：请求日志
+    @Component
+    public class LoggingGlobalFilter implements GlobalFilter, Ordered {
+        
+        private static final Logger logger = LoggerFactory.getLogger(LoggingGlobalFilter.class);
+        
+        @Override
+        public Mono<Void> filter(ServerWebExchange exchange, GatewayFilterChain chain) {
+            ServerHttpRequest request = exchange.getRequest();
+            long startTime = System.currentTimeMillis();
+            
+            return chain.filter(exchange)
+                .doFinally(signalType -> {
+                    long endTime = System.currentTimeMillis();
+                    long duration = endTime - startTime;
+                    
+                    logger.info("Request: {} {} - Status: {} - Duration: {}ms",
+                        request.getMethod(),
+                        request.getPath(),
+                        exchange.getResponse().getStatusCode(),
+                        duration);
+                });
+        }
+        
+        @Override
+        public int getOrder() {
+            return -50; // 中等优先级
+        }
+    }
+    
+    // 自定义网关过滤器：请求限流
+    @Component
+    public class CustomRateLimitFilter implements GatewayFilter, Ordered {
+        
+        private final RateLimiter rateLimiter;
+        private final KeyResolver keyResolver;
+        
+        public CustomRateLimitFilter(RateLimiter rateLimiter, KeyResolver keyResolver) {
+            this.rateLimiter = rateLimiter;
+            this.keyResolver = keyResolver;
+        }
+        
+        @Override
+        public Mono<Void> filter(ServerWebExchange exchange, GatewayFilterChain chain) {
+            return keyResolver.resolve(exchange)
+                .flatMap(key -> {
+                    if (rateLimiter.isAllowed(key)) {
+                        return chain.filter(exchange);
+                    } else {
+                        return rateLimitExceeded(exchange);
+                    }
+                });
+        }
+        
+        @Override
+        public int getOrder() {
+            return -200; // 高优先级
+        }
+        
+        private Mono<Void> rateLimitExceeded(ServerWebExchange exchange) {
+            exchange.getResponse().setStatusCode(HttpStatus.TOO_MANY_REQUESTS);
+            return exchange.getResponse().setComplete();
+        }
+    }
+}
+```
 
-## Zuul（简述）
+#### 过滤器配置示例
+```java title="过滤器配置示例"
+@Configuration
+public class FilterConfiguration {
+    
+    // 限流配置
+    @Bean
+    public RedisRateLimiter redisRateLimiter() {
+        return new RedisRateLimiter(10, 20); // 每秒10个令牌，突发20个
+    }
+    
+    // 用户限流Key解析器
+    @Bean
+    public KeyResolver userKeyResolver() {
+        return exchange -> {
+            String userId = exchange.getRequest().getHeaders().getFirst("X-User-Id");
+            return Mono.just(userId != null ? userId : "anonymous");
+        };
+    }
+    
+    // IP限流Key解析器
+    @Bean
+    public KeyResolver ipKeyResolver() {
+        return exchange -> {
+            String ip = exchange.getRequest().getRemoteAddress().getAddress().getHostAddress();
+            return Mono.just(ip);
+        };
+    }
+    
+    // 支付限流Key解析器
+    @Bean
+    public KeyResolver paymentKeyResolver() {
+        return exchange -> {
+            String userId = exchange.getRequest().getHeaders().getFirst("X-User-Id");
+            String paymentType = exchange.getRequest().getQueryParams().getFirst("paymentType");
+            return Mono.just(userId + ":" + paymentType);
+        };
+    }
+    
+    // 熔断器配置
+    @Bean
+    public Customizer<Resilience4JCircuitBreakerFactory> defaultCustomizer() {
+        return factory -> factory.configureDefault(id -> new CircuitBreakerConfig.Builder()
+            .slidingWindowSize(10)
+            .failureRateThreshold(50)
+            .waitDurationInOpenState(Duration.ofSeconds(10))
+            .permittedNumberOfCallsInHalfOpenState(5)
+            .build());
+    }
+}
+```
 
-Zuul 1基于Servlet，已进入维护期；Zuul 2为异步非阻塞模型。现在更推荐使用Spring Cloud Gateway。
+### 2.4 限流与熔断
 
-## 跨域与安全
+#### 限流实现
+```java title="限流实现示例"
+public class RateLimitingImplementation {
+    
+    // 令牌桶限流器
+    @Component
+    public class TokenBucketRateLimiter {
+        
+        private final Map<String, TokenBucket> buckets = new ConcurrentHashMap<>();
+        
+        public boolean isAllowed(String key, int tokens, int capacity, int refillRate) {
+            TokenBucket bucket = buckets.computeIfAbsent(key, 
+                k -> new TokenBucket(capacity, refillRate));
+            return bucket.tryConsume(tokens);
+        }
+        
+        private static class TokenBucket {
+            private final int capacity;
+            private final int refillRate;
+            private int tokens;
+            private long lastRefillTime;
+            
+            public TokenBucket(int capacity, int refillRate) {
+                this.capacity = capacity;
+                this.refillRate = refillRate;
+                this.tokens = capacity;
+                this.lastRefillTime = System.currentTimeMillis();
+            }
+            
+            public synchronized boolean tryConsume(int tokens) {
+                refill();
+                if (this.tokens >= tokens) {
+                    this.tokens -= tokens;
+                    return true;
+                }
+                return false;
+            }
+            
+            private void refill() {
+                long now = System.currentTimeMillis();
+                long timePassed = now - lastRefillTime;
+                int tokensToAdd = (int) (timePassed * refillRate / 1000);
+                
+                if (tokensToAdd > 0) {
+                    tokens = Math.min(capacity, tokens + tokensToAdd);
+                    lastRefillTime = now;
+                }
+            }
+        }
+    }
+    
+    // 滑动窗口限流器
+    @Component
+    public class SlidingWindowRateLimiter {
+        
+        private final Map<String, Queue<Long>> windows = new ConcurrentHashMap<>();
+        private final int windowSize; // 窗口大小（秒）
+        private final int maxRequests; // 最大请求数
+        
+        public SlidingWindowRateLimiter(int windowSize, int maxRequests) {
+            this.windowSize = windowSize;
+            this.maxRequests = maxRequests;
+        }
+        
+        public boolean isAllowed(String key) {
+            Queue<Long> window = windows.computeIfAbsent(key, k -> new ConcurrentLinkedQueue<>());
+            long now = System.currentTimeMillis();
+            
+            // 移除过期的请求记录
+            while (!window.isEmpty() && now - window.peek() > windowSize * 1000) {
+                window.poll();
+            }
+            
+            // 检查是否允许请求
+            if (window.size() < maxRequests) {
+                window.offer(now);
+                return true;
+            }
+            
+            return false;
+        }
+    }
+    
+    // 分布式限流器（Redis实现）
+    @Component
+    public class RedisRateLimiter {
+        
+        private final RedisTemplate<String, String> redisTemplate;
+        
+        public RedisRateLimiter(RedisTemplate<String, String> redisTemplate) {
+            this.redisTemplate = redisTemplate;
+        }
+        
+        public boolean isAllowed(String key, int tokens, int capacity, int refillRate) {
+            String script = """
+                local key = KEYS[1]
+                local tokens = tonumber(ARGV[1])
+                local capacity = tonumber(ARGV[2])
+                local refillRate = tonumber(ARGV[3])
+                local now = tonumber(ARGV[4])
+                
+                local bucket = redis.call('HMGET', key, 'tokens', 'lastRefillTime')
+                local currentTokens = tonumber(bucket[1]) or capacity
+                local lastRefillTime = tonumber(bucket[2]) or now
+                
+                local timePassed = now - lastRefillTime
+                local tokensToAdd = math.floor(timePassed * refillRate / 1000)
+                currentTokens = math.min(capacity, currentTokens + tokensToAdd)
+                
+                if currentTokens >= tokens then
+                    currentTokens = currentTokens - tokens
+                    redis.call('HMSET', key, 'tokens', currentTokens, 'lastRefillTime', now)
+                    redis.call('EXPIRE', key, 3600)
+                    return 1
+                else
+                    return 0
+                end
+                """;
+            
+            DefaultRedisScript<Long> redisScript = new DefaultRedisScript<>();
+            redisScript.setScriptText(script);
+            redisScript.setResultType(Long.class);
+            
+            Long result = redisTemplate.execute(redisScript, 
+                Collections.singletonList(key), 
+                String.valueOf(tokens), 
+                String.valueOf(capacity), 
+                String.valueOf(refillRate), 
+                String.valueOf(System.currentTimeMillis()));
+            
+            return result != null && result == 1;
+        }
+    }
+}
+```
 
-- CORS：配置允许的Origin/Method/Header
-- 鉴权：JWT/OAuth2，黑白名单、IP限流
-- 防护：限速、WAF、签名校验
+#### 熔断器实现
+```java title="熔断器实现示例"
+public class CircuitBreakerImplementation {
+    
+    // 熔断器状态
+    public enum CircuitBreakerState {
+        CLOSED,     // 关闭状态：正常处理请求
+        OPEN,       // 开启状态：快速失败
+        HALF_OPEN   // 半开状态：允许部分请求通过
+    }
+    
+    // 熔断器实现
+    @Component
+    public class CircuitBreaker {
+        
+        private final String name;
+        private volatile CircuitBreakerState state = CircuitBreakerState.CLOSED;
+        private final AtomicInteger failureCount = new AtomicInteger(0);
+        private final AtomicInteger successCount = new AtomicInteger(0);
+        private volatile long lastFailureTime = 0;
+        
+        private final int failureThreshold;      // 失败阈值
+        private final int successThreshold;      // 成功阈值
+        private final long timeout;              // 超时时间
+        private final long resetTimeout;         // 重置超时时间
+        
+        public CircuitBreaker(String name, int failureThreshold, int successThreshold, 
+                             long timeout, long resetTimeout) {
+            this.name = name;
+            this.failureThreshold = failureThreshold;
+            this.successThreshold = successThreshold;
+            this.timeout = timeout;
+            this.resetTimeout = resetTimeout;
+        }
+        
+        public <T> T execute(Supplier<T> supplier) {
+            if (isOpen()) {
+                throw new CircuitBreakerOpenException("Circuit breaker is open");
+            }
+            
+            try {
+                T result = supplier.get();
+                onSuccess();
+                return result;
+            } catch (Exception e) {
+                onFailure();
+                throw e;
+            }
+        }
+        
+        private boolean isOpen() {
+            if (state == CircuitBreakerState.OPEN) {
+                if (System.currentTimeMillis() - lastFailureTime > resetTimeout) {
+                    state = CircuitBreakerState.HALF_OPEN;
+                    successCount.set(0);
+                    return false;
+                }
+                return true;
+            }
+            return false;
+        }
+        
+        private void onSuccess() {
+            if (state == CircuitBreakerState.HALF_OPEN) {
+                if (successCount.incrementAndGet() >= successThreshold) {
+                    state = CircuitBreakerState.CLOSED;
+                    failureCount.set(0);
+                }
+            }
+        }
+        
+        private void onFailure() {
+            lastFailureTime = System.currentTimeMillis();
+            
+            if (state == CircuitBreakerState.CLOSED) {
+                if (failureCount.incrementAndGet() >= failureThreshold) {
+                    state = CircuitBreakerState.OPEN;
+                }
+            } else if (state == CircuitBreakerState.HALF_OPEN) {
+                state = CircuitBreakerState.OPEN;
+                successCount.set(0);
+            }
+        }
+        
+        public CircuitBreakerState getState() {
+            return state;
+        }
+    }
+    
+    // 熔断器异常
+    public class CircuitBreakerOpenException extends RuntimeException {
+        public CircuitBreakerOpenException(String message) {
+            super(message);
+        }
+    }
+    
+    // 熔断器配置
+    @Configuration
+    public class CircuitBreakerConfig {
+        
+        @Bean
+        public CircuitBreaker userServiceCircuitBreaker() {
+            return new CircuitBreaker("user-service", 5, 3, 5000, 30000);
+        }
+        
+        @Bean
+        public CircuitBreaker orderServiceCircuitBreaker() {
+            return new CircuitBreaker("order-service", 3, 2, 3000, 20000);
+        }
+        
+        @Bean
+        public CircuitBreaker paymentServiceCircuitBreaker() {
+            return new CircuitBreaker("payment-service", 2, 1, 2000, 15000);
+        }
+    }
+}
+```
 
-## 面试题
+:::caution 限流熔断注意事项
+1. **限流策略**：根据业务特点选择合适的限流算法（令牌桶、滑动窗口、漏桶）
+2. **限流粒度**：合理设置限流粒度（用户、IP、接口、服务）
+3. **熔断阈值**：根据服务特点设置合适的熔断阈值和恢复时间
+4. **降级策略**：为熔断状态提供合适的降级策略
+5. **监控告警**：建立完善的监控体系，及时发现限流和熔断事件
+::: 
 
-1. 网关的核心职责有哪些
-2. Gateway的断言与过滤器体系
-3. 如何实现全局限流与IP维度限流
-4. 如何在网关中做鉴权与Trace透传
-5. Zuul与Gateway的差异与选型 
+## 3. 监控观测与安全防护
+
+### 3.1 监控观测体系
+
+#### 监控指标收集
+```java title="监控指标收集示例"
+public class MonitoringAndObservability {
+    
+    // 监控指标收集器
+    @Component
+    public class GatewayMetricsCollector {
+        
+        private final MeterRegistry meterRegistry;
+        private final Counter requestCounter;
+        private final Timer requestTimer;
+        private final Gauge activeConnections;
+        private final Counter errorCounter;
+        
+        public GatewayMetricsCollector(MeterRegistry meterRegistry) {
+            this.meterRegistry = meterRegistry;
+            this.requestCounter = Counter.builder("gateway.requests.total")
+                .description("Total number of requests")
+                .register(meterRegistry);
+            this.requestTimer = Timer.builder("gateway.requests.duration")
+                .description("Request duration")
+                .register(meterRegistry);
+            this.activeConnections = Gauge.builder("gateway.connections.active")
+                .description("Active connections")
+                .register(meterRegistry, this, GatewayMetricsCollector::getActiveConnections);
+            this.errorCounter = Counter.builder("gateway.errors.total")
+                .description("Total number of errors")
+                .register(meterRegistry);
+        }
+        
+        public void recordRequest(String serviceName, String method, String path, long duration, boolean success) {
+            requestCounter.increment(Tags.of(
+                "service", serviceName,
+                "method", method,
+                "path", path,
+                "status", success ? "success" : "error"
+            ));
+            
+            requestTimer.record(duration, TimeUnit.MILLISECONDS, Tags.of(
+                "service", serviceName,
+                "method", method,
+                "path", path
+            ));
+            
+            if (!success) {
+                errorCounter.increment(Tags.of("service", serviceName));
+            }
+        }
+        
+        private double getActiveConnections() {
+            // 获取当前活跃连接数
+            return 0.0; // 实际实现中需要统计连接数
+        }
+    }
+    
+    // 分布式链路追踪
+    @Component
+    public class TracingFilter implements GlobalFilter, Ordered {
+        
+        @Override
+        public Mono<Void> filter(ServerWebExchange exchange, GatewayFilterChain chain) {
+            ServerHttpRequest request = exchange.getRequest();
+            
+            // 提取或生成Trace ID
+            String traceId = extractOrGenerateTraceId(request);
+            String spanId = generateSpanId();
+            
+            // 添加追踪头
+            ServerHttpRequest tracedRequest = request.mutate()
+                .header("X-B3-TraceId", traceId)
+                .header("X-B3-SpanId", spanId)
+                .header("X-B3-Sampled", "1")
+                .build();
+            
+            // 记录请求开始
+            long startTime = System.currentTimeMillis();
+            
+            return chain.filter(exchange.mutate().request(tracedRequest).build())
+                .doFinally(signalType -> {
+                    long duration = System.currentTimeMillis() - startTime;
+                    
+                    // 记录请求结束
+                    logRequest(traceId, spanId, request.getPath().value(), duration, 
+                              exchange.getResponse().getStatusCode());
+                });
+        }
+        
+        @Override
+        public int getOrder() {
+            return -300; // 高优先级
+        }
+        
+        private String extractOrGenerateTraceId(ServerHttpRequest request) {
+            String traceId = request.getHeaders().getFirst("X-B3-TraceId");
+            return traceId != null ? traceId : UUID.randomUUID().toString().replace("-", "");
+        }
+        
+        private String generateSpanId() {
+            return UUID.randomUUID().toString().replace("-", "").substring(0, 16);
+        }
+        
+        private void logRequest(String traceId, String spanId, String path, long duration, HttpStatus status) {
+            // 记录请求日志，包含追踪信息
+            log.info("Trace: {} Span: {} Path: {} Duration: {}ms Status: {}", 
+                    traceId, spanId, path, duration, status);
+        }
+    }
+    
+    // 健康检查
+    @RestController
+    public class HealthCheckController {
+        
+        @GetMapping("/health")
+        public ResponseEntity<Map<String, Object>> health() {
+            Map<String, Object> health = new HashMap<>();
+            health.put("status", "UP");
+            health.put("timestamp", System.currentTimeMillis());
+            health.put("version", "1.0.0");
+            
+            // 检查依赖服务健康状态
+            Map<String, String> dependencies = new HashMap<>();
+            dependencies.put("redis", checkRedisHealth());
+            dependencies.put("database", checkDatabaseHealth());
+            health.put("dependencies", dependencies);
+            
+            return ResponseEntity.ok(health);
+        }
+        
+        private String checkRedisHealth() {
+            try {
+                // 检查Redis连接
+                return "UP";
+            } catch (Exception e) {
+                return "DOWN";
+            }
+        }
+        
+        private String checkDatabaseHealth() {
+            try {
+                // 检查数据库连接
+                return "UP";
+            } catch (Exception e) {
+                return "DOWN";
+            }
+        }
+    }
+}
+```
+
+#### Prometheus监控配置
+```yaml title="Prometheus监控配置"
+# prometheus.yml
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: 'spring-cloud-gateway'
+    static_configs:
+      - targets: ['localhost:8080']
+    metrics_path: '/actuator/prometheus'
+    scrape_interval: 5s
+
+  - job_name: 'user-service'
+    static_configs:
+      - targets: ['localhost:8081']
+    metrics_path: '/actuator/prometheus'
+
+  - job_name: 'order-service'
+    static_configs:
+      - targets: ['localhost:8082']
+    metrics_path: '/actuator/prometheus'
+```
+
+### 3.2 安全防护机制
+
+#### 安全防护实现
+```java title="安全防护实现示例"
+public class SecurityProtection {
+    
+    // WAF（Web应用防火墙）过滤器
+    @Component
+    public class WafFilter implements GlobalFilter, Ordered {
+        
+        private final List<String> blacklistedIps = Arrays.asList(
+            "192.168.1.100", "10.0.0.50"
+        );
+        
+        private final List<String> blacklistedUserAgents = Arrays.asList(
+            "bot", "crawler", "scanner"
+        );
+        
+        @Override
+        public Mono<Void> filter(ServerWebExchange exchange, GatewayFilterChain chain) {
+            ServerHttpRequest request = exchange.getRequest();
+            
+            // IP黑名单检查
+            String clientIp = getClientIp(request);
+            if (blacklistedIps.contains(clientIp)) {
+                return forbidden(exchange, "IP is blacklisted");
+            }
+            
+            // User-Agent检查
+            String userAgent = request.getHeaders().getFirst("User-Agent");
+            if (userAgent != null && isBlacklistedUserAgent(userAgent)) {
+                return forbidden(exchange, "User-Agent is blacklisted");
+            }
+            
+            // SQL注入检查
+            if (containsSqlInjection(request)) {
+                return forbidden(exchange, "SQL injection detected");
+            }
+            
+            // XSS检查
+            if (containsXss(request)) {
+                return forbidden(exchange, "XSS attack detected");
+            }
+            
+            return chain.filter(exchange);
+        }
+        
+        @Override
+        public int getOrder() {
+            return -400; // 高优先级
+        }
+        
+        private String getClientIp(ServerHttpRequest request) {
+            String xForwardedFor = request.getHeaders().getFirst("X-Forwarded-For");
+            if (xForwardedFor != null) {
+                return xForwardedFor.split(",")[0].trim();
+            }
+            return request.getRemoteAddress().getAddress().getHostAddress();
+        }
+        
+        private boolean isBlacklistedUserAgent(String userAgent) {
+            return blacklistedUserAgents.stream()
+                .anyMatch(ua -> userAgent.toLowerCase().contains(ua.toLowerCase()));
+        }
+        
+        private boolean containsSqlInjection(ServerHttpRequest request) {
+            String query = request.getURI().getQuery();
+            if (query != null) {
+                String lowerQuery = query.toLowerCase();
+                return lowerQuery.contains("select") || 
+                       lowerQuery.contains("insert") || 
+                       lowerQuery.contains("update") || 
+                       lowerQuery.contains("delete") ||
+                       lowerQuery.contains("drop") ||
+                       lowerQuery.contains("union");
+            }
+            return false;
+        }
+        
+        private boolean containsXss(ServerHttpRequest request) {
+            String query = request.getURI().getQuery();
+            if (query != null) {
+                return query.contains("<script>") || 
+                       query.contains("javascript:") ||
+                       query.contains("onload=") ||
+                       query.contains("onerror=");
+            }
+            return false;
+        }
+        
+        private Mono<Void> forbidden(ServerWebExchange exchange, String reason) {
+            exchange.getResponse().setStatusCode(HttpStatus.FORBIDDEN);
+            return exchange.getResponse().setComplete();
+        }
+    }
+    
+    // 请求签名验证
+    @Component
+    public class SignatureVerificationFilter implements GlobalFilter, Ordered {
+        
+        @Override
+        public Mono<Void> filter(ServerWebExchange exchange, GatewayFilterChain chain) {
+            ServerHttpRequest request = exchange.getRequest();
+            
+            // 跳过不需要签名验证的路径
+            if (isPublicPath(request.getPath().value())) {
+                return chain.filter(exchange);
+            }
+            
+            // 验证请求签名
+            String signature = request.getHeaders().getFirst("X-Signature");
+            String timestamp = request.getHeaders().getFirst("X-Timestamp");
+            String nonce = request.getHeaders().getFirst("X-Nonce");
+            
+            if (signature == null || timestamp == null || nonce == null) {
+                return unauthorized(exchange, "Missing signature parameters");
+            }
+            
+            // 验证时间戳（防止重放攻击）
+            if (!isValidTimestamp(timestamp)) {
+                return unauthorized(exchange, "Invalid timestamp");
+            }
+            
+            // 验证签名
+            if (!isValidSignature(request, signature, timestamp, nonce)) {
+                return unauthorized(exchange, "Invalid signature");
+            }
+            
+            return chain.filter(exchange);
+        }
+        
+        @Override
+        public int getOrder() {
+            return -150; // 高优先级
+        }
+        
+        private boolean isPublicPath(String path) {
+            return path.startsWith("/api/public") || 
+                   path.startsWith("/api/auth") ||
+                   path.equals("/health");
+        }
+        
+        private boolean isValidTimestamp(String timestamp) {
+            try {
+                long requestTime = Long.parseLong(timestamp);
+                long currentTime = System.currentTimeMillis();
+                long timeDiff = Math.abs(currentTime - requestTime);
+                
+                // 允许5分钟的时间差
+                return timeDiff <= 300000;
+            } catch (NumberFormatException e) {
+                return false;
+            }
+        }
+        
+        private boolean isValidSignature(ServerHttpRequest request, String signature, 
+                                       String timestamp, String nonce) {
+            try {
+                // 构建签名字符串
+                String method = request.getMethod().name();
+                String path = request.getPath().value();
+                String query = request.getURI().getQuery() != null ? request.getURI().getQuery() : "";
+                
+                String signString = method + "&" + path + "&" + query + "&" + timestamp + "&" + nonce;
+                
+                // 使用HMAC-SHA256计算签名
+                String expectedSignature = calculateHmacSha256(signString, getSecretKey());
+                
+                return signature.equals(expectedSignature);
+            } catch (Exception e) {
+                return false;
+            }
+        }
+        
+        private String calculateHmacSha256(String data, String key) {
+            try {
+                Mac mac = Mac.getInstance("HmacSHA256");
+                SecretKeySpec secretKeySpec = new SecretKeySpec(key.getBytes(), "HmacSHA256");
+                mac.init(secretKeySpec);
+                byte[] hash = mac.doFinal(data.getBytes());
+                return Base64.getEncoder().encodeToString(hash);
+            } catch (Exception e) {
+                throw new RuntimeException("Failed to calculate HMAC", e);
+            }
+        }
+        
+        private String getSecretKey() {
+            // 从配置或环境变量获取密钥
+            return System.getenv("API_SECRET_KEY");
+        }
+        
+        private Mono<Void> unauthorized(ServerWebExchange exchange, String reason) {
+            exchange.getResponse().setStatusCode(HttpStatus.UNAUTHORIZED);
+            return exchange.getResponse().setComplete();
+        }
+    }
+    
+    // CORS配置
+    @Configuration
+    public class CorsConfiguration {
+        
+        @Bean
+        public CorsWebFilter corsWebFilter() {
+            CorsConfiguration config = new CorsConfiguration();
+            
+            // 允许的源
+            config.addAllowedOriginPattern("*");
+            
+            // 允许的方法
+            config.addAllowedMethod("*");
+            
+            // 允许的头
+            config.addAllowedHeader("*");
+            
+            // 允许携带凭证
+            config.setAllowCredentials(true);
+            
+            // 预检请求缓存时间
+            config.setMaxAge(3600L);
+            
+            UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
+            source.registerCorsConfiguration("/**", config);
+            
+            return new CorsWebFilter(source);
+        }
+    }
+}
+```
+
+## 4. 最佳实践与性能优化
+
+### 4.1 性能优化策略
+
+#### 性能优化实现
+```java title="性能优化示例"
+public class PerformanceOptimization {
+    
+    // 连接池配置
+    @Configuration
+    public class ConnectionPoolConfig {
+        
+        @Bean
+        public HttpClient httpClient() {
+            return HttpClient.create()
+                .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, 5000)
+                .option(ChannelOption.SO_KEEPALIVE, true)
+                .option(ChannelOption.TCP_NODELAY, true)
+                .doOnConnected(conn -> conn
+                    .addHandlerLast(new ReadTimeoutHandler(10))
+                    .addHandlerLast(new WriteTimeoutHandler(10)))
+                .resolver(DefaultAddressResolverGroup.INSTANCE);
+        }
+        
+        @Bean
+        public ConnectionProvider connectionProvider() {
+            return ConnectionProvider.builder("gateway-connection-pool")
+                .maxConnections(1000)
+                .maxIdleTime(Duration.ofSeconds(20))
+                .maxLifeTime(Duration.ofMinutes(10))
+                .pendingAcquireTimeout(Duration.ofSeconds(5))
+                .build();
+        }
+    }
+    
+    // 缓存过滤器
+    @Component
+    public class CacheFilter implements GlobalFilter, Ordered {
+        
+        private final Cache<String, CachedResponse> responseCache;
+        
+        public CacheFilter() {
+            this.responseCache = Caffeine.newBuilder()
+                .maximumSize(10000)
+                .expireAfterWrite(Duration.ofMinutes(5))
+                .build();
+        }
+        
+        @Override
+        public Mono<Void> filter(ServerWebExchange exchange, GatewayFilterChain chain) {
+            ServerHttpRequest request = exchange.getRequest();
+            
+            // 只缓存GET请求
+            if (!HttpMethod.GET.equals(request.getMethod())) {
+                return chain.filter(exchange);
+            }
+            
+            // 生成缓存键
+            String cacheKey = generateCacheKey(request);
+            
+            // 检查缓存
+            CachedResponse cachedResponse = responseCache.getIfPresent(cacheKey);
+            if (cachedResponse != null) {
+                return writeCachedResponse(exchange, cachedResponse);
+            }
+            
+            // 缓存响应
+            return chain.filter(exchange)
+                .doFinally(signalType -> {
+                    if (exchange.getResponse().getStatusCode() == HttpStatus.OK) {
+                        cacheResponse(cacheKey, exchange);
+                    }
+                });
+        }
+        
+        @Override
+        public int getOrder() {
+            return -50; // 中等优先级
+        }
+        
+        private String generateCacheKey(ServerHttpRequest request) {
+            return request.getMethod().name() + ":" + request.getPath().value() + ":" + 
+                   request.getURI().getQuery();
+        }
+        
+        private Mono<Void> writeCachedResponse(ServerWebExchange exchange, CachedResponse cachedResponse) {
+            ServerHttpResponse response = exchange.getResponse();
+            response.setStatusCode(HttpStatus.OK);
+            response.getHeaders().putAll(cachedResponse.getHeaders());
+            
+            return response.writeWith(Flux.just(
+                response.bufferFactory().wrap(cachedResponse.getBody())
+            ));
+        }
+        
+        private void cacheResponse(String cacheKey, ServerWebExchange exchange) {
+            // 实现响应缓存逻辑
+        }
+        
+        private static class CachedResponse {
+            private final byte[] body;
+            private final HttpHeaders headers;
+            
+            public CachedResponse(byte[] body, HttpHeaders headers) {
+                this.body = body;
+                this.headers = headers;
+            }
+            
+            public byte[] getBody() { return body; }
+            public HttpHeaders getHeaders() { return headers; }
+        }
+    }
+    
+    // 异步处理过滤器
+    @Component
+    public class AsyncProcessingFilter implements GlobalFilter, Ordered {
+        
+        private final ExecutorService executorService;
+        
+        public AsyncProcessingFilter() {
+            this.executorService = Executors.newFixedThreadPool(100);
+        }
+        
+        @Override
+        public Mono<Void> filter(ServerWebExchange exchange, GatewayFilterChain chain) {
+            // 对于耗时操作，使用异步处理
+            return Mono.fromCallable(() -> {
+                // 异步处理逻辑
+                return processAsync(exchange);
+            }).subscribeOn(Schedulers.fromExecutor(executorService))
+            .then(chain.filter(exchange));
+        }
+        
+        @Override
+        public int getOrder() {
+            return -25; // 中等优先级
+        }
+        
+        private Object processAsync(ServerWebExchange exchange) {
+            // 异步处理逻辑
+            return null;
+        }
+    }
+}
+```
+
+### 4.2 高可用部署
+
+#### 高可用部署配置
+```yaml title="高可用部署配置"
+# docker-compose.yml
+version: '3.8'
+
+services:
+  gateway-1:
+    image: api-gateway:latest
+    ports:
+      - "8080:8080"
+    environment:
+      - SPRING_PROFILES_ACTIVE=prod
+      - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://eureka-server:8761/eureka/
+    depends_on:
+      - eureka-server
+      - redis
+    networks:
+      - gateway-network
+
+  gateway-2:
+    image: api-gateway:latest
+    ports:
+      - "8081:8080"
+    environment:
+      - SPRING_PROFILES_ACTIVE=prod
+      - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://eureka-server:8761/eureka/
+    depends_on:
+      - eureka-server
+      - redis
+    networks:
+      - gateway-network
+
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf
+    depends_on:
+      - gateway-1
+      - gateway-2
+    networks:
+      - gateway-network
+
+  eureka-server:
+    image: eureka-server:latest
+    ports:
+      - "8761:8761"
+    networks:
+      - gateway-network
+
+  redis:
+    image: redis:alpine
+    ports:
+      - "6379:6379"
+    networks:
+      - gateway-network
+
+networks:
+  gateway-network:
+    driver: bridge
+```
+
+```nginx title="Nginx负载均衡配置"
+# nginx.conf
+events {
+    worker_connections 1024;
+}
+
+http {
+    upstream gateway_backend {
+        server gateway-1:8080 weight=1 max_fails=3 fail_timeout=30s;
+        server gateway-2:8080 weight=1 max_fails=3 fail_timeout=30s;
+        keepalive 32;
+    }
+
+    server {
+        listen 80;
+        server_name api.example.com;
+
+        location / {
+            proxy_pass http://gateway_backend;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+            
+            # 超时配置
+            proxy_connect_timeout 5s;
+            proxy_send_timeout 10s;
+            proxy_read_timeout 10s;
+            
+            # 健康检查
+            proxy_next_upstream error timeout invalid_header http_500 http_502 http_503 http_504;
+        }
+
+        # 健康检查端点
+        location /health {
+            proxy_pass http://gateway_backend/health;
+            access_log off;
+        }
+    }
+}
+```
+
+### 4.3 监控告警配置
+
+#### Grafana仪表板配置
+```json title="Grafana仪表板配置"
+{
+  "dashboard": {
+    "title": "API Gateway Dashboard",
+    "panels": [
+      {
+        "title": "Request Rate",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "rate(gateway_requests_total[5m])",
+            "legendFormat": "{{service}}"
+          }
+        ]
+      },
+      {
+        "title": "Response Time",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, rate(gateway_requests_duration_seconds_bucket[5m]))",
+            "legendFormat": "95th percentile"
+          }
+        ]
+      },
+      {
+        "title": "Error Rate",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "rate(gateway_errors_total[5m])",
+            "legendFormat": "{{service}}"
+          }
+        ]
+      },
+      {
+        "title": "Active Connections",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "gateway_connections_active",
+            "legendFormat": "Active Connections"
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+#### 告警规则配置
+```yaml title="Prometheus告警规则"
+# alerting.yml
+groups:
+  - name: api-gateway
+    rules:
+      - alert: HighErrorRate
+        expr: rate(gateway_errors_total[5m]) > 0.1
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High error rate detected"
+          description: "Error rate is {{ $value }} errors per second"
+
+      - alert: HighResponseTime
+        expr: histogram_quantile(0.95, rate(gateway_requests_duration_seconds_bucket[5m])) > 1
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High response time detected"
+          description: "95th percentile response time is {{ $value }} seconds"
+
+      - alert: CircuitBreakerOpen
+        expr: gateway_circuit_breaker_state == 1
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Circuit breaker is open"
+          description: "Circuit breaker for service {{ $labels.service }} is open"
+
+      - alert: HighRequestRate
+        expr: rate(gateway_requests_total[5m]) > 1000
+        for: 2m
+        labels:
+          severity: info
+        annotations:
+          summary: "High request rate detected"
+          description: "Request rate is {{ $value }} requests per second"
+```
+
+:::tip API网关最佳实践
+1. **路由设计**：按照业务领域设计路由规则，保持简洁明了
+2. **安全防护**：实施多层次安全防护，包括认证、授权、限流、WAF等
+3. **性能优化**：使用连接池、缓存、异步处理等技术提升性能
+4. **监控告警**：建立完善的监控体系，及时发现和处理问题
+5. **高可用部署**：采用多实例部署和负载均衡，确保高可用性
+6. **版本管理**：合理管理API版本，支持向后兼容
+7. **文档管理**：维护完整的API文档，便于开发和维护
+:::
+
+## 5. 面试题精选
+
+### 5.1 基础概念题
+
+#### Q1: API网关的核心职责有哪些？
+
+**答**: API网关作为微服务架构的统一入口，承担以下核心职责：
+
+1. **路由转发**：将客户端请求路由到正确的微服务
+2. **负载均衡**：在多个服务实例间分发请求
+3. **认证授权**：验证用户身份和权限
+4. **限流熔断**：控制请求流量和故障隔离
+5. **协议转换**：支持不同协议间的转换
+6. **日志监控**：记录请求日志和性能指标
+7. **安全防护**：防止恶意攻击和数据泄露
+8. **服务聚合**：将多个服务的响应聚合为单个响应
+
+#### Q2: Spring Cloud Gateway与Zuul的区别是什么？
+
+**答**: 主要区别如下：
+
+**Spring Cloud Gateway**:
+- 基于Spring WebFlux，支持响应式编程
+- 性能更好，支持异步非阻塞
+- 功能更丰富，支持更多过滤器类型
+- 配置更灵活，支持动态路由
+- 社区活跃，持续更新维护
+
+**Zuul**:
+- 基于Servlet，同步阻塞模型
+- 性能相对较低
+- 功能相对简单
+- 已进入维护期，不再积极开发
+- 主要用于遗留系统迁移
+
+### 5.2 实践题
+
+#### Q3: 如何实现基于用户ID的限流？
+
+**答**: 可以通过自定义KeyResolver实现：
+
+```java
+@Configuration
+public class RateLimitConfig {
+    
+    @Bean
+    public KeyResolver userKeyResolver() {
+        return exchange -> {
+            // 从请求头获取用户ID
+            String userId = exchange.getRequest().getHeaders().getFirst("X-User-Id");
+            
+            // 从Token中提取用户ID
+            if (userId == null) {
+                String token = exchange.getRequest().getHeaders().getFirst("Authorization");
+                if (token != null && token.startsWith("Bearer ")) {
+                    try {
+                        Claims claims = JwtUtil.parseToken(token.substring(7));
+                        userId = claims.getSubject();
+                    } catch (Exception e) {
+                        userId = "anonymous";
+                    }
+                } else {
+                    userId = "anonymous";
+                }
+            }
+            
+            return Mono.just(userId);
+        };
+    }
+}
+```
+
+#### Q4: 如何在网关中实现JWT认证？
+
+**答**: 可以通过全局过滤器实现：
+
+```java
+@Component
+public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
+    
+    @Override
+    public Mono<Void> filter(ServerWebExchange exchange, GatewayFilterChain chain) {
+        ServerHttpRequest request = exchange.getRequest();
+        
+        // 跳过不需要认证的路径
+        if (isPublicPath(request.getPath().value())) {
+            return chain.filter(exchange);
+        }
+        
+        // 提取Token
+        String token = extractToken(request);
+        if (token == null) {
+            return unauthorized(exchange, "Missing token");
+        }
+        
+        // 验证Token
+        try {
+            Claims claims = JwtUtil.parseToken(token);
+            
+            // 添加用户信息到请求头
+            ServerHttpRequest modifiedRequest = request.mutate()
+                .header("X-User-Id", claims.getSubject())
+                .header("X-User-Role", claims.get("role", String.class))
+                .build();
+            
+            return chain.filter(exchange.mutate().request(modifiedRequest).build());
+        } catch (Exception e) {
+            return unauthorized(exchange, "Invalid token");
+        }
+    }
+    
+    @Override
+    public int getOrder() {
+        return -100;
+    }
+}
+```
+
+### 5.3 性能优化题
+
+#### Q5: 如何优化API网关的性能？
+
+**答**: 可以从以下几个方面优化：
+
+1. **连接池优化**：
+```java
+@Bean
+public HttpClient httpClient() {
+    return HttpClient.create()
+        .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, 5000)
+        .option(ChannelOption.SO_KEEPALIVE, true)
+        .resolver(DefaultAddressResolverGroup.INSTANCE);
+}
+```
+
+2. **缓存策略**：
+```java
+@Component
+public class ResponseCacheFilter implements GlobalFilter {
+    private final Cache<String, CachedResponse> cache = Caffeine.newBuilder()
+        .maximumSize(10000)
+        .expireAfterWrite(Duration.ofMinutes(5))
+        .build();
+}
+```
+
+3. **异步处理**：
+```java
+@Component
+public class AsyncFilter implements GlobalFilter {
+    @Override
+    public Mono<Void> filter(ServerWebExchange exchange, GatewayFilterChain chain) {
+        return Mono.fromCallable(() -> processAsync(exchange))
+            .subscribeOn(Schedulers.boundedElastic())
+            .then(chain.filter(exchange));
+    }
+}
+```
+
+4. **负载均衡优化**：使用合适的负载均衡策略，如响应时间加权
+
+5. **监控优化**：使用异步监控，避免影响请求处理性能
+
+:::info API网关学习要点
+1. **理解架构**：掌握API网关在微服务架构中的作用和地位
+2. **掌握技术**：熟悉Spring Cloud Gateway的核心组件和配置
+3. **实践应用**：通过实际项目练习网关的配置和使用
+4. **性能优化**：了解网关性能优化的方法和技巧
+5. **安全防护**：掌握网关安全防护的实现方案
+6. **监控运维**：学会网关的监控和运维管理
+:::
+
+---
+
+通过本章的学习，你应该已经深入理解了API网关的核心概念、实现方案和最佳实践。API网关是微服务架构中的重要组件，合理使用网关可以显著提高系统的安全性、可维护性和可扩展性。在实际项目中，要根据业务需求选择合适的网关方案，并注重性能优化和监控运维。 
