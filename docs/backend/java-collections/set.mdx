@@ -8,19 +8,90 @@ last_update:
   author: Laby
 ---
 
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
 # Java Set 集合详解
 
 Set是Java集合框架中用于存储不重复元素的核心接口，它继承自Collection接口，提供了元素唯一性的保证。在Java开发中，Set集合被广泛应用于去重、集合运算、缓存实现等各种场景，是数据处理和算法实现的重要基础。
 
 :::tip 核心特性
-Set接口 = 元素唯一性 + 无序性 + 集合运算 + 高性能查找 + 去重能力
+**Set接口 = 元素唯一性 + 无序性 + 集合运算 + 高性能查找 + 去重能力**
+- 🔍 **元素唯一性**：集合中每个元素只能出现一次，自动拒绝重复元素
+- 🔀 **无序性**：大多数实现不保证元素的存储顺序（LinkedHashSet例外）
+- 🔢 **集合运算**：支持并集(∪)、交集(∩)、差集(-)等数学集合操作
+- ⚡ **高性能查找**：多数实现提供O(1)查找性能，适合频繁检索
+- 🧹 **天然去重**：添加重复元素时自动去重，不抛异常而是返回false
 :::
 
 ## 1. Set接口基础概念
 
 ### 1.1 什么是Set接口？
 
-Set接口是Java集合框架中的核心接口，它继承自Collection接口，为不重复元素的集合提供了完整的抽象。Set集合具有以下核心特征：
+Set接口是Java集合框架中的核心接口，它继承自Collection接口，为不重复元素的集合提供了完整的抽象。
+
+```mermaid
+classDiagram
+    Iterable <|-- Collection
+    Collection <|-- Set
+    Set <|.. HashSet
+    Set <|.. LinkedHashSet
+    Set <|.. TreeSet
+    Set <|.. EnumSet
+    Set <|-- SortedSet
+    SortedSet <|-- NavigableSet
+    NavigableSet <|.. TreeSet
+    HashSet <|-- LinkedHashSet
+    
+    class Set {
+        +add(E) boolean
+        +remove(Object) boolean
+        +contains(Object) boolean
+        +size() int
+        +isEmpty() boolean
+        +iterator() Iterator
+    }
+    
+    class HashSet {
+        -HashMap~E,Object~ map
+        +HashSet()
+        +HashSet(Collection)
+    }
+    
+    class LinkedHashSet {
+        -LinkedHashMap map
+        +LinkedHashSet()
+        +LinkedHashSet(Collection)
+    }
+    
+    class TreeSet {
+        -TreeMap~E,Object~ map
+        +TreeSet()
+        +TreeSet(Comparator)
+        +TreeSet(Collection)
+    }
+    
+    class EnumSet {
+        +of(E) EnumSet
+        +allOf(Class) EnumSet
+        +noneOf(Class) EnumSet
+    }
+    
+    class NavigableSet {
+        +lower(E) E
+        +floor(E) E
+        +ceiling(E) E
+        +higher(E) E
+    }
+    
+    <<interface>> Iterable
+    <<interface>> Collection
+    <<interface>> Set
+    <<interface>> SortedSet
+    <<interface>> NavigableSet
+```
+
+Set集合具有以下核心特征：
 
 - **元素唯一性**：不允许存储重复的元素，每个元素在集合中只能出现一次
 - **无序性**：大多数实现类不保证元素的存储顺序
@@ -80,7 +151,34 @@ public interface Set<E> extends Collection<E> {
 
 Set接口提供了丰富的方法来操作不重复元素的集合，这些方法可以分为几个主要类别：
 
-#### 基本操作方法
+```mermaid
+graph TD
+    A["Set核心方法"] --> B["基本操作"]
+    A --> C["集合运算"]
+    A --> D["迭代操作"]
+    A --> E["转换操作"]
+    
+    B --> B1["add"]
+    B --> B2["remove"]
+    B --> B3["contains"]
+    
+    C --> C1["addAll"]
+    C --> C2["removeAll"]
+    C --> C3["retainAll"]
+    
+    D --> D1["iterator"]
+    D --> D2["forEach"]
+    
+    E --> E1["toArray"]
+    E --> E2["Stream操作"]
+    
+    style A fill:#f9f,stroke:#333,stroke-width:2px
+    style B,C,D,E fill:#bbf,stroke:#333,stroke-width:1px
+```
+
+<Tabs>
+<TabItem value="basic" label="基本操作方法">
+
 ```java title="Set基本操作方法"
 public interface Set<E> extends Collection<E> {
     
@@ -96,7 +194,14 @@ public interface Set<E> extends Collection<E> {
 }
 ```
 
-#### 集合运算方法
+| 方法 | 描述 | 返回值 | 特殊行为 |
+|------|------|--------|----------|
+| `add(E e)` | 添加元素到集合 | 成功添加返回true，元素已存在返回false | 添加重复元素不会抛异常 |
+| `remove(Object o)` | 从集合移除元素 | 存在并移除返回true，不存在返回false | 性能因实现类而异 |
+| `contains(Object o)` | 检查元素是否在集合中 | 存在返回true，不存在返回false | HashSet为O(1)，TreeSet为O(log n) |
+
+</TabItem>
+<TabItem value="collection-ops" label="集合运算方法">
 ```java title="Set集合运算方法"
 public interface Set<E> extends Collection<E> {
     
@@ -111,7 +216,30 @@ public interface Set<E> extends Collection<E> {
 }
 ```
 
-#### 迭代器方法
+| 方法 | 描述 | 数学表示 | 应用场景 |
+|------|------|----------|----------|
+| `addAll(Collection<? extends E> c)` | 添加另一个集合的所有元素（并集） | A ∪ B | 合并两个分类集合 |
+| `retainAll(Collection<?> c)` | 只保留也在指定集合中的元素（交集） | A ∩ B | 查找共同元素 |
+| `removeAll(Collection<?> c)` | 移除指定集合中的所有元素（差集） | A - B | 从一个集合中剔除特定元素 |
+
+```java title="集合运算示例"
+public void setOperationsExample() {
+    Set<String> set1 = new HashSet<>(Arrays.asList("A", "B", "C"));
+    Set<String> set2 = new HashSet<>(Arrays.asList("B", "C", "D"));
+    
+    // 并集：set1 ← set1 ∪ set2 = {A, B, C, D}
+    set1.addAll(set2);
+    
+    // 交集：set1 ← set1 ∩ set2 = {B, C}
+    set1.retainAll(set2);
+    
+    // 差集：set1 ← set1 - set2 = {A}
+    set1.removeAll(set2);
+}
+```
+
+</TabItem>
+<TabItem value="iterator" label="迭代器方法">
 ```java title="Set迭代器方法"
 public interface Set<E> extends Collection<E> {
     
@@ -123,6 +251,45 @@ public interface Set<E> extends Collection<E> {
     // spliterator()                           // Java 8+ 的并行迭代器
 }
 ```
+
+| 方法 | 描述 | 返回值 | 特性 |
+|------|------|--------|------|
+| `iterator()` | 获取迭代器 | Iterator对象 | 允许遍历并可选择性删除元素 |
+| `forEach(Consumer)` | 对每个元素执行操作 | void | 简化迭代代码，Java 8+ |
+
+:::info 迭代与遍历
+遍历Set集合的4种方式：
+1. **for-each循环**：`for (E element : set) { ... }`
+2. **Iterator**：`Iterator<E> it = set.iterator(); while(it.hasNext()) { ... }`
+3. **Lambda forEach**：`set.forEach(e -> System.out.println(e));`
+4. **Stream API**：`set.stream().forEach(e -> System.out.println(e));`
+:::
+
+```java title="Set迭代示例"
+public void iterationExample() {
+    Set<String> set = new HashSet<>(Arrays.asList("A", "B", "C"));
+    
+    // 方式1：for-each循环
+    for (String element : set) {
+        System.out.println(element);
+    }
+    
+    // 方式2：Iterator (支持删除)
+    Iterator<String> it = set.iterator();
+    while (it.hasNext()) {
+        String element = it.next();
+        if (element.equals("B")) {
+            it.remove();  // 安全删除元素
+        }
+    }
+    
+    // 方式3：Lambda forEach (Java 8+)
+    set.forEach(element -> System.out.println(element));
+}
+```
+
+</TabItem>
+</Tabs>
 
 ### 1.5 Set接口方法对比分析
 
@@ -142,17 +309,51 @@ public interface Set<E> extends Collection<E> {
 - **性能考虑**：contains()操作在HashSet中为O(1)，在TreeSet中为O(log n)
 :::
 
-## 2. HashSet 实现类详解
+## 2. Set 实现类详解
+
+```mermaid
+graph TD
+    subgraph 性能比较
+        A["Set实现类"] --> B["HashSet (查找快)"]
+        A --> C["LinkedHashSet (保持顺序)"]
+        A --> D["TreeSet (有序)"]
+        A --> E["EnumSet (枚举集合)"]
+    end
+    
+    subgraph 时间复杂度
+        B --> B1["查找/添加/删除: O(1)"]
+        B --> B2["无序"]
+        
+        C --> C1["查找/添加/删除: O(1)"]
+        C --> C2["保持插入顺序"]
+        
+        D --> D1["查找/添加/删除: O(log n)"]
+        D --> D2["自然排序或比较器排序"]
+        
+        E --> E1["查找/添加/删除: O(1)"]
+        E --> E2["只能存储同一枚举类型"]
+    end
+    
+    classDef default fill:#f9f9f9,stroke:#333,stroke-width:1px;
+    classDef fast fill:#d1f0d1,stroke:#333,stroke-width:1px;
+    classDef slow fill:#f0d1d1,stroke:#333,stroke-width:1px;
+    
+    class B1,C1,E1 fast;
+    class D1 slow;
+```
+
+<Tabs>
+<TabItem value="hashset" label="HashSet">
 
 ### 2.1 HashSet 概述
 
 :::tip 核心特点
 HashSet是Set接口最常用的实现类，基于HashMap实现，具有以下特点：
-- **基于HashMap**：底层使用HashMap存储元素
-- **无序性**：不保证元素的存储顺序
-- **高性能**：查找、插入、删除操作平均时间复杂度O(1)
-- **允许null**：支持null元素
-- **线程不安全**：在多线程环境下需要外部同步
+- 🔍 **基于HashMap**：底层使用HashMap存储元素
+- 🔀 **无序性**：不保证元素的存储顺序
+- ⚡ **高性能**：查找、插入、删除操作平均时间复杂度O(1)
+- ⚪ **允许null**：支持null元素
+- ⚠️ **线程不安全**：在多线程环境下需要外部同步
 :::
 
 #### 适用场景
@@ -575,17 +776,18 @@ public class HashSetDeduplicationExample {
 }
 ```
 
-## 3. LinkedHashSet 实现类详解
+</TabItem>
+<TabItem value="linkedhashset" label="LinkedHashSet">
 
 ### 3.1 LinkedHashSet 概述
 
 :::tip 核心特点
 LinkedHashSet是HashSet的子类，在HashSet的基础上维护了插入顺序，具有以下特点：
-- **继承HashSet**：基于HashSet实现，具有HashSet的所有特性
-- **维护顺序**：通过双向链表维护元素的插入顺序
-- **性能平衡**：在HashSet高性能的基础上增加了顺序维护
-- **允许null**：支持null元素
-- **线程不安全**：在多线程环境下需要外部同步
+- 🔄 **继承HashSet**：基于HashSet实现，具有HashSet的所有特性
+- 📝 **维护顺序**：通过双向链表维护元素的插入顺序
+- ⚖️ **性能平衡**：在HashSet高性能的基础上增加了顺序维护
+- ⚪ **允许null**：支持null元素
+- ⚠️ **线程不安全**：在多线程环境下需要外部同步
 :::
 
 #### 适用场景
@@ -828,17 +1030,18 @@ public class LinkedHashSetLRUCacheExample {
 }
 ```
 
-## 4. TreeSet 实现类详解
+</TabItem>
+<TabItem value="treeset" label="TreeSet">
 
 ### 4.1 TreeSet 概述
 
 :::tip 核心特点
 TreeSet是基于TreeMap实现的有序Set，具有以下特点：
-- **基于TreeMap**：底层使用TreeMap存储元素
-- **有序性**：元素按照自然顺序或自定义比较器排序
-- **不允许null**：不支持null元素
-- **线程不安全**：在多线程环境下需要外部同步
-- **性能特点**：查找、插入、删除操作时间复杂度O(log n)
+- 🌳 **基于TreeMap**：底层使用TreeMap存储元素
+- 📊 **有序性**：元素按照自然顺序或自定义比较器排序
+- ⛔ **不允许null**：不支持null元素
+- ⚠️ **线程不安全**：在多线程环境下需要外部同步
+- 📉 **性能特点**：查找、插入、删除操作时间复杂度O(log n)
 :::
 
 #### 适用场景
@@ -1287,18 +1490,22 @@ public class CopyOnWriteArraySetExample {
 }
 ```
 
-### 5.2 EnumSet 实现类详解
+</TabItem>
+<TabItem value="enumset" label="EnumSet">
 
 #### 5.2.1 EnumSet 概述
 
 :::tip 核心特点
 EnumSet是专门为枚举类型设计的高效Set实现，具有以下特点：
-- **专门为枚举设计**：只能存储枚举类型的元素
-- **高性能**：基于位向量实现，性能极高
-- **内存效率**：使用位运算，内存占用极小
-- **线程不安全**：在多线程环境下需要外部同步
-- **不允许null**：不支持null元素
+- 🔠 **专门为枚举设计**：只能存储枚举类型的元素
+- ⚡ **高性能**：基于位向量实现，性能极高
+- 📊 **内存效率**：使用位运算，内存占用极小
+- ⚠️ **线程不安全**：在多线程环境下需要外部同步
+- ⛔ **不允许null**：不支持null元素
 :::
+
+</TabItem>
+</Tabs>
 
 #### 5.2.2 EnumSet 使用示例
 
@@ -1427,6 +1634,43 @@ public class ConcurrentSkipListSetExample {
 ```
 
 ## 6. 实际应用场景
+
+```mermaid
+graph TD
+    subgraph 应用场景
+        S1["Set应用场景"] --> D1["数据去重"]
+        S1 --> C1["集合运算"]
+        S1 --> M1["成员关系"]
+        S1 --> P1["性能优化"]
+    end
+    
+    D1 --> D11["用户ID去重"]
+    D1 --> D12["日志事件去重"]
+    D1 --> D13["数据采集去重"]
+    
+    C1 --> C11["权限计算"]
+    C1 --> C12["数据比较"]
+    C1 --> C13["共同元素查找"]
+    
+    M1 --> M11["权限检查"]
+    M1 --> M12["缓存键检查"]
+    M1 --> M13["状态标记"]
+    
+    subgraph 实现类选择
+        A["实现类选择"] --> B1["HashSet"]
+        A --> B2["LinkedHashSet"]
+        A --> B3["TreeSet"]
+        A --> B4["EnumSet"]
+        
+        B1 --> X1["一般去重场景"]
+        B2 --> X2["需要记住顺序"]
+        B3 --> X3["需要排序"]
+        B4 --> X4["枚举类型集合"]
+    end
+    
+    style S1 fill:#f9f,stroke:#333,stroke-width:2px
+    style A fill:#bbf,stroke:#333,stroke-width:1px
+```
 
 ### 6.1 数据去重处理
 

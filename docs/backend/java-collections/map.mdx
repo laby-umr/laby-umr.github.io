@@ -8,19 +8,89 @@ last_update:
   author: Laby
 ---
 
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
 # Java Map 集合详解
 
 Map是Java集合框架中用于存储键值对的数据结构，它不继承自Collection接口，是一个独立的接口。Map集合在Java开发中应用广泛，从简单的数据缓存到复杂的业务逻辑处理，都离不开Map的支持。
 
 :::tip 核心特性
-Map接口 = 键值对存储 + 键唯一性 + 高效查找 + 灵活操作 + 多种实现选择
+**Map接口 = 键值对存储 + 键唯一性 + 高效查找 + 灵活操作 + 多种实现选择**
+- 🔑 **键值对存储**：每个元素包含键(Key)和值(Value)，形成一对一映射关系
+- 🔍 **键唯一性**：每个键在Map中只能出现一次，重复添加会覆盖原值
+- ⚡ **高效查找**：大多数实现提供O(1)查找性能，适合频繁检索
+- 🛠️ **灵活操作**：支持基于键的增删改查和集合视图操作
+- 📦 **丰富实现**：HashMap、TreeMap、LinkedHashMap等多种实现满足不同需求
 :::
 
 ## 1. Map接口基础概念
 
 ### 1.1 什么是Map接口？
 
-Map接口是Java集合框架中的核心接口，用于存储键值对（key-value pair）数据。Map集合具有以下核心特征：
+Map接口是Java集合框架中的核心接口，用于存储键值对（key-value pair）数据。
+
+```mermaid
+classDiagram
+    Map <|.. HashMap
+    Map <|.. LinkedHashMap
+    Map <|.. TreeMap
+    Map <|.. WeakHashMap
+    Map <|.. IdentityHashMap
+    Map <|-- SortedMap
+    SortedMap <|-- NavigableMap
+    NavigableMap <|.. TreeMap
+    HashMap <|-- LinkedHashMap
+    Map <|.. ConcurrentHashMap
+    
+    class Map {
+        +put(K, V) V
+        +get(Object) V
+        +remove(Object) V
+        +containsKey(Object) boolean
+        +containsValue(Object) boolean
+        +keySet() Set~K~
+        +values() Collection~V~
+        +entrySet() Set~Entry~
+    }
+    
+    class HashMap {
+        -table Node[]
+        -size int
+        -modCount int
+        +HashMap()
+        +HashMap(int)
+        +HashMap(Map)
+    }
+    
+    class LinkedHashMap {
+        -head Entry
+        -tail Entry
+        +LinkedHashMap()
+        +LinkedHashMap(int)
+        +accessOrder boolean
+    }
+    
+    class TreeMap {
+        -root Entry
+        -comparator Comparator
+        +TreeMap()
+        +TreeMap(Comparator)
+    }
+    
+    class NavigableMap {
+        +lowerEntry(K) Entry
+        +floorEntry(K) Entry
+        +ceilingEntry(K) Entry
+        +higherEntry(K) Entry
+    }
+    
+    <<interface>> Map
+    <<interface>> SortedMap
+    <<interface>> NavigableMap
+```
+
+Map集合具有以下核心特征：
 
 - **键值对存储**：每个元素包含一个键和一个值
 - **键唯一性**：键不能重复，值可以重复
@@ -82,7 +152,35 @@ public interface Map<K,V> {
 
 Map接口提供了丰富的方法来操作键值对集合，这些方法可以分为几个主要类别：
 
-#### 基本操作方法
+```mermaid
+graph TD
+    A["Map核心方法"] --> B["基本操作"]
+    A --> C["集合视图"]
+    A --> D["批量操作"]
+    A --> E["Java8+新增"]
+    
+    B --> B1["put/get"]
+    B --> B2["remove"]
+    B --> B3["containsKey/Value"]
+    
+    C --> C1["keySet"]
+    C --> C2["values"]
+    C --> C3["entrySet"]
+    
+    D --> D1["putAll"]
+    D --> D2["clear"]
+    
+    E --> E1["compute"]
+    E --> E2["merge"]
+    E --> E3["forEach"]
+    
+    style A fill:#f9f,stroke:#333,stroke-width:2px
+    style B,C,D,E fill:#bbf,stroke:#333,stroke-width:1px
+```
+
+<Tabs>
+<TabItem value="basic" label="基本操作方法">
+
 ```java title="Map基本操作方法"
 public interface Map<K,V> {
     
@@ -102,7 +200,16 @@ public interface Map<K,V> {
 }
 ```
 
-#### 集合视图方法
+| 方法 | 描述 | 返回值 | 特殊行为 |
+|------|------|--------|----------|
+| `put(K,V)` | 添加或更新键值对 | 原值或null | 键已存在时会覆盖原值 |
+| `get(Object)` | 获取指定键的值 | 值或null | 键不存在返回null |
+| `remove(Object)` | 删除键值对 | 被删除的值或null | 键不存在返回null |
+| `containsKey(Object)` | 检查键是否存在 | boolean | HashMap为O(1)，TreeMap为O(log n) |
+| `containsValue(Object)` | 检查值是否存在 | boolean | 遍历全部元素，性能较差O(n) |
+
+</TabItem>
+<TabItem value="view" label="集合视图方法">
 ```java title="Map集合视图方法"
 public interface Map<K,V> {
     
@@ -118,7 +225,43 @@ public interface Map<K,V> {
 }
 ```
     
-#### 批量操作方法
+| 方法 | 描述 | 返回视图特性 | 应用场景 |
+|------|------|------------|----------|
+| `keySet()` | 获取所有键的Set | 键集合，与原Map同步 | 需要遍历或操作所有键时 |
+| `values()` | 获取所有值的集合 | 值集合，与原Map同步 | 需要遍历或访问所有值时 |
+| `entrySet()` | 获取所有键值对 | Entry集合，与原Map同步 | 同时需要键和值，效率最高 |
+
+:::info 视图操作特性
+Map返回的集合视图具有以下特性：
+- 视图是**动态的**，对视图的修改会反映到原Map，反之亦然
+- 通过视图的`remove()`方法可以删除Map中的元素
+- 不允许通过键集视图添加元素（会抛出`UnsupportedOperationException`）
+- 视图对象不需要额外内存，它们引用的是同一个底层数据结构
+:::
+
+```java title="视图操作示例"
+Map<String, Integer> map = new HashMap<>();
+map.put("A", 1);
+map.put("B", 2);
+
+// 使用keySet遍历
+for (String key : map.keySet()) {
+    System.out.println(key);  // 输出: A, B
+}
+
+// 使用values遍历
+for (Integer value : map.values()) {
+    System.out.println(value);  // 输出: 1, 2
+}
+
+// 使用entrySet遍历 (最高效)
+for (Map.Entry<String, Integer> entry : map.entrySet()) {
+    System.out.println(entry.getKey() + ": " + entry.getValue());
+}
+```
+
+</TabItem>
+<TabItem value="batch" label="批量操作方法">
 ```java title="Map批量操作方法"
 public interface Map<K,V> {
     
@@ -135,17 +278,66 @@ public interface Map<K,V> {
 }
 ```
 
-#### 原子操作方法
+| 方法 | 描述 | 返回值 | 性能特征 |
+|------|------|--------|----------|
+| `putAll(Map)` | 批量添加键值对 | void | 时间复杂度O(n) |
+| `clear()` | 清空所有键值对 | void | 时间复杂度O(n) |
+| `replace(K,V)` | 替换指定键的值 | 原值或null | 键不存在时不操作 |
+
+</TabItem>
+<TabItem value="java8" label="Java 8+ 新增方法">
 ```java title="Map原子操作方法"
 public interface Map<K,V> {
     
-    // 原子操作（ConcurrentMap接口）
-    V putIfAbsent(K key, V value);            // 如果键不存在则添加
-    boolean remove(Object key, Object value); // 条件删除
-    boolean replace(K key, V oldValue, V newValue); // 条件替换
-    V replace(K key, V value);                // 替换值
+    // Java 8+ 新增方法
+    default V computeIfAbsent(K key, Function<? super K,? extends V> mappingFunction) {
+        // 如果键不存在，则计算值并插入
+    }
+    
+    default V computeIfPresent(K key, BiFunction<? super K,? super V,? extends V> remappingFunction) {
+        // 如果键存在，则重新计算值
+    }
+    
+    default V compute(K key, BiFunction<? super K,? super V,? extends V> remappingFunction) {
+        // 计算新值（无论键是否存在）
+    }
+    
+    default V merge(K key, V value, BiFunction<? super V,? super V,? extends V> remappingFunction) {
+        // 合并现有值与给定值
+    }
+    
+    default void forEach(BiConsumer<? super K,? super V> action) {
+        // 对每个键值对执行操作
+    }
 }
 ```
+
+| 方法 | 描述 | 使用场景 | 优势 |
+|------|------|----------|------|
+| `computeIfAbsent` | 键不存在时才计算并插入 | 缓存实现 | 避免重复计算 |
+| `compute` | 重新计算键的值 | 值依赖于键和旧值 | 原子更新 |
+| `merge` | 合并现有值和新值 | 累积统计 | 原子更新 |
+| `forEach` | 遍历所有键值对 | 批量处理 | 简洁语法 |
+
+```java title="Java 8 Map方法示例"
+Map<String, Integer> scores = new HashMap<>();
+
+// computeIfAbsent示例
+scores.computeIfAbsent("Alice", key -> calculateScore(key));  // 键不存在时才计算
+
+// 计数器示例
+Map<String, Integer> wordCounts = new HashMap<>();
+String[] words = {"apple", "banana", "apple", "orange", "banana", "apple"};
+
+for (String word : words) {
+    wordCounts.merge(word, 1, (oldValue, value) -> oldValue + value);
+}
+
+// 结果: {orange=1, banana=2, apple=3}
+```
+
+</TabItem>
+</Tabs>
 
 ### 1.5 Map接口方法分类对比
 
@@ -163,17 +355,51 @@ public interface Map<K,V> {
 - 选择实现类时应根据性能要求和使用场景
 ::: 
 
-## 2. HashMap 实现类详解
+## 2. Map 实现类详解
+
+```mermaid
+graph TD
+    subgraph 性能比较
+        A["Map实现类"] --> B["HashMap (查找快)"]
+        A --> C["LinkedHashMap (保持顺序)"]
+        A --> D["TreeMap (有序)"]
+        A --> E["ConcurrentHashMap (线程安全)"]
+    end
+    
+    subgraph 时间复杂度
+        B --> B1["查找/添加/删除: O(1)"]
+        B --> B2["无序"]
+        
+        C --> C1["查找/添加/删除: O(1)"]
+        C --> C2["保持插入顺序"]
+        
+        D --> D1["查找/添加/删除: O(log n)"]
+        D --> D2["自然排序或比较器排序"]
+        
+        E --> E1["查找/添加/删除: O(1)"]
+        E --> E2["分段锁或CAS保证并发安全"]
+    end
+    
+    classDef default fill:#f9f9f9,stroke:#333,stroke-width:1px;
+    classDef fast fill:#d1f0d1,stroke:#333,stroke-width:1px;
+    classDef slow fill:#f0d1d1,stroke:#333,stroke-width:1px;
+    
+    class B1,C1,E1 fast;
+    class D1 slow;
+```
+
+<Tabs>
+<TabItem value="hashmap" label="HashMap 实现">
 
 ### 2.1 HashMap 概述
 
 :::tip 核心特点
 HashMap是基于哈希表实现的Map，是Java中最常用的Map实现类，具有以下特点：
-- **哈希表实现**：基于数组+链表+红黑树的数据结构
-- **无序性**：不保证元素的顺序
-- **允许null**：允许null键和null值
-- **线程不安全**：在多线程环境下需要外部同步
-- **高效操作**：查找、插入、删除性能好，平均O(1)
+- 🔍 **哈希表实现**：基于数组+链表+红黑树的数据结构
+- 🔀 **无序性**：不保证元素的顺序
+- ⚪ **允许null**：允许null键和null值
+- ⚠️ **线程不安全**：在多线程环境下需要外部同步
+- ⚡ **高效操作**：查找、插入、删除性能好，平均O(1)
 :::
 
 #### 适用场景
@@ -703,17 +929,18 @@ public class HashMapAdvancedExample {
     }
 } 
 
-## 3. LinkedHashMap 实现类详解
+</TabItem>
+<TabItem value="linkedhashmap" label="LinkedHashMap 实现">
 
 ### 3.1 LinkedHashMap 概述
 
 :::tip 核心特点
 LinkedHashMap是HashMap的子类，它在HashMap的基础上维护了一个双向链表，具有以下特点：
-- **继承HashMap**：拥有HashMap的所有特性
-- **维护顺序**：维护插入顺序或访问顺序
-- **双向链表**：通过双向链表维护元素顺序
-- **LRU缓存**：可以实现LRU（最近最少使用）缓存
-- **性能略低**：相比HashMap有轻微的性能开销
+- 🔄 **继承HashMap**：拥有HashMap的所有特性
+- 📝 **维护顺序**：维护插入顺序或访问顺序
+- 🔗 **双向链表**：通过双向链表维护元素顺序
+- 🗄️ **LRU缓存**：可以实现LRU（最近最少使用）缓存
+- 📉 **性能略低**：相比HashMap有轻微的性能开销
 :::
 
 #### 适用场景
@@ -952,18 +1179,22 @@ public class LRUCache<K, V> extends LinkedHashMap<K, V> {
 }
 ```
 
-## 4. TreeMap 实现类详解
+</TabItem>
+<TabItem value="treemap" label="TreeMap 实现">
 
 ### 4.1 TreeMap 概述
 
 :::tip 核心特点
 TreeMap是基于红黑树实现的Map，具有以下特点：
-- **红黑树实现**：基于红黑树的有序数据结构
-- **有序性**：按键的自然顺序或自定义顺序排序
-- **不允许null键**：键不能为null，值可以为null
-- **线程不安全**：在多线程环境下需要外部同步
-- **性能稳定**：查找、插入、删除性能为O(log n)
+- 🌳 **红黑树实现**：基于红黑树的有序数据结构
+- 📊 **有序性**：按键的自然顺序或自定义顺序排序
+- ⛔ **不允许null键**：键不能为null，值可以为null
+- ⚠️ **线程不安全**：在多线程环境下需要外部同步
+- 📈 **性能稳定**：查找、插入、删除性能为O(log n)
 :::
+
+</TabItem>
+</Tabs>
 
 #### 适用场景
 - 需要按键排序的场景
@@ -1412,6 +1643,43 @@ public class IdentityHashMapExample {
 ```
 
 ## 7. 实际应用场景
+
+```mermaid
+graph TD
+    subgraph 应用场景
+        S1[Map应用场景] --> D1[数据缓存]
+        S1 --> C1[配置管理]
+        S1 --> M1[索引映射]
+        S1 --> P1[数据统计]
+    end
+    
+    D1 --> D11[本地缓存]
+    D1 --> D12[LRU缓存]
+    D1 --> D13[缓存失效]
+    
+    C1 --> C11[程序配置]
+    C1 --> C12[动态参数]
+    C1 --> C13[Feature Flag]
+    
+    M1 --> M11[ID映射]
+    M1 --> M12[反向索引]
+    M1 --> M13[多级索引]
+    
+    subgraph 实现类选择
+        A[实现类选择] --> B1[HashMap]
+        A --> B2[LinkedHashMap]
+        A --> B3[TreeMap]
+        A --> B4[ConcurrentHashMap]
+        
+        B1 --> X1[一般场景]
+        B2 --> X2[需要记住顺序/LRU缓存]
+        B3 --> X3[需要按键排序]
+        B4 --> X4[并发环境]
+    end
+    
+    style S1 fill:#f9f,stroke:#333,stroke-width:2px
+    style A fill:#bbf,stroke:#333,stroke-width:1px
+```
 
 ### 7.1 缓存系统
 

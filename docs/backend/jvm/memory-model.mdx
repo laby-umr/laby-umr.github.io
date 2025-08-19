@@ -3,10 +3,15 @@ sidebar_position: 1
 title: JVM内存模型详解
 description: 全面介绍Java虚拟机内存结构、对象创建过程、内存分配策略与最佳实践
 authors: [Laby]
+tags: [Java, JVM, 内存模型, 运行时数据区, 对象创建]
 last_update:
-  date: 2025-08-07
+  date: 2023-08-15
   author: Laby
 ---
+
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+import CodeBlock from '@theme/CodeBlock';
 
 # JVM内存模型详解
 
@@ -16,11 +21,179 @@ Java虚拟机(JVM)内存模型是Java程序运行的基础架构，它定义了J
 JVM内存模型 = 运行时数据区 + 对象生命周期 + 内存分配策略 + 垃圾回收机制 + 并发内存访问
 :::
 
+```mermaid
+graph TD
+    A[JVM内存模型] --> B[运行时数据区]
+    A --> C[对象生命周期]
+    A --> D[内存分配策略]
+    A --> E[垃圾回收机制]
+    A --> F[并发内存模型]
+    
+    B --> B1[线程私有]
+    B --> B2[线程共享]
+    
+    B1 --> B11[程序计数器]
+    B1 --> B12[虚拟机栈]
+    B1 --> B13[本地方法栈]
+    
+    B2 --> B21[堆]
+    B2 --> B22[方法区]
+    
+    C --> C1[对象创建]
+    C --> C2[对象访问]
+    C --> C3[对象回收]
+    
+    D --> D1[指针碰撞]
+    D --> D2[空闲列表]
+    D --> D3[TLAB分配]
+    
+    E --> E1[堆管理]
+    E --> E2[垃圾回收算法]
+    E --> E3[垃圾收集器]
+    
+    F --> F1[JMM模型]
+    F --> F2[内存屏障]
+    F --> F3[happens-before]
+    
+    style A fill:#f9f9fa,stroke:#333,stroke-width:2px
+    style B fill:#e3f2fd,stroke:#333,stroke-width:1px
+    style C fill:#e8f5e9,stroke:#333,stroke-width:1px
+    style D fill:#fff3cd,stroke:#333,stroke-width:1px
+    style E fill:#fce4ec,stroke:#333,stroke-width:1px
+    style F fill:#e0f2f1,stroke:#333,stroke-width:1px
+```
+
 ## 1. JVM内存模型基础概念
 
 ### 1.1 什么是JVM内存模型？
 
 JVM内存模型是Java虚拟机在运行时管理内存的抽象概念，它定义了Java程序在运行时的内存组织方式和操作规则。JVM内存模型主要包括以下几个核心组成部分：
+
+<Tabs>
+<TabItem value="structure" label="内存结构">
+
+**JVM内存结构** 是JVM运行时管理的各个内存区域，包括:
+
+```mermaid
+graph TD
+    JVM[JVM内存结构] --> TP[线程私有]
+    JVM --> TS[线程共享]
+    
+    TP --> PC[程序计数器<br>Program Counter]
+    TP --> VS[虚拟机栈<br>VM Stack]
+    TP --> NS[本地方法栈<br>Native Method Stack]
+    
+    TS --> H[堆<br>Heap]
+    TS --> MA[方法区<br>Method Area]
+    
+    MA --> MP[元空间<br>Metaspace]
+    
+    style JVM fill:#f9f9fa,stroke:#333,stroke-width:2px
+    style TP fill:#bbdefb,stroke:#333,stroke-width:1px
+    style TS fill:#c8e6c9,stroke:#333,stroke-width:1px
+    style PC fill:#90caf9,stroke:#333,stroke-width:1px
+    style VS fill:#90caf9,stroke:#333,stroke-width:1px
+    style NS fill:#90caf9,stroke:#333,stroke-width:1px
+    style H fill:#a5d6a7,stroke:#333,stroke-width:1px
+    style MA fill:#a5d6a7,stroke:#333,stroke-width:1px
+    style MP fill:#80cbc4,stroke:#333,stroke-width:1px
+```
+
+**各区域主要特点**:
+
+| 内存区域 | 线程私有/共享 | 内存溢出异常 | 主要用途 | 垃圾回收 |
+|--------|------------|----------|--------|---------|
+| **程序计数器** | 线程私有 | 不会 | 字节码指令地址 | 不涉及 |
+| **虚拟机栈** | 线程私有 | 会 | 存储栈帧 | 不涉及 |
+| **本地方法栈** | 线程私有 | 会 | Native方法 | 不涉及 |
+| **堆** | 线程共享 | 会 | 存储对象实例 | 主要区域 |
+| **方法区** | 线程共享 | 会 | 类信息、常量池等 | 很少 |
+
+</TabItem>
+<TabItem value="jmm" label="并发内存模型">
+
+**JMM (Java Memory Model)** 是Java的并发内存模型，是一种抽象概念，定义了线程如何与内存交互:
+
+```mermaid
+graph LR
+    subgraph "线程1"
+        T1WB[工作内存]
+        T1[线程操作]
+    end
+    
+    subgraph "线程2"
+        T2WB[工作内存]
+        T2[线程操作]
+    end
+    
+    MM[主内存<br>共享变量]
+    
+    T1 -- 读/load --> MM
+    T1 -- 写/store --> MM
+    T1 <--> T1WB
+    
+    T2 -- 读/load --> MM
+    T2 -- 写/store --> MM
+    T2 <--> T2WB
+    
+    style MM fill:#f9f9fa,stroke:#333,stroke-width:2px
+    style T1WB fill:#bbdefb,stroke:#333,stroke-width:1px
+    style T2WB fill:#ffcc80,stroke:#333,stroke-width:1px
+```
+
+**JMM三大特性**:
+
+1. **原子性 (Atomicity)**
+   - 操作不可中断，要么全部执行，要么全不执行
+   - 通过synchronized和Lock保证
+
+2. **可见性 (Visibility)**
+   - 一个线程修改共享变量，其他线程能立即看到
+   - 通过volatile、synchronized和final保证
+
+3. **有序性 (Ordering)**
+   - 程序执行顺序按代码顺序执行
+   - Java存在指令重排
+   - 通过volatile和synchronized禁止指令重排
+
+**happens-before原则**: 
+定义了操作间的内存可见性，如果A happens-before B，则A的结果对B可见。
+
+</TabItem>
+<TabItem value="lifecycle" label="对象生命周期">
+
+**Java对象的生命周期** 从创建到回收的完整过程:
+
+```mermaid
+graph LR
+    A[对象创建] --> B[对象使用]
+    B --> C[对象不可达]
+    C --> D[垃圾标记]
+    D --> E[垃圾回收]
+    E --> F[内存释放]
+    
+    style A fill:#bbdefb,stroke:#333,stroke-width:1px
+    style B fill:#c8e6c9,stroke:#333,stroke-width:1px
+    style C fill:#ffe0b2,stroke:#333,stroke-width:1px
+    style D fill:#ffccbc,stroke:#333,stroke-width:1px
+    style E fill:#d1c4e9,stroke:#333,stroke-width:1px
+    style F fill:#b2ebf2,stroke:#333,stroke-width:1px
+```
+
+**对象创建过程**:
+1. **类加载检查**: 检查类是否已加载
+2. **内存分配**: 在堆上分配对象所需内存
+3. **内存初始化**: 将分配的内存空间初始化为零值
+4. **对象头设置**: 设置对象的元数据信息
+5. **执行构造方法**: 执行`<init>`方法
+
+**对象的内存布局**:
+- **对象头 (Header)**: 包含Mark Word和类型指针
+- **实例数据 (Instance Data)**: 对象的实际数据
+- **对齐填充 (Padding)**: 保证对象大小是8字节的倍数
+
+</TabItem>
+</Tabs>
 
 - **运行时数据区**：程序运行时使用的内存区域
 - **对象生命周期**：从对象创建到垃圾回收的完整过程
@@ -77,9 +250,255 @@ public class JVMMemoryModelExample {
 
 ## 2. 运行时数据区详解
 
+:::info JVM运行时数据区
+JVM运行时数据区是Java程序执行过程中的工作内存空间，由线程私有的部分和线程共享的部分组成。每个区域都有特定的用途和内存管理机制。
+:::
+
+```mermaid
+graph TD
+    JVM[JVM运行时数据区] --> TP[线程私有区域]
+    JVM --> TS[线程共享区域]
+    
+    TP --> PC[程序计数器]
+    TP --> VS[虚拟机栈]
+    TP --> NS[本地方法栈]
+    
+    VS --> F1[栈帧1]
+    VS --> F2[栈帧2]
+    VS --> F3[栈帧...]
+    
+    F1 --> L1[局部变量表]
+    F1 --> O1[操作数栈]
+    F1 --> D1[动态链接]
+    F1 --> R1[返回地址]
+    
+    TS --> H[堆]
+    TS --> MD[方法区]
+    
+    H --> YG[新生代]
+    H --> OG[老年代]
+    
+    YG --> E[Eden区]
+    YG --> S[Survivor区]
+    
+    S --> S0[From Survivor]
+    S --> S1[To Survivor]
+    
+    MD --> C[类信息]
+    MD --> CP[运行时常量池]
+    MD --> SM[静态变量]
+    MD --> M[JIT代码缓存]
+    
+    style JVM fill:#f9f9fa,stroke:#333,stroke-width:2px
+    style TP fill:#e3f2fd,stroke:#333,stroke-width:1px
+    style TS fill:#e8f5e9,stroke:#333,stroke-width:1px
+    style VS fill:#bbdefb,stroke:#333,stroke-width:1px
+    style H fill:#c8e6c9,stroke:#333,stroke-width:1px
+    style MD fill:#ffe0b2,stroke:#333,stroke-width:1px
+```
+
 ### 2.1 运行时数据区概述
 
 JVM运行时数据区是Java程序运行时的内存空间，分为五个主要部分：程序计数器、Java虚拟机栈、本地方法栈、堆和方法区。其中堆和方法区是所有线程共享的，而程序计数器、虚拟机栈和本地方法栈则是线程私有的。
+
+<Tabs>
+<TabItem value="overview" label="区域概览">
+
+| 区域 | 用途 | 创建时间 | 线程私有/共享 | 是否会OOM |
+|-----|------|---------|------------|----------|
+| **程序计数器** | 记录当前线程执行位置 | 线程创建时 | 线程私有 | 否 |
+| **虚拟机栈** | 存储Java方法执行信息 | 线程创建时 | 线程私有 | 是(StackOverflowError/OOM) |
+| **本地方法栈** | 存储Native方法信息 | 线程创建时 | 线程私有 | 是(同上) |
+| **堆** | 存储对象实例和数组 | JVM启动时 | 线程共享 | 是(OOM) |
+| **方法区** | 存储类信息、常量、静态变量等 | JVM启动时 | 线程共享 | 是(OOM) |
+
+```java title="JVM内存模型初始化"
+public class JVMMemoryInit {
+    static {
+        // 方法区初始化（类加载时）
+        // 加载类信息、静态变量、常量池等
+    }
+    
+    public static void main(String[] args) {
+        // 主线程启动
+        // - 程序计数器初始化
+        // - 虚拟机栈创建
+        // - 本地方法栈创建
+        
+        // 堆内存中分配对象
+        Object obj = new Object();
+        
+        // 创建新线程，会为该线程创建私有内存区域
+        Thread t = new Thread(() -> {
+            // 新线程有自己的程序计数器
+            // 新线程有自己的虚拟机栈
+            // 新线程有自己的本地方法栈
+            
+            // 共享主线程创建的对象（堆中的对象）
+            System.out.println(obj);
+        });
+        t.start();
+    }
+}
+```
+
+</TabItem>
+<TabItem value="stack-structure" label="栈帧结构">
+
+```mermaid
+graph TD
+    SF[栈帧 Stack Frame] --> LVT[局部变量表<br>Local Variable Table]
+    SF --> OS[操作数栈<br>Operand Stack]
+    SF --> DL[动态链接<br>Dynamic Linking]
+    SF --> RA[返回地址<br>Return Address]
+    
+    LVT --> LV1[变量槽1]
+    LVT --> LV2[变量槽2]
+    LVT --> LVN[...]
+    
+    OS --> V1[值1]
+    OS --> V2[值2]
+    OS --> VN[...]
+    
+    style SF fill:#f9f9fa,stroke:#333,stroke-width:2px
+    style LVT fill:#bbdefb,stroke:#333,stroke-width:1px
+    style OS fill:#c8e6c9,stroke:#333,stroke-width:1px
+    style DL fill:#ffe0b2,stroke:#333,stroke-width:1px
+    style RA fill:#ffccbc,stroke:#333,stroke-width:1px
+```
+
+**栈帧执行过程示例**:
+
+```java
+public int calculate(int a, int b) {
+    int c = a + b;
+    return c * 2;
+}
+```
+
+**执行过程**:
+
+1. **方法调用**:
+   - 创建新栈帧并压入虚拟机栈
+   - 局部变量表槽0存储this，槽1存储a，槽2存储b
+
+2. **执行a + b**:
+   - 将a、b从局部变量表加载到操作数栈
+   - 执行加法操作，结果压入操作数栈
+   - 将结果存入局部变量表槽3(c)
+
+3. **执行c * 2**:
+   - 加载c到操作数栈
+   - 将常量2压入操作数栈
+   - 执行乘法，结果压入操作数栈
+
+4. **方法返回**:
+   - 返回值从操作数栈顶获取
+   - 栈帧弹出，方法调用者栈帧成为当前栈帧
+   - 程序计数器恢复为方法调用指令的下一条指令
+
+</TabItem>
+<TabItem value="heap-structure" label="堆内存结构">
+
+```mermaid
+graph TD
+    H[堆内存 Heap] --> YG[新生代 Young Generation]
+    H --> OG[老年代 Old Generation]
+    
+    YG --> E[Eden区]
+    YG --> S0[From Survivor]
+    YG --> S1[To Survivor]
+    
+    E -- 最初分配 --> OBJ1[大多数对象]
+    E -- Minor GC --> S0
+    S0 -- Minor GC --> S1
+    S1 -- Minor GC --> S0
+    S0 -- 多次GC存活 --> OG
+    S1 -- 多次GC存活 --> OG
+    OG -- Major GC --> DEAD[回收不可达对象]
+    
+    style H fill:#f9f9fa,stroke:#333,stroke-width:2px
+    style YG fill:#c8e6c9,stroke:#333,stroke-width:1px
+    style OG fill:#ffecb3,stroke:#333,stroke-width:1px
+    style E fill:#b2dfdb,stroke:#333,stroke-width:1px
+    style S0 fill:#b2dfdb,stroke:#333,stroke-width:1px
+    style S1 fill:#b2dfdb,stroke:#333,stroke-width:1px
+```
+
+**堆内存特点**:
+
+1. **新生代 (Young Generation)**:
+   - **Eden区**: 新对象分配的地方
+   - **Survivor区**: 两个相同大小的区域(From和To)，存放经过垃圾回收后存活的对象
+   - 大小比例默认为8:1:1 (Eden:From:To)
+   - 采用复制算法进行垃圾回收
+
+2. **老年代 (Old Generation)**:
+   - 存放长期存活的对象
+   - 通常经过多次Minor GC后，对象会从新生代提升到老年代
+   - 采用标记-整理或标记-清除算法进行垃圾回收
+
+**特殊情况**:
+- **大对象直接进入老年代**: 避免在新生代频繁复制
+- **长期存活对象进入老年代**: 默认经过15次Minor GC
+- **动态对象年龄判定**: 如果Survivor空间中相同年龄对象总和大于Survivor的一半，则年龄大于等于该年龄的对象进入老年代
+
+</TabItem>
+<TabItem value="metaspace" label="元空间">
+
+```mermaid
+graph TD
+    M[方法区/元空间 Metaspace] --> CI[类信息]
+    M --> CP[常量池]
+    M --> SM[静态变量]
+    M --> CODE[JIT编译代码]
+    
+    CI --> C1[类元数据]
+    CI --> C2[方法元数据]
+    CI --> C3[字段元数据]
+    
+    CP --> STR[字符串常量]
+    CP --> NUM[数值常量]
+    CP --> REF[符号引用]
+    
+    style M fill:#f9f9fa,stroke:#333,stroke-width:2px
+    style CI fill:#d1c4e9,stroke:#333,stroke-width:1px
+    style CP fill:#ffcc80,stroke:#333,stroke-width:1px
+    style SM fill:#a5d6a7,stroke:#333,stroke-width:1px
+    style CODE fill:#b3e5fc,stroke:#333,stroke-width:1px
+```
+
+**元空间特点**:
+
+1. **JDK 8之前叫永久代**:
+   - JDK 8之前，方法区实现为永久代(PermGen)
+   - 永久代有固定大小限制，容易出现OOM
+   - 使用JVM堆内存
+
+2. **JDK 8及之后叫元空间**:
+   - 元空间使用本地内存，不再有固定大小限制
+   - 默认情况下会根据需要动态调整
+   - 可通过参数限制大小: `-XX:MetaspaceSize` 和 `-XX:MaxMetaspaceSize`
+
+3. **存储内容**:
+   - 类的元数据信息
+   - 方法的元数据信息
+   - 运行时常量池
+   - 静态变量(JDK 7后转移至堆中)
+   - JIT编译后的本地代码
+
+**与永久代的比较**:
+
+| 特性 | 永久代 (PermGen) | 元空间 (Metaspace) |
+|------|-----------------|-------------------|
+| **内存位置** | JVM堆内存 | 本地内存(Native Memory) |
+| **内存大小** | 固定大小，受JVM参数限制 | 默认无限制，受系统可用内存限制 |
+| **GC行为** | Full GC时会进行回收 | 类卸载时会回收 |
+| **OOM风险** | 较高，尤其是动态类生成时 | 较低，但仍可能发生 |
+| **字符串常量** | JDK 7之前存储在永久代 | 移至堆内存中的字符串池 |
+
+</TabItem>
+</Tabs>
 
 #### 内存区域分类
 
@@ -97,212 +516,216 @@ public class RuntimeDataAreas {
 }
 ```
 
-### 2.2 程序计数器（Program Counter Register）
-
-程序计数器是一块较小的内存空间，可以看作是当前线程所执行的字节码的行号指示器。
-
-#### 核心特点
-
-```java title="程序计数器特点"
-public class ProgramCounterExample {
-    
-    public void method1() {
-        int a = 1;        // 程序计数器记录当前执行位置
-        int b = 2;        // 程序计数器更新到下一条指令
-        int c = a + b;    // 程序计数器继续更新
-    }
-    
-    public void method2() {
-        // 每个线程都有独立的程序计数器
-        // 线程切换时，程序计数器会保存当前执行位置
-        // 线程恢复时，程序计数器会恢复到之前的位置
-    }
-}
-```
-
-#### 程序计数器的作用
-
-| 作用 | 具体体现 | 重要性 |
-|------|----------|--------|
-| **指令地址记录** | 记录当前线程执行的字节码指令地址 | 线程恢复执行的关键 |
-| **线程私有** | 每个线程都有独立的程序计数器 | 保证线程切换的正确性 |
-| **唯一无异常区域** | 不会发生OutOfMemoryError | 程序稳定性的保证 |
-
-### 2.3 Java虚拟机栈（JVM Stack）
-
-Java虚拟机栈描述的是Java方法执行的线程内存模型，每个方法被执行时都会创建一个栈帧。
-
-#### 栈帧结构
-
-```java title="栈帧结构示例"
-public class StackFrameExample {
-    
-    public void method() {
-        // 局部变量表：存储方法参数和局部变量
-        int localVar1 = 10;
-        String localVar2 = "test";
-        
-        // 操作数栈：存储计算过程中的临时数据
-        int result = localVar1 + 20;  // 操作数栈存储计算过程
-        
-        // 动态链接：指向运行时常量池中该栈帧所属方法的引用
-        // 方法出口：记录方法返回地址
-    }
-}
-```
-
-#### 栈帧组成部分
-
-| 组成部分 | 作用 | 特点 |
-|----------|------|------|
-| **局部变量表** | 存储方法参数和局部变量 | 以变量槽(Slot)为单位 |
-| **操作数栈** | 存储计算过程中的临时数据 | 后进先出(LIFO)结构 |
-| **动态链接** | 指向运行时常量池的方法引用 | 支持动态分派 |
-| **方法出口** | 记录方法返回地址 | 支持方法调用和返回 |
-
-#### 栈异常情况
-
-```java title="栈异常示例"
-public class StackExceptionExample {
-    
-    // StackOverflowError：栈深度超出限制
-    public void stackOverflow() {
-        stackOverflow();  // 无限递归，导致栈溢出
-    }
-    
-    // OutOfMemoryError：栈内存不足
-    public void outOfMemory() {
-        // 创建大量局部变量，可能导致栈内存不足
-        int[] largeArray = new int[1000000];
-    }
-}
-```
-
-### 2.4 本地方法栈（Native Method Stack）
-
-本地方法栈与Java虚拟机栈类似，但它为JVM使用到的Native方法服务。
-
-#### 本地方法栈特点
-
-```java title="本地方法栈示例"
-public class NativeMethodStackExample {
-    
-    // Native方法示例
-    public native void nativeMethod();
-    
-    static {
-        // 加载本地库
-        System.loadLibrary("native-lib");
-    }
-    
-    public void javaMethod() {
-        // Java方法在虚拟机栈中执行
-        nativeMethod();  // Native方法在本地方法栈中执行
-    }
-}
-```
-
-### 2.5 堆（Heap）
-
-Java堆是JVM管理的最大内存区域，所有对象实例和数组都在堆上分配。
-
-#### 堆内存结构
-
-```java title="堆内存结构示例"
-public class HeapStructureExample {
-    
-    public static void main(String[] args) {
-        // 新生代对象分配
-        Object youngObject = new Object();  // 在Eden区分配
-        
-        // 老年代对象分配（大对象）
-        byte[] largeArray = new byte[1024 * 1024];  // 直接进入老年代
-        
-        // 数组对象分配
-        int[] array = new int[1000];  // 在堆中分配连续内存
-    }
-}
-```
-
-#### 堆内存分区
-
-| 分区 | 作用 | 特点 |
-|------|------|------|
-| **新生代（Young Generation）** | 存放新创建的对象 | 分为Eden、From Survivor、To Survivor |
-| **老年代（Old Generation）** | 存放长期存活的对象 | 经过多次GC后仍然存活的对象 |
-| **永久代/元空间** | 存放类信息、常量等 | JDK8前为永久代，JDK8后为元空间 |
-
-#### 堆内存分配策略
-
-```java title="堆内存分配策略示例"
-public class HeapAllocationExample {
-    
-    public static void main(String[] args) {
-        // 1. 对象优先在Eden区分配
-        Object obj1 = new Object();
-        
-        // 2. 大对象直接进入老年代
-        byte[] largeObject = new byte[4 * 1024 * 1024];  // 4MB大对象
-        
-        // 3. 长期存活的对象进入老年代
-        for (int i = 0; i < 1000; i++) {
-            Object obj = new Object();
-            // 经过多次Minor GC后，存活的对象会进入老年代
-        }
-        
-        // 4. 动态对象年龄判定
-        // 如果Survivor空间中相同年龄的对象大小总和超过一半，
-        // 年龄大于等于该年龄的对象直接进入老年代
-    }
-}
-```
-
-### 2.6 方法区（Method Area）
-
-方法区用于存储已被JVM加载的类信息、常量、静态变量、即时编译器编译后的代码缓存等数据。
-
-#### 方法区内容
-
-```java title="方法区内容示例"
-public class MethodAreaExample {
-    
-    // 静态变量存储在方法区
-    public static String staticVar = "static variable";
-    
-    // 常量存储在运行时常量池
-    public static final String CONSTANT = "constant";
-    
-    // 类信息存储在方法区
-    public void method() {
-        // 方法字节码存储在方法区
-        System.out.println("method executed");
-    }
-    
-    static {
-        // 静态代码块在类加载时执行
-        System.out.println("static block executed");
-    }
-}
-```
-
-#### 方法区特点对比
-
-| 版本 | 名称 | 存储位置 | 大小限制 |
-|------|------|----------|----------|
-| **JDK 7及之前** | 永久代（PermGen） | JVM堆内存 | 受堆大小限制 |
-| **JDK 8及之后** | 元空间（Metaspace） | 本地内存 | 默认无限制 |
-
 ## 3. 对象创建过程详解
+
+:::info Java对象创建
+Java对象的创建是一个复杂的过程，涉及类加载、内存分配、对象初始化等多个步骤。深入理解对象创建过程有助于优化内存使用和提高应用程序性能。
+:::
+
+```mermaid
+flowchart LR
+    A[new指令] --> B[类加载检查]
+    B --> C[分配内存]
+    C --> D[初始化零值]
+    D --> E[设置对象头]
+    E --> F[执行init方法]
+    
+    subgraph "内存分配方式"
+        C1[指针碰撞]
+        C2[空闲列表]
+        C3[TLAB分配]
+    end
+    
+    subgraph "并发安全保证"
+        CS1[CAS+失败重试]
+        CS2[TLAB本地线程分配缓冲]
+    end
+    
+    C --> C1
+    C --> C2
+    C --> C3
+    C --> CS1
+    C --> CS2
+    
+    style A fill:#bbdefb,stroke:#333,stroke-width:1px
+    style B fill:#c8e6c9,stroke:#333,stroke-width:1px
+    style C fill:#ffecb3,stroke:#333,stroke-width:1px
+    style D fill:#e1bee7,stroke:#333,stroke-width:1px
+    style E fill:#ffccbc,stroke:#333,stroke-width:1px
+    style F fill:#b3e5fc,stroke:#333,stroke-width:1px
+```
 
 ### 3.1 对象创建概述
 
 Java对象的创建过程涉及多个步骤，从类加载到对象初始化，每个步骤都有其特定的作用和意义。
 
-#### 对象创建流程图
+<Tabs>
+<TabItem value="creation" label="创建流程">
 
+**完整对象创建流程**:
+
+1. **类加载检查**: 检查类是否已加载，如未加载则触发类加载过程
+2. **分配内存**: 在堆上为对象分配所需内存空间
+3. **初始化零值**: 将分配的内存空间初始化为零值
+4. **设置对象头**: 设置对象的元数据信息，包括类型指针、哈希码、GC分代年龄等
+5. **执行初始化**: 执行构造方法`<init>`，初始化对象的字段
+
+```mermaid
+sequenceDiagram
+    participant JVM as Java虚拟机
+    participant Heap as 堆内存
+    participant Class as 类数据
+    
+    JVM->>JVM: 遇到new指令
+    JVM->>Class: 1. 类加载检查
+    
+    alt 类未加载
+        JVM->>Class: 触发类加载过程
+    end
+    
+    JVM->>Heap: 2. 分配内存空间
+    Note over Heap: 根据类定义计算所需内存大小
+    
+    alt 指针碰撞
+        JVM->>Heap: 移动指针，分配连续空间
+    else 空闲列表
+        JVM->>Heap: 查找空闲列表，分配合适空间
+    end
+    
+    JVM->>Heap: 3. 初始化零值
+    Note over Heap: 保证对象实例字段在代码中可以不赋初值
+    
+    JVM->>Heap: 4. 设置对象头
+    Note over Heap: 包括类型指针、哈希码、GC分代年龄等
+    
+    JVM->>Heap: 5. 执行init方法
+    Note over Heap: 执行构造方法中的代码
 ```
-类加载检查 → 分配内存 → 解决并发安全问题 → 初始化零值 → 设置对象头 → 执行init方法
+
+</TabItem>
+<TabItem value="memory-allocation" label="内存分配方式">
+
+JVM有三种主要的内存分配方式，选择哪种方式取决于堆内存的具体实现和运行时环境：
+
+**1. 指针碰撞 (Bump the Pointer)**
+
+适用于内存规整的场景，例如使用标记-整理或复制算法的垃圾回收器。
+
+```mermaid
+graph LR
+    A[已分配区域] --> P((分界指针))
+    P --> B[空闲区域]
+    P -- 分配对象 --> P2((新指针位置))
+    
+    style A fill:#f8cecc,stroke:#333,stroke-width:1px
+    style B fill:#d5e8d4,stroke:#333,stroke-width:1px
+    style P fill:#000000,stroke:#333,stroke-width:2px
+    style P2 fill:#000000,stroke:#333,stroke-width:2px
 ```
+
+**2. 空闲列表 (Free List)**
+
+适用于内存不规整的场景，例如使用标记-清除算法的垃圾回收器。
+
+```mermaid
+graph TD
+    subgraph "堆内存"
+        A1[已分配] --- B1[空闲]
+        B1 --- A2[已分配]
+        A2 --- B2[空闲]
+        B2 --- A3[已分配]
+    end
+    
+    FL[空闲列表] --> |记录| B1
+    FL --> |记录| B2
+    
+    style A1 fill:#f8cecc,stroke:#333,stroke-width:1px
+    style A2 fill:#f8cecc,stroke:#333,stroke-width:1px
+    style A3 fill:#f8cecc,stroke:#333,stroke-width:1px
+    style B1 fill:#d5e8d4,stroke:#333,stroke-width:1px
+    style B2 fill:#d5e8d4,stroke:#333,stroke-width:1px
+    style FL fill:#dae8fc,stroke:#333,stroke-width:1px
+```
+
+**3. TLAB (Thread Local Allocation Buffer)**
+
+在多线程环境下提高分配效率，为每个线程在Eden区预先分配一小块内存。
+
+```mermaid
+graph TD
+    subgraph "Eden区"
+        T1[线程1 TLAB]
+        T2[线程2 TLAB]
+        T3[线程3 TLAB]
+        ES[共享Eden空间]
+    end
+    
+    Thread1 -- 分配对象 --> T1
+    Thread2 -- 分配对象 --> T2
+    Thread3 -- 分配对象 --> T3
+    
+    style T1 fill:#fff2cc,stroke:#333,stroke-width:1px
+    style T2 fill:#d5e8d4,stroke:#333,stroke-width:1px
+    style T3 fill:#dae8fc,stroke:#333,stroke-width:1px
+    style ES fill:#f5f5f5,stroke:#333,stroke-width:1px
+```
+
+</TabItem>
+<TabItem value="object-layout" label="对象内存布局">
+
+Java对象在内存中的布局由三部分组成：**对象头**、**实例数据**和**对齐填充**。
+
+```mermaid
+graph TD
+    OBJ[Java对象] --> H[对象头]
+    OBJ --> D[实例数据]
+    OBJ --> P[对齐填充]
+    
+    H --> M[Mark Word]
+    H --> C[类型指针]
+    H --> A[数组长度<br>仅数组对象有]
+    
+    M --> M1[HashCode]
+    M --> M2[GC分代年龄]
+    M --> M3[锁状态标志]
+    M --> M4[线程持有的锁]
+    M --> M5[偏向线程ID]
+    
+    D --> D1[父类实例字段]
+    D --> D2[子类实例字段]
+    
+    style OBJ fill:#f5f5f5,stroke:#333,stroke-width:2px
+    style H fill:#dae8fc,stroke:#333,stroke-width:1px
+    style D fill:#d5e8d4,stroke:#333,stroke-width:1px
+    style P fill:#fff2cc,stroke:#333,stroke-width:1px
+```
+
+**1. 对象头 (Header)**
+
+- **Mark Word**: 存储对象运行时数据，如哈希码、GC分代年龄、锁状态标志等
+- **类型指针**: 指向对象的类元数据，用于确定对象的类型
+- **数组长度**: 只有数组对象才有，用于存储数组长度
+
+**Mark Word在不同状态下的内容**:
+
+| 状态 | 存储内容 |
+|------|---------|
+| 无锁状态 | 对象HashCode、GC分代年龄、是否偏向锁 |
+| 偏向锁状态 | 偏向线程ID、偏向时间戳、GC分代年龄、偏向标志 |
+| 轻量级锁状态 | 指向栈中锁记录的指针 |
+| 重量级锁状态 | 指向互斥量(Monitor)的指针 |
+| GC标记状态 | 空，只记录GC信息 |
+
+**2. 实例数据 (Instance Data)**
+
+存储对象的实际数据，包括父类继承下来的和本类定义的字段。
+
+**3. 对齐填充 (Padding)**
+
+仅起占位作用，保证对象大小是8字节的整数倍。
+
+</TabItem>
+</Tabs>
 
 ### 3.2 类加载检查
 
@@ -323,209 +746,215 @@ public class ClassLoadingCheckExample {
         // 5. 初始化：执行静态代码块和静态变量赋值
     }
 }
+```
 
-class MyClass {
-    static {
-        System.out.println("MyClass loaded");
+## 4. 对象引用类型详解
+
+:::info Java引用类型
+JDK 1.2后，Java引入了四种引用类型，构成了一种比强引用更加灵活的对象生命周期管理方式，为垃圾回收提供了更多的可控性。
+:::
+
+```mermaid
+graph LR
+    R[引用类型] --> SR[强引用<br>Strong Reference]
+    R --> SO[软引用<br>Soft Reference]
+    R --> WE[弱引用<br>Weak Reference]
+    R --> PH[虚引用<br>Phantom Reference]
+    
+    SR --> GC1["不会被回收"]
+    SO --> GC2["内存不足时回收"]
+    WE --> GC3["下次GC时回收"]
+    PH --> GC4["随时可能被回收<br>仅用于跟踪"]
+    
+    SR -.强度.-> SO -.强度.-> WE -.强度.-> PH
+    
+    style R fill:#f9f9fa,stroke:#333,stroke-width:2px
+    style SR fill:#d4edda,stroke:#333,stroke-width:1px
+    style SO fill:#cce5ff,stroke:#333,stroke-width:1px
+    style WE fill:#fff3cd,stroke:#333,stroke-width:1px
+    style PH fill:#f8d7da,stroke:#333,stroke-width:1px
+```
+
+### 4.1 引用类型概述
+
+<Tabs>
+<TabItem value="overview" label="引用类型比较">
+
+Java提供了四种引用类型，用于灵活控制对象的生命周期，从强到弱分别是：强引用、软引用、弱引用和虚引用。
+
+| 引用类型 | 回收时机 | 用途 | 需要引用队列 | 典型应用场景 |
+|---------|---------|-----|------------|------------|
+| **强引用** | 永不回收 | 正常对象引用 | 否 | 常规业务对象 |
+| **软引用** | 内存不足时 | 缓存敏感数据 | 可选 | 图片缓存、网页缓存 |
+| **弱引用** | 下次GC时 | 缓存临时数据 | 可选 | ThreadLocal、WeakHashMap |
+| **虚引用** | 随时可能回收 | 跟踪对象回收 | 必需 | 堆外内存管理、DirectByteBuffer |
+
+```java title="引用类型使用示例"
+// 强引用 - 最常见的引用
+Object strongRef = new Object();  // 只要强引用存在，对象不会被回收
+
+// 软引用 - 内存不足时回收
+SoftReference<Object> softRef = new SoftReference<>(new Object());
+Object obj1 = softRef.get();  // 获取引用的对象，可能为null
+
+// 弱引用 - 下次GC时回收
+WeakReference<Object> weakRef = new WeakReference<>(new Object());
+Object obj2 = weakRef.get();  // 获取引用的对象，可能为null
+
+// 虚引用 - 随时可能回收，必须配合引用队列
+ReferenceQueue<Object> queue = new ReferenceQueue<>();
+PhantomReference<Object> phantomRef = new PhantomReference<>(new Object(), queue);
+// 无法通过phantomRef.get()获取对象，总是返回null
+```
+
+</TabItem>
+<TabItem value="gc-behavior" label="GC行为">
+
+不同引用类型影响对象的垃圾回收行为：
+
+```mermaid
+sequenceDiagram
+    participant App as 应用程序
+    participant GC as 垃圾收集器
+    participant Heap as 堆内存
+    participant RQ as 引用队列
+    
+    Note over App,Heap: 1. 强引用：不会回收
+    App->>Heap: 创建强引用对象
+    GC->>Heap: 执行垃圾回收
+    Note over Heap: 对象存活
+    
+    Note over App,Heap: 2. 软引用：内存不足时回收
+    App->>Heap: 创建软引用对象
+    alt 内存充足
+        GC->>Heap: 执行垃圾回收
+        Note over Heap: 对象存活
+    else 内存不足
+        GC->>Heap: 回收软引用对象
+        GC->>RQ: 将引用加入引用队列
+    end
+    
+    Note over App,Heap: 3. 弱引用：下次GC时回收
+    App->>Heap: 创建弱引用对象
+    GC->>Heap: 执行垃圾回收
+    GC->>Heap: 回收弱引用对象
+    GC->>RQ: 将引用加入引用队列
+    
+    Note over App,Heap: 4. 虚引用：无法获取对象
+    App->>Heap: 创建虚引用对象
+    Note over App: 无法通过虚引用获取对象
+    GC->>Heap: 执行垃圾回收
+    GC->>Heap: 回收虚引用对象
+    GC->>RQ: 将引用加入引用队列
+```
+
+**引用队列(ReferenceQueue)的使用**:
+
+```java
+// 创建引用队列
+ReferenceQueue<Object> refQueue = new ReferenceQueue<>();
+
+// 创建带引用队列的弱引用
+Object obj = new Object();
+WeakReference<Object> weakRef = new WeakReference<>(obj, refQueue);
+
+// 使原对象不可达
+obj = null;
+System.gc(); // 触发垃圾回收
+
+// 弱引用对象进入引用队列
+Reference<?> refFromQueue = refQueue.poll();
+if (refFromQueue != null) {
+    System.out.println("弱引用对象已被GC回收，并进入引用队列");
+    System.out.println("引用队列中的对象 == 弱引用? " + (refFromQueue == weakRef));
+}
+```
+
+</TabItem>
+<TabItem value="use-cases" label="应用场景">
+
+**各种引用类型的典型应用场景**:
+
+1. **强引用**:
+   - 常规业务对象
+   - 不能被垃圾回收器回收的对象
+
+```java
+// 典型的强引用
+Object obj = new Object();
+String str = "Hello";
+List<String> list = new ArrayList<>();
+```
+
+2. **软引用**:
+   - 缓存实现
+   - 内存敏感的缓存
+
+```java
+// 图片缓存示例
+public class ImageCache {
+    private final Map<String, SoftReference<Bitmap>> imageCache = new HashMap<>();
+    
+    public void putImage(String key, Bitmap image) {
+        imageCache.put(key, new SoftReference<>(image));
+    }
+    
+    public Bitmap getImage(String key) {
+        SoftReference<Bitmap> reference = imageCache.get(key);
+        if (reference != null) {
+            return reference.get(); // 可能为null，如果已被回收
+        }
+        return null;
     }
 }
 ```
 
-### 3.3 分配内存
+3. **弱引用**:
+   - WeakHashMap
+   - ThreadLocal
 
-在类加载检查通过后，JVM为新生对象分配内存。对象所需内存大小在类加载完成后即可确定。
+```java
+// WeakHashMap示例 - 键不再被引用时会被自动移除
+WeakHashMap<Key, Value> weakMap = new WeakHashMap<>();
+Key key = new Key("unique");
+weakMap.put(key, new Value("data"));
 
-#### 内存分配方式
+// 当key不再被引用时
+key = null;
+System.gc();
+// weakMap中对应的条目会被自动移除
+```
 
-```java title="内存分配方式示例"
-public class MemoryAllocationExample {
+4. **虚引用**:
+   - 跟踪对象被回收的状态
+   - 管理堆外内存资源
+
+```java
+// DirectByteBuffer使用虚引用来管理堆外内存
+public class DirectMemoryTracker {
+    private final ReferenceQueue<Object> queue = new ReferenceQueue<>();
     
-    public static void main(String[] args) {
-        // 指针碰撞方式（内存规整）
-        Object obj1 = new Object();
-        
-        // 空闲列表方式（内存不规整）
-        // 当使用标记-清除算法时，内存空间不规整，使用空闲列表
-        
-        // TLAB分配（线程本地分配缓冲区）
-        // 每个线程在Eden区预先分配一小块内存，避免同步
-        for (int i = 0; i < 1000; i++) {
-            Object obj = new Object();  // 优先在TLAB中分配
+    public void allocateDirect(int capacity) {
+        Object obj = new Object();
+        // 创建虚引用，包含清理信息
+        PhantomReference<Object> ref = new PhantomReference<>(obj, queue);
+        // 分配直接内存
+        ByteBuffer buffer = ByteBuffer.allocateDirect(capacity);
+    }
+    
+    public void checkForFreedReferences() {
+        Reference<?> ref;
+        while ((ref = queue.poll()) != null) {
+            // 释放关联的直接内存资源
+            // 这里仅作为示例，实际实现更复杂
+            System.out.println("清理直接内存");
         }
     }
 }
 ```
 
-#### 分配方式对比
-
-| 分配方式 | 适用场景 | 特点 | 优缺点 |
-|----------|----------|------|--------|
-| **指针碰撞** | 内存规整 | 移动指针分配内存 | 简单高效，需要内存规整 |
-| **空闲列表** | 内存不规整 | 维护空闲内存列表 | 复杂，但适应性强 |
-| **TLAB** | 多线程环境 | 线程本地预分配 | 避免同步，提高效率 |
-
-### 3.4 解决并发安全问题
-
-在多线程环境下，内存分配需要保证线程安全。
-
-```java title="并发安全问题解决示例"
-public class ConcurrencySafetyExample {
-    
-    public static void main(String[] args) {
-        // 方式1：CAS + 失败重试
-        // JVM使用CAS操作保证内存分配的原子性
-        // 如果CAS失败，则重试
-        
-        // 方式2：TLAB（Thread Local Allocation Buffer）
-        // 每个线程预先分配一块内存，减少同步开销
-        Thread t1 = new Thread(() -> {
-            for (int i = 0; i < 1000; i++) {
-                Object obj = new Object();  // 在TLAB中分配
-            }
-        });
-        
-        Thread t2 = new Thread(() -> {
-            for (int i = 0; i < 1000; i++) {
-                Object obj = new Object();  // 在TLAB中分配
-            }
-        });
-        
-        t1.start();
-        t2.start();
-    }
-}
-```
-
-### 3.5 初始化零值
-
-内存分配完成后，JVM将分配到的内存空间都初始化为零值。
-
-```java title="初始化零值示例"
-public class ZeroInitializationExample {
-    
-    public static void main(String[] args) {
-        // 创建对象时，JVM会自动初始化零值
-        MyObject obj = new MyObject();
-        
-        // 即使没有显式赋值，字段也有默认值
-        System.out.println("intField: " + obj.intField);      // 0
-        System.out.println("doubleField: " + obj.doubleField); // 0.0
-        System.out.println("booleanField: " + obj.booleanField); // false
-        System.out.println("objectField: " + obj.objectField);   // null
-    }
-}
-
-class MyObject {
-    int intField;
-    double doubleField;
-    boolean booleanField;
-    Object objectField;
-    
-    // 构造方法中可以进行显式初始化
-    public MyObject() {
-        intField = 42;  // 显式初始化
-    }
-}
-```
-
-### 3.6 设置对象头
-
-JVM对对象进行必要的设置，如这个对象是哪个类的实例、如何找到类的元数据信息等。
-
-```java title="对象头设置示例"
-public class ObjectHeaderExample {
-    
-    public static void main(String[] args) {
-        Object obj = new Object();
-        
-        // 对象头包含以下信息：
-        // 1. Mark Word：哈希码、GC分代年龄、锁状态标志等
-        // 2. 类型指针：指向类元数据的指针
-        // 3. 数组长度（仅数组对象）
-        
-        // 可以通过反射获取对象的一些信息
-        System.out.println("Class: " + obj.getClass());
-        System.out.println("HashCode: " + obj.hashCode());
-    }
-}
-```
-
-### 3.7 执行init方法
-
-从JVM角度看，对象已经产生了。但从Java程序角度，对象创建才刚开始，还需要执行构造方法。
-
-```java title="init方法执行示例"
-public class InitMethodExample {
-    
-    public static void main(String[] args) {
-        // 创建对象时，会按顺序执行：
-        // 1. 父类静态代码块
-        // 2. 子类静态代码块
-        // 3. 父类实例代码块
-        // 4. 父类构造方法
-        // 5. 子类实例代码块
-        // 6. 子类构造方法
-        
-        Child child = new Child();
-    }
-}
-
-class Parent {
-    static {
-        System.out.println("Parent static block");
-    }
-    
-    {
-        System.out.println("Parent instance block");
-    }
-    
-    public Parent() {
-        System.out.println("Parent constructor");
-    }
-}
-
-class Child extends Parent {
-    static {
-        System.out.println("Child static block");
-    }
-    
-    {
-        System.out.println("Child instance block");
-    }
-    
-    public Child() {
-        System.out.println("Child constructor");
-    }
-}
-```
-
-## 4. 对象引用类型详解
-
-### 4.1 引用类型概述
-
-Java提供了四种引用类型，用于灵活控制对象的生命周期，从强到弱分别是：强引用、软引用、弱引用和虚引用。
-
-#### 引用类型层次
-
-```java title="引用类型层次示例"
-public class ReferenceTypeExample {
-    
-    public static void main(String[] args) {
-        // 1. 强引用：最常见的引用类型
-        Object strongRef = new Object();
-        
-        // 2. 软引用：内存不足时回收
-        SoftReference<Object> softRef = new SoftReference<>(new Object());
-        
-        // 3. 弱引用：下次GC时回收
-        WeakReference<Object> weakRef = new WeakReference<>(new Object());
-        
-        // 4. 虚引用：不影响对象生命周期
-        ReferenceQueue<Object> queue = new ReferenceQueue<>();
-        PhantomReference<Object> phantomRef = new PhantomReference<>(new Object(), queue);
-    }
-}
-```
+</TabItem>
+</Tabs>
 
 ### 4.2 强引用（Strong Reference）
 
@@ -546,208 +975,6 @@ public class StrongReferenceExample {
         obj = null;
         System.gc();
         // 此时对象可以被垃圾收集器回收
-    }
-    
-    // 强引用的应用场景
-    public void strongReferenceUsage() {
-        // 1. 普通对象引用
-        String str = "Hello World";
-        
-        // 2. 集合中的对象
-        List<String> list = new ArrayList<>();
-        list.add("item");
-        
-        // 3. 静态变量
-        static Object staticObj = new Object();
-    }
-}
-```
-
-### 4.3 软引用（Soft Reference）
-
-用于描述还有用但非必需的对象。在系统将要发生内存溢出前，会将这些对象列入回收范围进行第二次回收。
-
-```java title="软引用示例"
-public class SoftReferenceExample {
-    
-    public static void main(String[] args) {
-        // 创建软引用
-        SoftReference<byte[]> softRef = new SoftReference<>(new byte[1024 * 1024]);
-        
-        // 获取软引用指向的对象
-        byte[] data = softRef.get();
-        if (data != null) {
-            System.out.println("Data available: " + data.length);
-        }
-        
-        // 模拟内存不足
-        List<byte[]> list = new ArrayList<>();
-        try {
-            while (true) {
-                list.add(new byte[1024 * 1024]);  // 分配大量内存
-            }
-        } catch (OutOfMemoryError e) {
-            System.out.println("OutOfMemoryError occurred");
-        }
-        
-        // 检查软引用是否被回收
-        data = softRef.get();
-        if (data == null) {
-            System.out.println("Soft reference was cleared");
-        }
-    }
-    
-    // 软引用的应用场景：缓存实现
-    public class ImageCache {
-        private Map<String, SoftReference<BufferedImage>> cache = new HashMap<>();
-        
-        public BufferedImage getImage(String key) {
-            SoftReference<BufferedImage> ref = cache.get(key);
-            if (ref != null) {
-                BufferedImage image = ref.get();
-                if (image != null) {
-                    return image;
-                }
-            }
-            return null;
-        }
-        
-        public void putImage(String key, BufferedImage image) {
-            cache.put(key, new SoftReference<>(image));
-        }
-    }
-}
-```
-
-### 4.4 弱引用（Weak Reference）
-
-比软引用更弱，被弱引用关联的对象只能生存到下一次垃圾收集发生为止。
-
-```java title="弱引用示例"
-public class WeakReferenceExample {
-    
-    public static void main(String[] args) {
-        // 创建弱引用
-        WeakReference<Object> weakRef = new WeakReference<>(new Object());
-        
-        // 获取弱引用指向的对象
-        Object obj = weakRef.get();
-        System.out.println("Object before GC: " + (obj != null));
-        
-        // 触发垃圾回收
-        System.gc();
-        
-        // 检查弱引用是否被回收
-        obj = weakRef.get();
-        System.out.println("Object after GC: " + (obj != null));
-    }
-    
-    // 弱引用的应用场景：WeakHashMap
-    public void weakHashMapExample() {
-        WeakHashMap<Object, String> weakMap = new WeakHashMap<>();
-        
-        Object key = new Object();
-        weakMap.put(key, "value");
-        
-        System.out.println("Map size before GC: " + weakMap.size());
-        
-        key = null;  // 移除强引用
-        System.gc();
-        
-        System.out.println("Map size after GC: " + weakMap.size());
-    }
-    
-    // ThreadLocal中的弱引用应用
-    public class ThreadLocalExample {
-        private ThreadLocal<String> threadLocal = new ThreadLocal<>();
-        
-        public void setValue(String value) {
-            threadLocal.set(value);
-        }
-        
-        public String getValue() {
-            return threadLocal.get();
-        }
-        
-        public void remove() {
-            threadLocal.remove();  // 防止内存泄漏
-        }
-    }
-}
-```
-
-### 4.5 虚引用（Phantom Reference）
-
-最弱的引用关系，几乎不对对象的生存时间构成影响，也无法通过虚引用获取对象实例。
-
-```java title="虚引用示例"
-public class PhantomReferenceExample {
-    
-    public static void main(String[] args) {
-        // 创建引用队列
-        ReferenceQueue<Object> queue = new ReferenceQueue<>();
-        
-        // 创建虚引用
-        PhantomReference<Object> phantomRef = new PhantomReference<>(new Object(), queue);
-        
-        // 虚引用无法获取对象实例
-        Object obj = phantomRef.get();
-        System.out.println("Phantom reference get: " + obj);  // null
-        
-        // 启动监控线程
-        Thread monitorThread = new Thread(() -> {
-            try {
-                Reference<?> ref = queue.remove();
-                System.out.println("Object was garbage collected");
-            } catch (InterruptedException e) {
-                e.printStackTrace();
-            }
-        });
-        monitorThread.start();
-        
-        // 触发垃圾回收
-        System.gc();
-    }
-    
-    // 虚引用的应用场景：DirectByteBuffer回收
-    public class DirectByteBufferExample {
-        private ByteBuffer buffer;
-        private PhantomReference<ByteBuffer> phantomRef;
-        private ReferenceQueue<ByteBuffer> queue = new ReferenceQueue<>();
-        
-        public DirectByteBufferExample() {
-            // 分配直接内存
-            buffer = ByteBuffer.allocateDirect(1024 * 1024);
-            
-            // 创建虚引用监控回收
-            phantomRef = new PhantomReference<>(buffer, queue);
-            
-            // 启动监控线程
-            startMonitorThread();
-        }
-        
-        private void startMonitorThread() {
-            Thread monitor = new Thread(() -> {
-                try {
-                    while (true) {
-                        Reference<?> ref = queue.remove();
-                        if (ref == phantomRef) {
-                            System.out.println("DirectByteBuffer was garbage collected");
-                            // 可以在这里执行一些清理工作
-                        }
-                    }
-                } catch (InterruptedException e) {
-                    e.printStackTrace();
-                }
-            });
-            monitor.setDaemon(true);
-            monitor.start();
-        }
-        
-        public void release() {
-            buffer = null;  // 移除强引用
-            System.gc();    // 触发垃圾回收
-        }
     }
 }
 ```

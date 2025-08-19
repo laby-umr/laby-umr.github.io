@@ -6,7 +6,12 @@ authors: [Laby]
 last_update:
   date: 2025-08-07
   author: Laby
+tags: [微服务, 配置中心, Spring Cloud Config, Nacos, Apollo]
 ---
+
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+import CodeBlock from '@theme/CodeBlock';
 
 # 配置中心详解
 
@@ -15,6 +20,129 @@ last_update:
 :::tip 核心价值
 配置中心 = 集中管理 + 动态刷新 + 多环境隔离 + 灰度发布 + 安全审计
 :::
+
+## 配置中心架构
+
+```mermaid
+graph TB
+    subgraph "配置管理层"
+        ConfigUI[配置管理界面]
+        ConfigAPI[配置管理API]
+    end
+    
+    subgraph "配置存储层"
+        Git[(Git仓库)]
+        DB[(数据库)]
+        File[(文件系统)]
+    end
+    
+    subgraph "配置服务层"
+        ConfigServer1[Config Server 1]
+        ConfigServer2[Config Server 2]
+        ConfigServer3[Config Server 3]
+    end
+    
+    subgraph "微服务集群"
+        Service1[用户服务]
+        Service2[订单服务]
+        Service3[支付服务]
+    end
+    
+    subgraph "配置推送"
+        MQ[消息队列]
+        WebHook[WebHook]
+    end
+    
+    ConfigUI --> ConfigAPI
+    ConfigAPI --> Git
+    ConfigAPI --> DB
+    
+    ConfigServer1 --> Git
+    ConfigServer2 --> Git
+    ConfigServer3 --> Git
+    
+    Service1 --> ConfigServer1
+    Service2 --> ConfigServer2
+    Service3 --> ConfigServer3
+    
+    ConfigAPI --> MQ
+    MQ --> Service1
+    MQ --> Service2
+    MQ --> Service3
+```
+
+## 配置中心方案对比
+
+<Tabs>
+<TabItem value="spring-cloud-config" label="Spring Cloud Config">
+
+```yaml
+# Config Server配置
+spring:
+  application:
+    name: config-server
+  cloud:
+    config:
+      server:
+        git:
+          uri: https://github.com/your-org/config-repo
+          username: your-username
+          password: your-password
+          search-paths: config
+          default-label: main
+          clone-on-start: true
+```
+
+**特点**：
+- ✅ Spring生态集成度高
+- ✅ 支持Git、SVN等多种存储
+- ✅ 支持配置加密
+- ❌ 功能相对简单
+- ❌ 界面管理能力弱
+
+</TabItem>
+<TabItem value="nacos" label="Nacos">
+
+```yaml
+# Nacos配置
+spring:
+  cloud:
+    nacos:
+      config:
+        server-addr: localhost:8848
+        file-extension: yaml
+        group: DEFAULT_GROUP
+        namespace: public
+        refresh-enabled: true
+```
+
+**特点**：
+- ✅ 功能全面，支持配置和服务发现
+- ✅ 界面友好，操作简单
+- ✅ 支持多环境、多租户
+- ✅ 中文文档丰富
+- ❌ 相对较新，生态不如Spring
+
+</TabItem>
+<TabItem value="apollo" label="Apollo">
+
+```properties
+# Apollo配置
+app.id=user-service
+apollo.meta=http://localhost:8080
+apollo.bootstrap.enabled=true
+apollo.bootstrap.namespaces=application,user-service
+```
+
+**特点**：
+- ✅ 功能强大，企业级特性丰富
+- ✅ 支持灰度发布
+- ✅ 权限管理完善
+- ✅ 监控和审计功能强
+- ❌ 部署复杂，学习成本高
+
+</TabItem>
+</Tabs>
 
 ## 1. 配置中心基础概念
 

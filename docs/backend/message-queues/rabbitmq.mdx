@@ -67,8 +67,8 @@ graph TB
 | **Binding** | 绑定关系 | 连接交换机和队列 | 路由规则定义 |
 | **Virtual Host** | 虚拟主机 | 逻辑隔离 | 多租户、环境隔离 |
 | **Channel** | 信道 | 轻量级连接 | 并发处理、资源复用 |
-#
-## 1.2 RabbitMQ应用场景对比
+
+### 1.2 RabbitMQ应用场景对比
 
 | 应用场景 | 传统方案 | RabbitMQ方案 | 核心优势 | 适用规模 |
 |---------|---------|-------------|----------|---------|
@@ -76,9 +76,8 @@ graph TB
 | **服务解耦** | 直接调用 | 事件驱动 | 降低耦合度 | 微服务架构 |
 | **流量削峰** | 限流熔断 | 队列缓冲 | 平滑处理突发流量 | 电商秒杀 |
 | **数据分发** | 点对点推送 | 发布订阅 | 一对多广播 | 消息通知 |
-| **任务调度** | 定时任务 | 延迟队列 | 灵活的任务调度 | 业务流程 |
-
-## 2. 交换机类型深度解析
+| **任务调度** | 定时任务 | 延迟队列 | 灵活的任务调度 | 业务流程 |## 2
+. 交换机类型深度解析
 
 ### 2.1 Direct Exchange - 精确路由
 
@@ -476,344 +475,130 @@ public class FanoutExchangeService {
 </TabItem>
 </Tabs>
 
-## 3. 消息可靠性保障机制
+### 2.4 Headers Exchange - 属性路由
 
-### 3.1 消息确认机制
-
-RabbitMQ提供了完善的消息确认机制，确保消息的可靠传递。
+Headers Exchange根据消息头部属性进行路由，提供最灵活的路由机制。
 
 <Tabs>
-<TabItem value="producer-confirm" label="生产者确认">
+<TabItem value="concept" label="工作原理">
 
-```java title="生产者确认机制"
-@Configuration
-public class ProducerConfirmConfig {
+```mermaid
+graph TB
+    P[Producer] --> E[Headers Exchange]
     
-    @Bean
-    public RabbitTemplate rabbitTemplate(ConnectionFactory connectionFactory) {
-        RabbitTemplate template = new RabbitTemplate(connectionFactory);
-        
-        // 开启生产者确认
-        template.setConfirmCallback((correlationData, ack, cause) -> {
-            if (ack) {
-                log.info("消息发送成功: {}", correlationData);
-            } else {
-                log.error("消息发送失败: {}, 原因: {}", correlationData, cause);
-                // 重试或记录失败消息
-            }
-        });
-        
-        // 开启消息返回
-        template.setReturnsCallback(returned -> {
-            log.error("消息被退回: {}, 退回原因: {}", 
-                returned.getMessage(), returned.getReplyText());
-            // 处理被退回的消息
-        });
-        
-        return template;
-    }
-}
+    E -->|x-match: all<br/>type: order<br/>priority: high| Q1[High Priority Order Queue]
+    E -->|x-match: any<br/>type: notification<br/>channel: email| Q2[Email Notification Queue]
+    E -->|x-match: any<br/>type: notification<br/>channel: sms| Q3[SMS Notification Queue]
+    
+    Q1 --> C1[High Priority Processor]
+    Q2 --> C2[Email Service]
+    Q3 --> C3[SMS Service]
 ```
 
-</TabItem>
-<TabItem value="consumer-ack" label="消费者确认">
+**匹配规则**：
+- `x-match: all`：所有指定的头部属性都必须匹配
+- `x-match: any`：任意一个指定的头部属性匹配即可
+- 支持复杂的属性组合匹配
 
-```java title="消费者确认机制"
+</TabItem>
+<TabItem value="java-impl" label="Java实现">
+
+```java title="Headers Exchange实现"
 @Component
-public class ReliableConsumer {
+public class HeadersExchangeService {
     
-    /**
-     * 手动确认消费
-     */
-    @RabbitListener(
-        queues = "reliable.queue",
-        ackMode = "MANUAL"  // 手动确认模式
-    )
-    public void handleMessage(
-        @Payload String message,
-        Channel channel,
-        @Header(AmqpHeaders.DELIVERY_TAG) long deliveryTag
-    ) {
-        try {
-            // 业务处理
-            processMessage(message);
+    private static final String EXCHANGE_NAME = "headers.exchange";
+    
+    @Configuration
+    public static class HeadersExchangeConfig {
+        
+        @Bean
+        public HeadersExchange headersExchange() {
+            return ExchangeBuilder.headersExchange(EXCHANGE_NAME)
+                .durable(true)
+                .build();
+        }
+        
+        @Bean
+        public Queue highPriorityQueue() {
+            return QueueBuilder.durable("high.priority.queue").build();
+        }
+        
+        @Bean
+        public Queue emailQueue() {
+            return QueueBuilder.durable("email.queue").build();
+        }
+        
+        // 绑定高优先级队列 - 需要同时匹配type=order和priority=high
+        @Bean
+        public Binding highPriorityBinding() {
+            Map<String, Object> headers = new HashMap<>();
+            headers.put("x-match", "all");
+            headers.put("type", "order");
+            headers.put("priority", "high");
             
-            // 手动确认消息
-            channel.basicAck(deliveryTag, false);
-            log.info("消息处理成功: {}", message);
+            return BindingBuilder.bind(highPriorityQueue())
+                .to(headersExchange()).whereAll(headers).match();
+        }
+        
+        // 绑定邮件队列 - 匹配type=notification或channel=email
+        @Bean
+        public Binding emailBinding() {
+            Map<String, Object> headers = new HashMap<>();
+            headers.put("x-match", "any");
+            headers.put("type", "notification");
+            headers.put("channel", "email");
             
-        } catch (BusinessException e) {
-            // 业务异常，拒绝消息但不重新入队
-            try {
-                channel.basicNack(deliveryTag, false, false);
-                log.error("业务处理失败，消息被拒绝: {}", message, e);
-            } catch (IOException ioException) {
-                log.error("消息确认失败", ioException);
-            }
-            
-        } catch (Exception e) {
-            // 系统异常，拒绝消息并重新入队
-            try {
-                channel.basicNack(deliveryTag, false, true);
-                log.error("系统异常，消息重新入队: {}", message, e);
-            } catch (IOException ioException) {
-                log.error("消息确认失败", ioException);
-            }
+            return BindingBuilder.bind(emailQueue())
+                .to(headersExchange()).whereAny(headers).match();
         }
     }
     
-    private void processMessage(String message) {
-        // 模拟业务处理
-        if (message.contains("error")) {
-            throw new BusinessException("业务处理失败");
+    /**
+     * 发送带头部属性的消息
+     */
+    public void sendMessageWithHeaders(Object message, Map<String, Object> headers) {
+        MessageProperties properties = new MessageProperties();
+        
+        // 设置头部属性
+        for (Map.Entry<String, Object> entry : headers.entrySet()) {
+            properties.setHeader(entry.getKey(), entry.getValue());
         }
-        // 正常业务逻辑
+        
+        Message rabbitMessage = new Message(
+            rabbitTemplate.getMessageConverter().toMessage(message, properties).getBody(),
+            properties
+        );
+        
+        rabbitTemplate.send(EXCHANGE_NAME, "", rabbitMessage);
+        log.info("Headers消息发送成功，头部: {}", headers);
+    }
+    
+    /**
+     * 发送高优先级订单消息
+     */
+    public void sendHighPriorityOrder(OrderEvent event) {
+        Map<String, Object> headers = new HashMap<>();
+        headers.put("type", "order");
+        headers.put("priority", "high");
+        headers.put("source", "web");
+        
+        sendMessageWithHeaders(event, headers);
+    }
+    
+    /**
+     * 发送邮件通知消息
+     */
+    public void sendEmailNotification(NotificationEvent event) {
+        Map<String, Object> headers = new HashMap<>();
+        headers.put("type", "notification");
+        headers.put("channel", "email");
+        headers.put("urgent", false);
+        
+        sendMessageWithHeaders(event, headers);
     }
 }
 ```
 
 </TabItem>
 </Tabs>
-
-## 4. 高可用集群架构
-
-### 4.1 集群部署模式
-
-<Tabs>
-<TabItem value="cluster-types" label="集群类型">
-
-| 集群类型 | 数据复制 | 可用性 | 性能 | 适用场景 |
-|---------|---------|--------|------|----------|
-| **普通集群** | 元数据复制 | 中等 | 高 | 开发测试环境 |
-| **镜像队列** | 完整数据复制 | 高 | 中等 | 生产环境 |
-| **仲裁队列** | Raft协议复制 | 最高 | 中等 | 关键业务 |
-
-</TabItem>
-<TabItem value="cluster-setup" label="集群搭建">
-
-```bash title="RabbitMQ集群搭建"
-# 1. 节点配置 (rabbitmq.conf)
-cluster_formation.peer_discovery_backend = rabbit_peer_discovery_classic_config
-cluster_formation.classic_config.nodes.1 = rabbit@node1
-cluster_formation.classic_config.nodes.2 = rabbit@node2  
-cluster_formation.classic_config.nodes.3 = rabbit@node3
-
-# 2. 启动集群
-sudo systemctl start rabbitmq-server
-
-# 3. 加入集群 (在node2和node3上执行)
-sudo rabbitmqctl stop_app
-sudo rabbitmqctl reset
-sudo rabbitmqctl join_cluster rabbit@node1
-sudo rabbitmqctl start_app
-
-# 4. 查看集群状态
-sudo rabbitmqctl cluster_status
-
-# 5. 设置镜像队列策略
-sudo rabbitmqctl set_policy ha-all "^ha\." \
-  '{"ha-mode":"all","ha-sync-mode":"automatic"}'
-```
-
-</TabItem>
-<TabItem value="ha-config" label="高可用配置">
-
-```java title="高可用配置"
-@Configuration
-public class HighAvailabilityConfig {
-    
-    /**
-     * 镜像队列配置
-     */
-    @Bean
-    public Queue haQueue() {
-        return QueueBuilder.durable("ha.queue")
-            .withArgument("x-ha-policy", "all")  // 镜像到所有节点
-            .withArgument("x-ha-sync-mode", "automatic")  // 自动同步
-            .build();
-    }
-    
-    /**
-     * 仲裁队列配置 (RabbitMQ 3.8+)
-     */
-    @Bean
-    public Queue quorumQueue() {
-        return QueueBuilder.durable("quorum.queue")
-            .quorum()  // 启用仲裁队列
-            .build();
-    }
-    
-    /**
-     * 连接工厂高可用配置
-     */
-    @Bean
-    public ConnectionFactory connectionFactory() {
-        CachingConnectionFactory factory = new CachingConnectionFactory();
-        
-        // 配置多个节点地址
-        factory.setAddresses("node1:5672,node2:5672,node3:5672");
-        factory.setUsername("admin");
-        factory.setPassword("password");
-        factory.setVirtualHost("/");
-        
-        // 连接池配置
-        factory.setConnectionCacheSize(10);
-        factory.setChannelCacheSize(50);
-        
-        // 自动恢复配置
-        factory.getRabbitConnectionFactory().setAutomaticRecoveryEnabled(true);
-        factory.getRabbitConnectionFactory().setNetworkRecoveryInterval(5000);
-        
-        return factory;
-    }
-}
-```
-
-</TabItem>
-</Tabs>
-
-## 5. 性能优化与监控
-
-### 5.1 性能优化策略
-
-<Tabs>
-<TabItem value="optimization" label="优化配置">
-
-```java title="性能优化配置"
-@Configuration
-public class PerformanceConfig {
-    
-    /**
-     * 连接池优化
-     */
-    @Bean
-    public ConnectionFactory optimizedConnectionFactory() {
-        CachingConnectionFactory factory = new CachingConnectionFactory("localhost");
-        
-        // 连接池大小
-        factory.setConnectionCacheSize(25);
-        factory.setChannelCacheSize(250);
-        
-        // 发布者确认
-        factory.setPublisherConfirmType(CachingConnectionFactory.ConfirmType.CORRELATED);
-        factory.setPublisherReturns(true);
-        
-        return factory;
-    }
-    
-    /**
-     * 消费者并发配置
-     */
-    @Bean
-    public SimpleRabbitListenerContainerFactory rabbitListenerContainerFactory(
-            ConnectionFactory connectionFactory) {
-        
-        SimpleRabbitListenerContainerFactory factory = new SimpleRabbitListenerContainerFactory();
-        factory.setConnectionFactory(connectionFactory);
-        
-        // 并发消费者数量
-        factory.setConcurrentConsumers(5);
-        factory.setMaxConcurrentConsumers(20);
-        
-        // 预取数量
-        factory.setPrefetchCount(10);
-        
-        // 确认模式
-        factory.setAcknowledgeMode(AcknowledgeMode.MANUAL);
-        
-        return factory;
-    }
-}
-```
-
-</TabItem>
-<TabItem value="monitoring" label="监控指标">
-
-```java title="监控指标收集"
-@Component
-public class RabbitMQMonitor {
-    
-    @Autowired
-    private RabbitAdmin rabbitAdmin;
-    
-    /**
-     * 队列监控指标
-     */
-    @Scheduled(fixedRate = 30000)  // 每30秒执行一次
-    public void collectQueueMetrics() {
-        Properties queueProperties = rabbitAdmin.getQueueProperties("important.queue");
-        
-        if (queueProperties != null) {
-            int messageCount = (Integer) queueProperties.get("QUEUE_MESSAGE_COUNT");
-            int consumerCount = (Integer) queueProperties.get("QUEUE_CONSUMER_COUNT");
-            
-            // 发送监控指标到监控系统
-            sendMetric("rabbitmq.queue.message_count", messageCount);
-            sendMetric("rabbitmq.queue.consumer_count", consumerCount);
-            
-            // 告警检查
-            if (messageCount > 1000) {
-                sendAlert("队列消息堆积告警", "队列消息数量: " + messageCount);
-            }
-        }
-    }
-    
-    private void sendMetric(String metricName, Object value) {
-        // 发送指标到监控系统 (如Prometheus、InfluxDB等)
-        log.info("监控指标: {} = {}", metricName, value);
-    }
-    
-    private void sendAlert(String title, String message) {
-        // 发送告警通知
-        log.error("告警: {} - {}", title, message);
-    }
-}
-```
-
-</TabItem>
-</Tabs>
-
-## 6. 最佳实践与总结
-
-### 6.1 架构设计最佳实践
-
-**消息设计原则**：
-1. **消息幂等性**：确保重复消费不会产生副作用
-2. **消息版本化**：支持消息格式的向后兼容
-3. **合理的消息大小**：避免过大的消息影响性能
-4. **消息过期时间**：设置合理的TTL避免消息堆积
-
-**队列设计原则**：
-1. **按业务域划分**：不同业务使用不同的队列
-2. **合理的队列长度**：设置最大长度防止内存溢出
-3. **死信队列**：处理失败消息的兜底方案
-4. **优先级队列**：重要消息优先处理
-
-**性能优化建议**：
-1. **连接复用**：使用连接池减少连接开销
-2. **批量操作**：批量发送和消费提高吞吐量
-3. **合理的预取**：平衡内存使用和处理效率
-4. **监控告警**：及时发现和处理性能问题
-
-### 6.2 RabbitMQ vs 其他消息队列
-
-| 特性对比 | RabbitMQ | Kafka | RocketMQ | 适用场景 |
-|---------|----------|-------|----------|----------|
-| **路由灵活性** | ⭐⭐⭐⭐⭐ | ⭐⭐ | ⭐⭐⭐ | 复杂路由需求 |
-| **吞吐量** | ⭐⭐⭐ | ⭐⭐⭐⭐⭐ | ⭐⭐⭐⭐ | 高并发场景 |
-| **延迟** | ⭐⭐⭐⭐ | ⭐⭐⭐ | ⭐⭐⭐⭐ | 低延迟要求 |
-| **可靠性** | ⭐⭐⭐⭐⭐ | ⭐⭐⭐⭐ | ⭐⭐⭐⭐⭐ | 金融交易 |
-| **运维复杂度** | ⭐⭐⭐ | ⭐⭐ | ⭐⭐⭐ | 团队技术水平 |
-| **生态成熟度** | ⭐⭐⭐⭐⭐ | ⭐⭐⭐⭐ | ⭐⭐⭐ | 技术选型 |
-
-:::tip RabbitMQ学习建议
-1. **掌握核心概念**：深入理解AMQP协议和RabbitMQ架构
-2. **实践不同场景**：尝试各种交换机类型和路由模式
-3. **关注可靠性**：重点学习消息确认和持久化机制
-4. **性能调优**：了解性能瓶颈和优化方法
-5. **运维监控**：掌握集群部署和监控告警
-:::
-
----
-
-RabbitMQ作为成熟的企业级消息中间件，在微服务架构中扮演着重要角色。通过合理的架构设计和配置优化，可以构建高可用、高性能的消息系统，为业务提供可靠的异步通信能力。

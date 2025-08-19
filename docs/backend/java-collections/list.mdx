@@ -8,19 +8,89 @@ last_update:
   author: Laby
 ---
 
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
 # Java List 集合详解
 
 List是Java集合框架中最核心的接口之一，它继承自Collection接口，提供了有序、可重复、可索引的集合操作能力。在Java开发中，List集合被广泛应用于各种场景，从简单的数据存储到复杂的业务逻辑处理，都离不开List的支持。
 
 :::tip 核心特性
-List接口 = 有序性 + 可重复性 + 可索引性 + 可修改性 + 批量操作支持
+**List接口 = 有序性 + 可重复性 + 可索引性 + 可修改性 + 批量操作支持**
+- 📋 **有序性**：元素按照插入顺序排列，位置可预测
+- 🔄 **可重复性**：允许添加相同的元素，不强制唯一性
+- 🔢 **可索引性**：支持通过索引快速定位和访问元素（如get(i)）
+- ✏️ **可修改性**：支持在任意位置添加、删除、替换元素
+- 🛠️ **批量操作**：支持子列表视图和整体集合操作
 :::
 
 ## 1. List接口基础概念
 
 ### 1.1 什么是List接口？
 
-List接口是Java集合框架中的核心接口，它继承自Collection接口，为有序集合提供了完整的抽象。List集合具有以下核心特征：
+List接口是Java集合框架中的核心接口，它继承自Collection接口，为有序集合提供了完整的抽象。
+
+```mermaid
+classDiagram
+    Iterable <|-- Collection
+    Collection <|-- List
+    List <|.. ArrayList
+    List <|.. LinkedList
+    List <|.. Vector
+    Vector <|-- Stack
+    
+    class Iterable {
+        +iterator() Iterator
+    }
+    
+    class Collection {
+        +add(E) boolean
+        +remove(Object) boolean
+        +contains(Object) boolean
+        +size() int
+        +isEmpty() boolean
+    }
+    
+    class List {
+        +get(int) E
+        +set(int, E) E
+        +add(int, E) void
+        +remove(int) E
+        +indexOf(Object) int
+        +subList(int, int) List
+    }
+    
+    class ArrayList {
+        -elementData Object[]
+        +ensureCapacity(int) void
+        +trimToSize() void
+    }
+    
+    class LinkedList {
+        -first Node
+        -last Node
+        +addFirst(E) void
+        +addLast(E) void
+    }
+    
+    class Vector {
+        -elementData Object[]
+        -capacityIncrement int
+        +capacity() int
+    }
+    
+    class Stack {
+        +push(E) E
+        +pop() E
+        +peek() E
+    }
+    
+    <<interface>> Iterable
+    <<interface>> Collection
+    <<interface>> List
+```
+
+List集合具有以下核心特征：
 
 - **有序性**：元素按照插入顺序存储，可以通过索引访问
 - **可重复性**：允许存储重复的元素  
@@ -77,7 +147,9 @@ public interface List<E> extends Collection<E> {
 
 List接口提供了丰富的方法来操作有序集合，这些方法可以分为几个主要类别：
 
-#### 基本操作方法
+<Tabs>
+<TabItem value="basic" label="基本操作方法">
+
 ```java title="List基本操作方法"
 public interface List<E> extends Collection<E> {
     
@@ -97,7 +169,15 @@ public interface List<E> extends Collection<E> {
 }
 ```
 
-#### 位置操作方法
+| 方法 | 描述 | 返回值 | 时间复杂度 |
+|------|------|--------|------------|
+| `add(E e)` | 添加元素到末尾 | 成功返回true | O(1)~O(n) |
+| `remove(Object o)` | 删除第一个匹配元素 | 成功返回true | O(n) |
+| `get(int index)` | 获取指定位置元素 | 元素值 | O(1)~O(n) |
+| `set(int index, E element)` | 设置指定位置元素 | 原元素值 | O(1)~O(n) |
+
+</TabItem>
+<TabItem value="positional" label="位置操作方法">
 ```java title="List位置操作方法"
 public interface List<E> extends Collection<E> {
     
@@ -111,7 +191,15 @@ public interface List<E> extends Collection<E> {
 }
 ```
     
-#### 批量操作方法
+| 方法 | 描述 | 返回值 | 时间复杂度 |
+|------|------|--------|------------|
+| `add(int index, E element)` | 在指定位置插入元素 | void | O(n) |
+| `remove(int index)` | 删除指定位置元素 | 被删除的元素 | O(n) |
+| `indexOf(Object o)` | 查找第一次出现位置 | 索引值或-1 | O(n) |
+| `lastIndexOf(Object o)` | 查找最后一次出现位置 | 索引值或-1 | O(n) |
+
+</TabItem>
+<TabItem value="batch" label="批量操作方法">
 ```java title="List批量操作方法"
 public interface List<E> extends Collection<E> {
     
@@ -128,7 +216,16 @@ public interface List<E> extends Collection<E> {
 }
 ```
 
-#### 迭代器方法
+| 方法 | 描述 | 返回值 | 时间复杂度 |
+|------|------|--------|------------|
+| `addAll(Collection<? extends E> c)` | 在末尾批量添加 | 成功返回true | O(n) |
+| `addAll(int index, Collection<? extends E> c)` | 在指定位置批量添加 | 成功返回true | O(n) |
+| `removeAll(Collection<?> c)` | 移除所有包含元素 | 成功返回true | O(n²) |
+| `retainAll(Collection<?> c)` | 仅保留共有元素 | 成功返回true | O(n²) |
+| `subList(int fromIndex, int toIndex)` | 获取子列表视图 | List视图 | O(1) |
+
+</TabItem>
+<TabItem value="iterator" label="迭代器方法">
 ```java title="List迭代器方法"
 public interface List<E> extends Collection<E> {
     
@@ -140,6 +237,23 @@ public interface List<E> extends Collection<E> {
     Iterator<E> iterator();                              // 获取迭代器
 }
 ```
+
+| 方法 | 描述 | 返回值 | 特殊功能 |
+|------|------|--------|----------|
+| `iterator()` | 获取普通迭代器 | Iterator对象 | 单向遍历、remove() |
+| `listIterator()` | 获取列表迭代器 | ListIterator对象 | 双向遍历、添加元素 |
+| `listIterator(int index)` | 从指定位置开始的迭代器 | ListIterator对象 | 从任意位置开始 |
+
+:::info ListIterator特有功能
+ListIterator是List接口的特有迭代器，相比普通Iterator具有更多功能：
+- `hasPrevious()`/`previous()`：支持**双向遍历**
+- `add(E e)`：在当前位置**添加元素**
+- `set(E e)`：**替换**最后返回的元素
+- `nextIndex()`/`previousIndex()`：获取**元素索引**
+:::
+
+</TabItem>
+</Tabs>
 
 ### 1.5 List接口方法分类对比
 
@@ -156,17 +270,54 @@ public interface List<E> extends Collection<E> {
 - 选择实现类时应根据主要操作类型进行权衡
 :::
 
-## 2. ArrayList 实现类详解
+## 2. List 实现类详解
+
+```mermaid
+graph TD
+    subgraph 性能比较
+        A["List实现类"] --> B["ArrayList (随机访问快)"]
+        A --> C["LinkedList (插入删除快)"]
+        A --> D["Vector/Stack (线程安全)"]
+        A --> E["CopyOnWriteArrayList (并发安全)"]
+    end
+    
+    subgraph 时间复杂度
+        B --> B1["随机访问: O(1)"]
+        B --> B2["中间插入/删除: O(n)"]
+        B --> B3["末尾添加: 平均O(1)"]
+        
+        C --> C1["随机访问: O(n)"]
+        C --> C2["中间插入/删除: O(1)"]
+        C --> C3["两端操作: O(1)"]
+        
+        D --> D1["与ArrayList类似"]
+        D --> D2["但有同步开销"]
+        
+        E --> E1["读取: O(1)"]
+        E --> E2["写入: O(n)"]
+        E --> E3["适合读多写少"]
+    end
+    
+    classDef default fill:#f9f9f9,stroke:#333,stroke-width:1px;
+    classDef fast fill:#d1f0d1,stroke:#333,stroke-width:1px;
+    classDef slow fill:#f0d1d1,stroke:#333,stroke-width:1px;
+    
+    class B1,C2,C3 fast;
+    class B2,C1 slow;
+```
+
+<Tabs>
+<TabItem value="arraylist" label="ArrayList 实现">
 
 ### 2.1 ArrayList 概述
 
 :::tip 核心特点
 ArrayList是List接口最常用的实现类，基于动态数组实现，具有以下特点：
-- **动态扩容**：自动调整容量以适应元素数量变化
-- **随机访问**：基于索引的快速访问，时间复杂度O(1)
-- **尾部操作高效**：在列表末尾添加和删除元素效率很高
-- **内存连续**：元素在内存中连续存储，缓存友好
-- **线程不安全**：在多线程环境下需要外部同步
+- 🔄 **动态扩容**：自动调整容量以适应元素数量变化
+- ⚡ **随机访问**：基于索引的快速访问，时间复杂度O(1)
+- 🚀 **尾部操作高效**：在列表末尾添加和删除元素效率很高
+- 📦 **内存连续**：元素在内存中连续存储，缓存友好
+- ⚠️ **线程不安全**：在多线程环境下需要外部同步
 :::
 
 #### 适用场景
@@ -552,17 +703,18 @@ public class ArrayListAdvancedExample {
 }
 ```
 
-## 3. LinkedList 实现类详解
+</TabItem>
+<TabItem value="linkedlist" label="LinkedList 实现">
 
 ### 3.1 LinkedList 概述
 
 :::tip 核心特点
 LinkedList是List接口的另一个重要实现类，基于双向链表实现，具有以下特点：
-- **双向链表**：每个节点都有前后指针，支持双向遍历
-- **插入删除高效**：在任意位置插入删除元素时间复杂度都是O(1)
-- **随机访问慢**：基于索引访问需要遍历链表，时间复杂度O(n)
-- **队列操作**：实现了Deque接口，支持队列和栈操作
-- **内存分散**：元素在内存中分散存储，缓存不友好
+- 🔗 **双向链表**：每个节点都有前后指针，支持双向遍历
+- ⚡ **插入删除高效**：在任意位置插入删除元素时间复杂度都是O(1)
+- 🐢 **随机访问慢**：基于索引访问需要遍历链表，时间复杂度O(n)
+- 🔄 **队列操作**：实现了Deque接口，支持队列和栈操作
+- 📊 **内存分散**：元素在内存中分散存储，缓存不友好
 :::
 
 #### 适用场景
@@ -951,6 +1103,66 @@ public class LinkedListBidirectionalExample {
     }
 }
 ```
+
+</TabItem>
+<TabItem value="vector" label="Vector/Stack 实现">
+
+### 4.1 Vector 概述
+
+:::tip 核心特点
+Vector是最早的List实现，类似ArrayList但线程安全，而Stack继承自Vector并实现LIFO栈功能：
+- 🔒 **线程安全**：所有方法都使用synchronized同步
+- 🚧 **性能较低**：同步机制导致性能开销大
+- 📈 **动态扩容**：默认扩容为原来的两倍
+- 📚 **栈结构**：Stack类提供push/pop等栈操作
+- ⚠️ **过时设计**：现代应用中一般不推荐使用
+:::
+
+#### Vector与ArrayList对比
+
+| 特性 | Vector | ArrayList |
+|------|--------|-----------|
+| **线程安全** | 是 | 否 |
+| **性能** | 较低 | 较高 |
+| **扩容机制** | 默认2倍 | 默认1.5倍 |
+| **适用场景** | 多线程环境（不推荐） | 单线程环境 |
+
+#### Stack使用示例
+
+```java title="Stack使用示例"
+public class StackExample {
+    public static void main(String[] args) {
+        Stack<String> stack = new Stack<>();
+        
+        // 压栈操作
+        stack.push("第一个元素");
+        stack.push("第二个元素");
+        stack.push("第三个元素");
+        
+        // 查看栈顶但不移除
+        System.out.println("栈顶元素: " + stack.peek());
+        
+        // 出栈操作
+        System.out.println("弹出元素: " + stack.pop());
+        System.out.println("弹出后栈顶: " + stack.peek());
+        
+        // 判断是否为空
+        System.out.println("栈是否为空: " + stack.isEmpty());
+        
+        // 查找元素位置
+        System.out.println("第一个元素位置: " + stack.search("第一个元素"));
+    }
+}
+```
+
+:::caution 现代替代方案
+- 使用 `Collections.synchronizedList(new ArrayList<>())` 代替 Vector
+- 使用 `ArrayDeque` 或 `LinkedList` 代替 Stack
+- 需要并发安全时，使用 `CopyOnWriteArrayList` 或 `ConcurrentLinkedDeque`
+:::
+
+</TabItem>
+</Tabs>
 
 ## 4. 实际应用场景
 

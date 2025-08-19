@@ -8,19 +8,58 @@ last_update:
   author: Laby
 ---
 
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+import TOCInline from '@theme/TOCInline';
+
 # Spring 框架总结
 
 Spring框架是Java企业级应用开发的事实标准，它通过IOC、AOP、MVC等核心特性，为开发者提供了完整的应用开发解决方案。
 
+:::info 本文内容概览
+<TOCInline toc={toc} />
+:::
+
 :::tip 核心价值
-Spring = IOC容器 + AOP编程 + MVC框架 + 企业级特性
+**Spring = IOC容器 + AOP编程 + MVC框架 + 企业级特性**
+- 🔄 **IOC容器**：控制反转和依赖注入
+- ✂️ **AOP编程**：面向切面编程
+- 🖥️ **MVC框架**：Web应用开发框架
+- 🛠️ **企业级特性**：事务管理、安全框架、数据访问等
 :::
 
 ## 1. Spring核心特性
 
+```mermaid
+graph TD
+    A[Spring核心特性] --> B[IOC容器]
+    A --> C[AOP编程]
+    A --> D[MVC框架]
+    A --> E[企业级特性]
+    
+    B --> B1[依赖注入]
+    B --> B2[Bean生命周期管理]
+    B --> B3[作用域控制]
+    
+    C --> C1[横切关注点]
+    C --> C2[代理机制]
+    C --> C3[切面定义]
+    
+    D --> D1[请求处理流程]
+    D --> D2[控制器]
+    D --> D3[视图解析]
+    
+    E --> E1[事务管理]
+    E --> E2[数据访问]
+    E --> E3[安全框架]
+```
+
 ### 1.1 控制反转（IOC）
 
 IOC是Spring框架的基础，通过依赖注入实现对象创建和依赖关系的管理。
+
+<div className="card">
+<div className="card__body">
 
 ```java title="IOC示例"
 @Service
@@ -34,15 +73,46 @@ public class UserService {
 }
 ```
 
-**核心优势**：
+</div>
+</div>
+
+<div className="card">
+<div className="card__header">
+<h4>IOC核心优势</h4>
+</div>
+<div className="card__body">
+
 - 降低代码耦合度
 - 提高代码可测试性
 - 简化对象管理
 - 支持配置化开发
 
+</div>
+</div>
+
 ### 1.2 面向切面编程（AOP）
 
 AOP通过横切关注点的模块化，实现日志、事务、安全等功能的统一管理。
+
+```mermaid
+graph LR
+    A[业务代码] --> B[核心功能]
+    
+    C[日志] -.-> A
+    D[事务] -.-> A
+    E[安全] -.-> A
+    F[性能] -.-> A
+    
+    subgraph 横切关注点
+    C
+    D
+    E
+    F
+    end
+```
+
+<div className="card">
+<div className="card__body">
 
 ```java title="AOP示例"
 @Aspect
@@ -58,16 +128,92 @@ public class LoggingAspect {
 }
 ```
 
-**应用场景**：
-- 日志记录
-- 事务管理
-- 权限控制
-- 性能监控
-- 缓存管理
+</div>
+</div>
+
+<Tabs>
+  <TabItem value="logging" label="日志记录" default>
+  ```java
+  @Aspect
+  @Component
+  public class LoggingAspect {
+      @Before("execution(* com.example.service.*.*(..))")
+      public void logBefore(JoinPoint joinPoint) {
+          System.out.println("执行方法: " + joinPoint.getSignature().getName());
+      }
+  }
+  ```
+  </TabItem>
+  <TabItem value="transaction" label="事务管理">
+  ```java
+  @Aspect
+  @Component
+  public class TransactionAspect {
+      @Around("@annotation(org.springframework.transaction.annotation.Transactional)")
+      public Object transactional(ProceedingJoinPoint joinPoint) throws Throwable {
+          try {
+              // 开启事务
+              Object result = joinPoint.proceed();
+              // 提交事务
+              return result;
+          } catch (Exception e) {
+              // 回滚事务
+              throw e;
+          }
+      }
+  }
+  ```
+  </TabItem>
+  <TabItem value="security" label="安全控制">
+  ```java
+  @Aspect
+  @Component
+  public class SecurityAspect {
+      @Before("@annotation(com.example.security.RequiresPermission)")
+      public void checkPermission(JoinPoint joinPoint) {
+          // 权限检查逻辑
+          MethodSignature signature = (MethodSignature) joinPoint.getSignature();
+          RequiresPermission annotation = signature.getMethod().getAnnotation(RequiresPermission.class);
+          String permission = annotation.value();
+          
+          if (!hasPermission(permission)) {
+              throw new AccessDeniedException("No permission: " + permission);
+          }
+      }
+      
+      private boolean hasPermission(String permission) {
+          // 权限验证逻辑
+          return true; // 示例
+      }
+  }
+  ```
+  </TabItem>
+</Tabs>
 
 ### 1.3 Spring MVC
 
 Spring MVC提供了完整的Web应用开发框架，支持RESTful API和传统Web应用开发。
+
+```mermaid
+sequenceDiagram
+    participant Client as 客户端
+    participant DS as DispatcherServlet
+    participant HM as HandlerMapping
+    participant C as Controller
+    participant V as ViewResolver
+    
+    Client->>DS: HTTP请求
+    DS->>HM: 获取处理器
+    HM-->>DS: 返回Controller
+    DS->>C: 调用方法
+    C-->>DS: 返回ModelAndView
+    DS->>V: 解析视图
+    V-->>DS: 返回View
+    DS->>Client: 响应
+```
+
+<div className="card">
+<div className="card__body">
 
 ```java title="Spring MVC示例"
 @RestController
@@ -91,11 +237,31 @@ public class UserController {
 }
 ```
 
+</div>
+</div>
+
 ## 2. Spring Boot特性
 
 ### 2.1 自动配置
 
 Spring Boot通过约定优于配置的理念，自动配置Spring应用。
+
+```mermaid
+graph TD
+    A[Spring Boot应用] --> B["@SpringBootApplication"]
+    B --> C["@EnableAutoConfiguration"]
+    C --> D["AutoConfigurationImportSelector"]
+    D --> E["读取META-INF/spring.factories"]
+    E --> F["条件注解过滤"]
+    F --> G["自动配置生效"]
+    
+    H["classpath依赖"] -.-> F
+    I["属性配置"] -.-> F
+    J["已有Bean"] -.-> F
+```
+
+<div className="card">
+<div className="card__body">
 
 ```java title="自动配置示例"
 @SpringBootApplication
@@ -106,30 +272,74 @@ public class Application {
 }
 ```
 
-**自动配置原理**：
+</div>
+</div>
+
+<div className="card">
+<div className="card__header">
+<h4>自动配置原理</h4>
+</div>
+<div className="card__body">
+
 - 基于classpath中的依赖
 - 使用条件注解控制配置
 - 通过spring.factories注册配置类
+- 允许通过配置属性覆盖默认行为
+
+</div>
+</div>
 
 ### 2.2 起步依赖
 
 起步依赖简化了Maven/Gradle的依赖管理。
 
-```xml title="起步依赖示例"
-<dependency>
-    <groupId>org.springframework.boot</groupId>
-    <artifactId>spring-boot-starter-web</artifactId>
-</dependency>
-
-<dependency>
-    <groupId>org.springframework.boot</groupId>
-    <artifactId>spring-boot-starter-data-jpa</artifactId>
-</dependency>
-```
+<Tabs>
+  <TabItem value="web" label="Web应用" default>
+  ```xml
+  <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-web</artifactId>
+  </dependency>
+  ```
+  </TabItem>
+  <TabItem value="data" label="数据访问">
+  ```xml
+  <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-data-jpa</artifactId>
+  </dependency>
+  ```
+  </TabItem>
+  <TabItem value="security" label="安全框架">
+  ```xml
+  <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-security</artifactId>
+  </dependency>
+  ```
+  </TabItem>
+</Tabs>
 
 ### 2.3 内嵌服务器
 
 Spring Boot支持内嵌Tomcat、Jetty、Undertow等服务器。
+
+```mermaid
+graph LR
+    A[Spring Boot] --> B[内嵌服务器]
+    B --> C[Tomcat]
+    B --> D[Jetty]
+    B --> E[Undertow]
+    B --> F[Netty]
+    
+    C --> C1["默认服务器"]
+    D --> D1["轻量级服务器"]
+    E --> E1["高性能服务器"]
+    F --> F1["异步服务器"]
+```
+
+<div className="card">
+<div className="card__body">
 
 ```java title="内嵌服务器配置"
 @Configuration
@@ -142,28 +352,73 @@ public class ServerConfig {
 }
 ```
 
+</div>
+</div>
+
 ## 3. Spring最佳实践
 
 ### 3.1 配置管理
 
-```yaml title="配置管理示例"
-spring:
-  profiles:
-    active: dev
+<Tabs>
+  <TabItem value="yaml" label="YAML配置" default>
+  ```yaml title="配置管理示例"
+  spring:
+    profiles:
+      active: dev
+    
+    datasource:
+      url: ${DATABASE_URL:jdbc:mysql://localhost:3306/test}
+      username: ${DATABASE_USERNAME:root}
+      password: ${DATABASE_PASSWORD:password}
   
-  datasource:
-    url: ${DATABASE_URL:jdbc:mysql://localhost:3306/test}
-    username: ${DATABASE_USERNAME:root}
-    password: ${DATABASE_PASSWORD:password}
-
-logging:
-  level:
-    com.example: DEBUG
-  pattern:
-    console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
-```
+  logging:
+    level:
+      com.example: DEBUG
+    pattern:
+      console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
+  ```
+  </TabItem>
+  <TabItem value="profile" label="多环境配置">
+  ```yaml title="多环境配置"
+  # application-dev.yml
+  spring:
+    datasource:
+      url: jdbc:mysql://localhost:3306/dev_db
+      username: dev_user
+      password: dev_pass
+  
+  logging:
+    level:
+      com.example: DEBUG
+  
+  # application-prod.yml
+  spring:
+    datasource:
+      url: jdbc:mysql://prod-server:3306/prod_db
+      username: prod_user
+      password: prod_pass
+  
+  logging:
+    level:
+      com.example: INFO
+  ```
+  </TabItem>
+</Tabs>
 
 ### 3.2 异常处理
+
+Spring提供了全局异常处理机制，可以统一处理应用中的异常：
+
+```mermaid
+graph TD
+    A[客户端请求] --> B[控制器方法]
+    B -- 抛出异常 --> C["@ExceptionHandler方法"]
+    C --> D["错误响应"]
+    D --> A
+```
+
+<div className="card">
+<div className="card__body">
 
 ```java title="全局异常处理"
 @ControllerAdvice
@@ -180,36 +435,102 @@ public class GlobalExceptionHandler {
 }
 ```
 
+</div>
+</div>
+
 ### 3.3 数据验证
 
-```java title="数据验证示例"
-@RestController
-public class UserController {
-    
-    @PostMapping("/users")
-    public ResponseEntity<User> createUser(@Valid @RequestBody User user, BindingResult result) {
-        if (result.hasErrors()) {
-            return ResponseEntity.badRequest().build();
-        }
-        
-        User savedUser = userService.save(user);
-        return ResponseEntity.ok(savedUser);
-    }
-}
-
-public class User {
-    @NotNull(message = "用户名不能为空")
-    @Size(min = 2, max = 20, message = "用户名长度必须在2-20之间")
-    private String name;
-    
-    @Email(message = "邮箱格式不正确")
-    private String email;
-}
-```
+<Tabs>
+  <TabItem value="validation" label="Bean验证" default>
+  ```java title="数据验证示例"
+  @RestController
+  public class UserController {
+      
+      @PostMapping("/users")
+      public ResponseEntity<User> createUser(@Valid @RequestBody User user, BindingResult result) {
+          if (result.hasErrors()) {
+              return ResponseEntity.badRequest().build();
+          }
+          
+          User savedUser = userService.save(user);
+          return ResponseEntity.ok(savedUser);
+      }
+  }
+  
+  public class User {
+      @NotNull(message = "用户名不能为空")
+      @Size(min = 2, max = 20, message = "用户名长度必须在2-20之间")
+      private String name;
+      
+      @Email(message = "邮箱格式不正确")
+      private String email;
+  }
+  ```
+  </TabItem>
+  <TabItem value="custom" label="自定义验证">
+  ```java title="自定义验证注解"
+  @Documented
+  @Constraint(validatedBy = PhoneValidator.class)
+  @Target({ElementType.FIELD})
+  @Retention(RetentionPolicy.RUNTIME)
+  public @interface Phone {
+      String message() default "手机号格式不正确";
+      Class<?>[] groups() default {};
+      Class<? extends Payload>[] payload() default {};
+  }
+  
+  public class PhoneValidator implements ConstraintValidator<Phone, String> {
+      @Override
+      public boolean isValid(String value, ConstraintValidatorContext context) {
+          if (value == null) {
+              return true;
+          }
+          return value.matches("^1[3-9]\\d{9}$");
+      }
+  }
+  
+  public class User {
+      @Phone
+      private String phoneNumber;
+  }
+  ```
+  </TabItem>
+</Tabs>
 
 ## 4. Spring生态系统
 
+```mermaid
+mindmap
+  root((Spring生态))
+    核心模块
+      Spring Core
+      Spring AOP
+      Spring MVC
+      Spring Test
+    数据访问
+      Spring Data JPA
+      Spring Data Redis
+      Spring JDBC
+      Spring MongoDB
+    企业服务
+      Spring Security
+      Spring Integration
+      Spring Batch
+      Spring Session
+    云原生
+      Spring Boot
+      Spring Cloud
+      Spring Cloud Data Flow
+    其他模块
+      Spring WebFlux
+      Spring AMQP
+      Spring Kafka
+```
+
 ### 4.1 核心模块
+
+<div className="card">
+<div className="card__body">
 
 | 模块 | 功能 | 说明 |
 |------|------|------|
@@ -220,50 +541,73 @@ public class User {
 | **Spring Security** | 安全框架 | 提供认证和授权功能 |
 | **Spring Boot** | 快速开发 | 简化Spring应用开发 |
 
+</div>
+</div>
+
 ### 4.2 集成技术
 
-```java title="Spring集成示例"
-// Spring Data JPA
-@Repository
-public interface UserRepository extends JpaRepository<User, Long> {
-    List<User> findByName(String name);
-    Optional<User> findByEmail(String email);
-}
-
-// Spring Security
-@Configuration
-@EnableWebSecurity
-public class SecurityConfig extends WebSecurityConfigurerAdapter {
-    
-    @Override
-    protected void configure(HttpSecurity http) throws Exception {
-        http.authorizeRequests()
-            .antMatchers("/public/**").permitAll()
-            .anyRequest().authenticated()
-            .and()
-            .formLogin();
-    }
-}
-
-// Spring Cache
-@Service
-public class UserService {
-    
-    @Cacheable("users")
-    public User findById(Long id) {
-        return userRepository.findById(id).orElse(null);
-    }
-    
-    @CacheEvict("users")
-    public void deleteUser(Long id) {
-        userRepository.deleteById(id);
-    }
-}
-```
+<Tabs>
+  <TabItem value="jpa" label="Spring Data JPA" default>
+  ```java title="Spring Data JPA"
+  @Repository
+  public interface UserRepository extends JpaRepository<User, Long> {
+      List<User> findByName(String name);
+      Optional<User> findByEmail(String email);
+  }
+  ```
+  </TabItem>
+  <TabItem value="security" label="Spring Security">
+  ```java title="Spring Security"
+  @Configuration
+  @EnableWebSecurity
+  public class SecurityConfig extends WebSecurityConfigurerAdapter {
+      
+      @Override
+      protected void configure(HttpSecurity http) throws Exception {
+          http.authorizeRequests()
+              .antMatchers("/public/**").permitAll()
+              .anyRequest().authenticated()
+              .and()
+              .formLogin();
+      }
+  }
+  ```
+  </TabItem>
+  <TabItem value="cache" label="Spring Cache">
+  ```java title="Spring Cache"
+  @Service
+  public class UserService {
+      
+      @Cacheable("users")
+      public User findById(Long id) {
+          return userRepository.findById(id).orElse(null);
+      }
+      
+      @CacheEvict("users")
+      public void deleteUser(Long id) {
+          userRepository.deleteById(id);
+      }
+  }
+  ```
+  </TabItem>
+</Tabs>
 
 ## 5. 性能优化
 
 ### 5.1 缓存策略
+
+```mermaid
+graph TD
+    A[数据请求] --> B{缓存中是否存在?}
+    B -- 是 --> C[从缓存获取]
+    B -- 否 --> D[从数据库获取]
+    D --> E[存入缓存]
+    C --> F[返回数据]
+    E --> F
+```
+
+<div className="card">
+<div className="card__body">
 
 ```java title="缓存配置"
 @Configuration
@@ -287,70 +631,123 @@ public class CacheConfig {
 }
 ```
 
+</div>
+</div>
+
 ### 5.2 异步处理
 
-```java title="异步配置"
-@Configuration
-@EnableAsync
-public class AsyncConfig implements AsyncConfigurer {
-    
-    @Override
-    public Executor getAsyncExecutor() {
-        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
-        executor.setCorePoolSize(10);
-        executor.setMaxPoolSize(50);
-        executor.setQueueCapacity(100);
-        executor.setThreadNamePrefix("Async-");
-        executor.initialize();
-        return executor;
-    }
-}
-
-@Service
-public class EmailService {
-    
-    @Async
-    public CompletableFuture<String> sendEmail(String to, String subject, String content) {
-        // 发送邮件逻辑
-        return CompletableFuture.completedFuture("邮件发送成功");
-    }
-}
-```
+<Tabs>
+  <TabItem value="config" label="异步配置" default>
+  ```java title="异步配置"
+  @Configuration
+  @EnableAsync
+  public class AsyncConfig implements AsyncConfigurer {
+      
+      @Override
+      public Executor getAsyncExecutor() {
+          ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+          executor.setCorePoolSize(10);
+          executor.setMaxPoolSize(50);
+          executor.setQueueCapacity(100);
+          executor.setThreadNamePrefix("Async-");
+          executor.initialize();
+          return executor;
+      }
+  }
+  ```
+  </TabItem>
+  <TabItem value="service" label="异步服务">
+  ```java title="异步服务"
+  @Service
+  public class EmailService {
+      
+      @Async
+      public CompletableFuture<String> sendEmail(String to, String subject, String content) {
+          // 发送邮件逻辑
+          return CompletableFuture.completedFuture("邮件发送成功");
+      }
+  }
+  
+  @Service
+  public class NotificationService {
+      
+      @Autowired
+      private EmailService emailService;
+      
+      public void notifyUsers(List<User> users, String message) {
+          List<CompletableFuture<String>> futures = new ArrayList<>();
+          
+          for (User user : users) {
+              futures.add(emailService.sendEmail(user.getEmail(), "通知", message));
+          }
+          
+          // 等待所有邮件发送完成
+          CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
+      }
+  }
+  ```
+  </TabItem>
+</Tabs>
 
 ## 6. 监控与管理
 
 ### 6.1 Spring Boot Actuator
 
-```yaml title="Actuator配置"
-management:
-  endpoints:
-    web:
-      exposure:
-        include: health,info,metrics,env
-      base-path: /actuator
-  endpoint:
-    health:
-      show-details: always
+Actuator提供了监控和管理Spring应用的功能，包括健康检查、指标收集等。
+
+```mermaid
+graph LR
+    A[Spring Boot Actuator] --> B[健康检查]
+    A --> C[指标监控]
+    A --> D[环境信息]
+    A --> E[线程信息]
+    A --> F[日志管理]
+    
+    B --> B1["/actuator/health"]
+    C --> C1["/actuator/metrics"]
+    D --> D1["/actuator/env"]
+    E --> E1["/actuator/threaddump"]
+    F --> F1["/actuator/loggers"]
 ```
 
-```java title="自定义健康检查"
-@Component
-public class CustomHealthIndicator implements HealthIndicator {
-    
-    @Override
-    public Health health() {
-        try {
-            // 检查外部服务
-            checkExternalService();
-            return Health.up().withDetail("external-service", "UP").build();
-        } catch (Exception e) {
-            return Health.down().withDetail("error", e.getMessage()).build();
-        }
-    }
-}
-```
+<Tabs>
+  <TabItem value="config" label="Actuator配置" default>
+  ```yaml title="Actuator配置"
+  management:
+    endpoints:
+      web:
+        exposure:
+          include: health,info,metrics,env
+        base-path: /actuator
+    endpoint:
+      health:
+        show-details: always
+  ```
+  </TabItem>
+  <TabItem value="health" label="自定义健康检查">
+  ```java title="自定义健康检查"
+  @Component
+  public class CustomHealthIndicator implements HealthIndicator {
+      
+      @Override
+      public Health health() {
+          try {
+              // 检查外部服务
+              checkExternalService();
+              return Health.up().withDetail("external-service", "UP").build();
+          } catch (Exception e) {
+              return Health.down().withDetail("error", e.getMessage()).build();
+          }
+      }
+  }
+  ```
+  </TabItem>
+</Tabs>
 
 ### 6.2 性能监控
+
+<div className="card">
+<div className="card__body">
 
 ```java title="性能监控切面"
 @Aspect
@@ -384,65 +781,149 @@ public class PerformanceMonitorAspect {
 }
 ```
 
+</div>
+</div>
+
 ## 7. 面试题总结
 
 ### 7.1 核心概念
 
-**Q: Spring框架的核心特性有哪些？**
-
-A: Spring框架的核心特性包括：
-- **IOC（控制反转）**：管理对象的创建和依赖关系
-- **AOP（面向切面编程）**：处理横切关注点
-- **MVC（模型视图控制器）**：Web应用开发框架
-- **事务管理**：声明式和编程式事务
-- **数据访问**：简化数据库操作
-
-**Q: Spring Boot的优势是什么？**
-
-A: Spring Boot的优势包括：
-- **自动配置**：根据依赖自动配置Spring应用
-- **起步依赖**：简化Maven/Gradle配置
-- **内嵌服务器**：无需部署到外部服务器
-- **生产就绪**：提供监控、健康检查等特性
-- **快速开发**：减少样板代码
+<Tabs>
+  <TabItem value="q1" label="Spring核心特性" default>
+  <div className="card">
+  <div className="card__header">
+  <h4>Q: Spring框架的核心特性有哪些？</h4>
+  </div>
+  <div className="card__body">
+  <p><strong>A:</strong> Spring框架的核心特性包括：</p>
+  <ul>
+  <li><strong>IOC（控制反转）</strong>：管理对象的创建和依赖关系</li>
+  <li><strong>AOP（面向切面编程）</strong>：处理横切关注点</li>
+  <li><strong>MVC（模型视图控制器）</strong>：Web应用开发框架</li>
+  <li><strong>事务管理</strong>：声明式和编程式事务</li>
+  <li><strong>数据访问</strong>：简化数据库操作</li>
+  </ul>
+  </div>
+  </div>
+  </TabItem>
+  <TabItem value="q2" label="Spring Boot优势">
+  <div className="card">
+  <div className="card__header">
+  <h4>Q: Spring Boot的优势是什么？</h4>
+  </div>
+  <div className="card__body">
+  <p><strong>A:</strong> Spring Boot的优势包括：</p>
+  <ul>
+  <li><strong>自动配置</strong>：根据依赖自动配置Spring应用</li>
+  <li><strong>起步依赖</strong>：简化Maven/Gradle配置</li>
+  <li><strong>内嵌服务器</strong>：无需部署到外部服务器</li>
+  <li><strong>生产就绪</strong>：提供监控、健康检查等特性</li>
+  <li><strong>快速开发</strong>：减少样板代码</li>
+  </ul>
+  </div>
+  </div>
+  </TabItem>
+</Tabs>
 
 ### 7.2 实践应用
 
-**Q: 如何设计一个Spring Boot应用？**
-
-A: 设计Spring Boot应用的步骤：
-1. **确定技术栈**：选择数据库、缓存、消息队列等
-2. **设计架构**：分层架构、微服务架构等
-3. **配置管理**：多环境配置、外部化配置
-4. **异常处理**：全局异常处理、业务异常定义
-5. **监控管理**：健康检查、性能监控、日志管理
-
-**Q: Spring应用如何优化性能？**
-
-A: Spring应用性能优化策略：
-- **缓存优化**：使用Redis、Ehcache等缓存
-- **异步处理**：使用@Async处理耗时操作
-- **连接池优化**：数据库连接池、线程池配置
-- **JVM调优**：堆内存、GC参数优化
-- **代码优化**：避免循环依赖、合理使用AOP
+<Tabs>
+  <TabItem value="q3" label="设计Spring Boot应用" default>
+  <div className="card">
+  <div className="card__header">
+  <h4>Q: 如何设计一个Spring Boot应用？</h4>
+  </div>
+  <div className="card__body">
+  <p><strong>A:</strong> 设计Spring Boot应用的步骤：</p>
+  <ol>
+  <li><strong>确定技术栈</strong>：选择数据库、缓存、消息队列等</li>
+  <li><strong>设计架构</strong>：分层架构、微服务架构等</li>
+  <li><strong>配置管理</strong>：多环境配置、外部化配置</li>
+  <li><strong>异常处理</strong>：全局异常处理、业务异常定义</li>
+  <li><strong>监控管理</strong>：健康检查、性能监控、日志管理</li>
+  </ol>
+  </div>
+  </div>
+  </TabItem>
+  <TabItem value="q4" label="性能优化">
+  <div className="card">
+  <div className="card__header">
+  <h4>Q: Spring应用如何优化性能？</h4>
+  </div>
+  <div className="card__body">
+  <p><strong>A:</strong> Spring应用性能优化策略：</p>
+  <ul>
+  <li><strong>缓存优化</strong>：使用Redis、Ehcache等缓存</li>
+  <li><strong>异步处理</strong>：使用@Async处理耗时操作</li>
+  <li><strong>连接池优化</strong>：数据库连接池、线程池配置</li>
+  <li><strong>JVM调优</strong>：堆内存、GC参数优化</li>
+  <li><strong>代码优化</strong>：避免循环依赖、合理使用AOP</li>
+  </ul>
+  </div>
+  </div>
+  </TabItem>
+</Tabs>
 
 ### 7.3 高级特性
 
-**Q: Spring如何处理循环依赖？**
-
-A: Spring通过三级缓存解决循环依赖：
-- **一级缓存**：完全初始化好的Bean
-- **二级缓存**：早期暴露的Bean
-- **三级缓存**：Bean工厂对象
-- 通过提前暴露Bean引用解决循环依赖
-
-**Q: Spring Boot自动配置的原理是什么？**
-
-A: Spring Boot自动配置原理：
-- 基于classpath中的依赖
-- 使用@ConditionalOnClass等条件注解
-- 通过spring.factories文件注册配置类
-- 根据条件决定是否启用配置
+<Tabs>
+  <TabItem value="q5" label="循环依赖" default>
+  <div className="card">
+  <div className="card__header">
+  <h4>Q: Spring如何处理循环依赖？</h4>
+  </div>
+  <div className="card__body">
+  <p><strong>A:</strong> Spring通过三级缓存解决循环依赖：</p>
+  <ul>
+  <li><strong>一级缓存</strong>：<code>singletonObjects</code> - 完全初始化好的Bean</li>
+  <li><strong>二级缓存</strong>：<code>earlySingletonObjects</code> - 早期暴露的Bean</li>
+  <li><strong>三级缓存</strong>：<code>singletonFactories</code> - Bean工厂对象</li>
+  </ul>
+  <p>解决过程：</p>
+  <ol>
+  <li>创建对象A，实例化但未属性注入</li>
+  <li>将A放入三级缓存</li>
+  <li>属性注入时发现依赖对象B</li>
+  <li>创建对象B，同样放入三级缓存</li>
+  <li>B属性注入时发现依赖A，从三级缓存获取A</li>
+  <li>B完成初始化，放入一级缓存</li>
+  <li>A获得B的引用，完成初始化，放入一级缓存</li>
+  </ol>
+  </div>
+  </div>
+  </TabItem>
+  <TabItem value="q6" label="自动配置原理">
+  <div className="card">
+  <div className="card__header">
+  <h4>Q: Spring Boot自动配置的原理是什么？</h4>
+  </div>
+  <div className="card__body">
+  <p><strong>A:</strong> Spring Boot自动配置原理：</p>
+  <ul>
+  <li>通过<code>@EnableAutoConfiguration</code>注解开启自动配置</li>
+  <li><code>AutoConfigurationImportSelector</code>加载<code>META-INF/spring.factories</code>中的配置类</li>
+  <li>使用<code>@ConditionalOnClass</code>等条件注解判断是否需要加载配置</li>
+  <li>使用<code>@ConditionalOnMissingBean</code>避免覆盖已有配置</li>
+  <li>提供<code>spring.*.properties</code>方式外部化配置</li>
+  </ul>
+  
+  ```java
+@Configuration
+@ConditionalOnClass(DataSource.class)
+@EnableConfigurationProperties(DataSourceProperties.class)
+public class DataSourceAutoConfiguration {
+    
+    @Bean
+    @ConditionalOnMissingBean
+    public DataSource dataSource(DataSourceProperties properties) {
+        return properties.initializeDataSourceBuilder().build();
+    }
+}
+  ```
+  </div>
+  </div>
+  </TabItem>
+</Tabs>
 
 :::tip Spring学习要点
 1. **掌握核心概念**：理解IOC、AOP、MVC等基本概念
@@ -451,6 +932,36 @@ A: Spring Boot自动配置原理：
 4. **学会性能优化**：掌握缓存、异步、监控等技术
 5. **关注生态系统**：了解Spring Data、Security等模块
 :::
+
+```mermaid
+mindmap
+  root((Spring框架))
+    核心特性
+      IOC容器
+      AOP编程
+      MVC框架
+      事务管理
+    Spring Boot
+      自动配置
+      起步依赖
+      内嵌服务器
+      监控管理
+    Spring Cloud
+      服务注册发现
+      API网关
+      熔断降级
+      配置中心
+    最佳实践
+      配置管理
+      异常处理
+      数据验证
+      性能优化
+    企业应用
+      缓存策略
+      异步处理
+      安全框架
+      日志管理
+```
 
 ---
 

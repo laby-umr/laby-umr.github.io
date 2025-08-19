@@ -1,0 +1,1072 @@
+---
+sidebar_position: 4
+title: Angular服务与依赖注入
+description: Angular服务开发实践，包括依赖注入、状态管理与异步数据处理
+authors: [Laby]
+tags: [Angular, 服务, 依赖注入, 状态管理, HTTP]
+last_update:
+  date: 2025-08-15
+  author: Laby
+---
+
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+import CodeBlock from '@theme/CodeBlock';
+
+# Angular服务与依赖注入
+
+Angular服务是一个广泛的类别，包含应用中用于特定目的的任何值、函数或特性。服务是一个类，它可以在应用的各个部分之间共享，通过依赖注入系统提供给需要它的组件。
+
+:::tip 核心价值
+**Angular服务的优势**
+- 🔄 **代码复用**：避免重复逻辑，集中管理共享功能
+- 🧩 **关注点分离**：组件专注于视图，服务专注于数据和业务逻辑
+- 💉 **依赖注入**：松耦合架构，便于测试和维护
+- 📦 **单例模式**：默认单例，便于状态共享和管理
+- 🔌 **可测试性**：便于单元测试，支持模拟依赖
+:::
+
+## 1. 服务基础
+
+### 1.1 创建服务
+
+使用Angular CLI创建服务：
+
+```bash
+ng generate service services/data
+# 或简写形式
+ng g s services/data
+```
+
+一个基本的服务示例：
+
+```typescript title="data.service.ts"
+import { Injectable } from '@angular/core';
+
+@Injectable({
+  providedIn: 'root'  // 应用级单例
+})
+export class DataService {
+  private data: any[] = [];
+  
+  constructor() { }
+  
+  getData(): any[] {
+    return this.data;
+  }
+  
+  addData(item: any): void {
+    this.data.push(item);
+  }
+  
+  clearData(): void {
+    this.data = [];
+  }
+}
+```
+
+### 1.2 依赖注入
+
+Angular的依赖注入(DI)系统是一种设计模式，它允许类接收它们的依赖，而不是自己创建它们。
+
+#### 注入服务
+
+```typescript title="users.component.ts"
+import { Component, OnInit } from '@angular/core';
+import { DataService } from '../services/data.service';
+import { LoggingService } from '../services/logging.service';
+
+@Component({
+  selector: 'app-users',
+  template: `
+    <div *ngFor="let user of users">
+      {{ user.name }}
+    </div>
+    <button (click)="addUser()">添加用户</button>
+  `
+})
+export class UsersComponent implements OnInit {
+  users: any[] = [];
+  
+  constructor(
+    private dataService: DataService,
+    private logger: LoggingService
+  ) {}
+  
+  ngOnInit(): void {
+    this.users = this.dataService.getData();
+    this.logger.log('已加载用户数据');
+  }
+  
+  addUser(): void {
+    const newUser = { id: Date.now(), name: `User ${this.users.length + 1}` };
+    this.dataService.addData(newUser);
+    this.logger.log(`已添加用户: ${newUser.name}`);
+  }
+}
+``` 
+
+### 1.3 提供者和注入层级
+
+Angular的依赖注入系统有多个级别的提供者，按从高到低的优先级排列：
+
+1. **元素注入器**：在组件或指令上指定的提供者
+2. **模块注入器**：在NgModule的providers数组中指定的提供者
+3. **根注入器**：在应用的根模块或使用`providedIn: 'root'`指定的提供者
+
+#### 提供者方式
+
+```typescript title="服务提供方式示例"
+// 1. 在服务装饰器中提供(Angular 6+推荐方式)
+@Injectable({
+  providedIn: 'root' // 在根注入器中提供
+})
+export class GlobalService { }
+
+// 2. 在模块中提供
+@NgModule({
+  providers: [ModuleService]
+})
+export class FeatureModule { }
+
+// 3. 在组件中提供
+@Component({
+  providers: [LocalService]
+})
+export class SomeComponent { }
+
+// 4. 使用工厂函数提供
+@NgModule({
+  providers: [
+    {
+      provide: ConfigService,
+      useFactory: () => {
+        const config = new ConfigService();
+        config.apiUrl = environment.apiUrl;
+        return config;
+      }
+    }
+  ]
+})
+export class AppModule { }
+```
+
+### 1.4 提供者令牌和别名
+
+Angular的DI系统支持使用令牌和别名来更灵活地配置依赖：
+
+```typescript title="服务令牌和别名示例"
+// 使用InjectionToken
+import { InjectionToken } from '@angular/core';
+
+export const API_URL = new InjectionToken<string>('api.url');
+
+@NgModule({
+  providers: [
+    { provide: API_URL, useValue: 'https://api.example.com/v1' }
+  ]
+})
+export class AppModule { }
+
+// 在组件中注入
+@Component({
+  selector: 'app-example',
+  template: `<div>API URL: {{ apiUrl }}</div>`
+})
+export class ExampleComponent {
+  constructor(@Inject(API_URL) public apiUrl: string) { }
+}
+
+// 使用类提供者别名
+@NgModule({
+  providers: [
+    { provide: BaseLogger, useClass: ProductionLogger }
+  ]
+})
+export class AppModule { }
+```
+
+## 2. 高级服务模式
+
+### 2.1 单例服务与有状态服务
+
+默认情况下，Angular服务是单例的，它们可以用于在应用的不同部分之间共享状态：
+
+```typescript title="shared-state.service.ts"
+import { Injectable } from '@angular/core';
+import { BehaviorSubject, Observable } from 'rxjs';
+
+export interface AppState {
+  user: any;
+  theme: string;
+  notifications: any[];
+}
+
+@Injectable({
+  providedIn: 'root'
+})
+export class SharedStateService {
+  // 初始状态
+  private initialState: AppState = {
+    user: null,
+    theme: 'light',
+    notifications: []
+  };
+  
+  // 使用BehaviorSubject存储状态
+  private state$ = new BehaviorSubject<AppState>(this.initialState);
+  
+  // 公开的可观察状态
+  currentState$ = this.state$.asObservable();
+  
+  constructor() { }
+  
+  // 获取当前状态快照
+  get currentState(): AppState {
+    return this.state$.getValue();
+  }
+  
+  // 更新用户
+  updateUser(user: any): void {
+    this.state$.next({
+      ...this.currentState,
+      user
+    });
+  }
+  
+  // 切换主题
+  toggleTheme(): void {
+    const newTheme = this.currentState.theme === 'light' ? 'dark' : 'light';
+    this.state$.next({
+      ...this.currentState,
+      theme: newTheme
+    });
+  }
+  
+  // 添加通知
+  addNotification(notification: any): void {
+    this.state$.next({
+      ...this.currentState,
+      notifications: [...this.currentState.notifications, notification]
+    });
+  }
+  
+  // 清除通知
+  clearNotifications(): void {
+    this.state$.next({
+      ...this.currentState,
+      notifications: []
+    });
+  }
+}
+```
+
+### 2.2 多实例服务
+
+在某些情况下，您可能需要服务的多个实例，而不是单例：
+
+```typescript title="counter.service.ts"
+import { Injectable } from '@angular/core';
+
+// 不指定providedIn，以便在需要的地方提供它
+@Injectable()
+export class CounterService {
+  private count = 0;
+  
+  increment(): void {
+    this.count++;
+  }
+  
+  decrement(): void {
+    this.count--;
+  }
+  
+  getCount(): number {
+    return this.count;
+  }
+  
+  reset(): void {
+    this.count = 0;
+  }
+}
+```
+
+```typescript title="counter-container.component.ts"
+import { Component, OnInit } from '@angular/core';
+import { CounterService } from './counter.service';
+
+@Component({
+  selector: 'app-counter-container',
+  template: `
+    <h2>Counter Containers</h2>
+    
+    <app-counter title="Counter 1"></app-counter>
+    
+    <app-counter title="Counter 2"></app-counter>
+  `,
+  // 每个CounterContainer将有自己的CounterService实例
+  providers: [CounterService]
+})
+export class CounterContainerComponent implements OnInit {
+  constructor() { }
+  
+  ngOnInit(): void { }
+}
+```
+
+```typescript title="counter.component.ts"
+import { Component, Input } from '@angular/core';
+import { CounterService } from './counter.service';
+
+@Component({
+  selector: 'app-counter',
+  template: `
+    <div class="counter">
+      <h3>{{ title }}</h3>
+      <p>Count: {{ counterService.getCount() }}</p>
+      <button (click)="counterService.increment()">+</button>
+      <button (click)="counterService.decrement()">-</button>
+      <button (click)="counterService.reset()">Reset</button>
+    </div>
+  `,
+  // 不在这里提供CounterService，
+  // 而是使用从父组件继承的实例
+})
+export class CounterComponent {
+  @Input() title: string;
+  
+  constructor(public counterService: CounterService) { }
+}
+``` 
+
+## 3. HTTP服务与数据访问
+
+Angular应用通常需要与后端API进行通信，HttpClient是Angular提供的用于处理HTTP请求的服务。
+
+### 3.1 基础HTTP服务
+
+首先，需要在应用模块中导入HttpClientModule：
+
+```typescript title="app.module.ts"
+import { NgModule } from '@angular/core';
+import { BrowserModule } from '@angular/platform-browser';
+import { HttpClientModule } from '@angular/common/http';
+
+import { AppComponent } from './app.component';
+
+@NgModule({
+  declarations: [AppComponent],
+  imports: [
+    BrowserModule,
+    HttpClientModule  // 导入HTTP客户端模块
+  ],
+  providers: [],
+  bootstrap: [AppComponent]
+})
+export class AppModule { }
+```
+
+然后创建一个数据服务：
+
+```typescript title="api.service.ts"
+import { Injectable } from '@angular/core';
+import { HttpClient, HttpParams, HttpHeaders } from '@angular/common/http';
+import { Observable } from 'rxjs';
+import { catchError, retry } from 'rxjs/operators';
+
+@Injectable({
+  providedIn: 'root'
+})
+export class ApiService {
+  private apiUrl = 'https://api.example.com';
+  
+  constructor(private http: HttpClient) { }
+  
+  // 获取数据
+  getData<T>(endpoint: string, options?: any): Observable<T> {
+    return this.http.get<T>(`${this.apiUrl}/${endpoint}`, options);
+  }
+  
+  // 提交数据
+  postData<T>(endpoint: string, data: any, options?: any): Observable<T> {
+    return this.http.post<T>(`${this.apiUrl}/${endpoint}`, data, options);
+  }
+  
+  // 更新数据
+  updateData<T>(endpoint: string, data: any, options?: any): Observable<T> {
+    return this.http.put<T>(`${this.apiUrl}/${endpoint}`, data, options);
+  }
+  
+  // 删除数据
+  deleteData<T>(endpoint: string, options?: any): Observable<T> {
+    return this.http.delete<T>(`${this.apiUrl}/${endpoint}`, options);
+  }
+}
+```
+
+### 3.2 处理请求选项
+
+HttpClient支持多种请求选项，如头信息、查询参数、响应类型等：
+
+```typescript title="product.service.ts"
+import { Injectable } from '@angular/core';
+import { HttpClient, HttpHeaders, HttpParams, HttpErrorResponse } from '@angular/common/http';
+import { Observable, throwError } from 'rxjs';
+import { catchError, retry, tap } from 'rxjs/operators';
+import { Product } from '../models/product';
+
+@Injectable({
+  providedIn: 'root'
+})
+export class ProductService {
+  private apiUrl = 'https://api.example.com/products';
+  
+  constructor(private http: HttpClient) { }
+  
+  // 获取产品列表，支持分页和筛选
+  getProducts(page: number = 1, limit: number = 20, category?: string): Observable<Product[]> {
+    let params = new HttpParams()
+      .set('page', page.toString())
+      .set('limit', limit.toString());
+      
+    if (category) {
+      params = params.set('category', category);
+    }
+    
+    return this.http.get<Product[]>(this.apiUrl, { params })
+      .pipe(
+        retry(2),  // 失败时重试2次
+        catchError(this.handleError)
+      );
+  }
+  
+  // 获取单个产品
+  getProduct(id: string): Observable<Product> {
+    return this.http.get<Product>(`${this.apiUrl}/${id}`)
+      .pipe(catchError(this.handleError));
+  }
+  
+  // 创建产品
+  createProduct(product: Product): Observable<Product> {
+    const headers = new HttpHeaders({
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${this.getAuthToken()}`
+    });
+    
+    return this.http.post<Product>(this.apiUrl, product, { headers })
+      .pipe(
+        tap(newProduct => console.log(`Created product with ID: ${newProduct.id}`)),
+        catchError(this.handleError)
+      );
+  }
+  
+  // 更新产品
+  updateProduct(product: Product): Observable<Product> {
+    const headers = new HttpHeaders({
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${this.getAuthToken()}`
+    });
+    
+    return this.http.put<Product>(`${this.apiUrl}/${product.id}`, product, { headers })
+      .pipe(catchError(this.handleError));
+  }
+  
+  // 删除产品
+  deleteProduct(id: string): Observable<any> {
+    const headers = new HttpHeaders({
+      'Authorization': `Bearer ${this.getAuthToken()}`
+    });
+    
+    return this.http.delete(`${this.apiUrl}/${id}`, { headers })
+      .pipe(catchError(this.handleError));
+  }
+  
+  // 获取认证令牌(示例)
+  private getAuthToken(): string {
+    return localStorage.getItem('auth_token') || '';
+  }
+  
+  // 错误处理
+  private handleError(error: HttpErrorResponse) {
+    let errorMessage = '';
+    
+    if (error.error instanceof ErrorEvent) {
+      // 客户端错误
+      errorMessage = `客户端错误: ${error.error.message}`;
+    } else {
+      // 服务器错误
+      errorMessage = `服务器错误代码: ${error.status}, 消息: ${error.message}`;
+    }
+    
+    console.error(errorMessage);
+    return throwError(() => new Error(errorMessage));
+  }
+}
+```
+
+### 3.3 HTTP拦截器
+
+HTTP拦截器允许您在请求离开应用或响应返回应用之前拦截并修改它们：
+
+```typescript title="auth.interceptor.ts"
+import { Injectable } from '@angular/core';
+import {
+  HttpRequest,
+  HttpHandler,
+  HttpEvent,
+  HttpInterceptor,
+  HttpErrorResponse
+} from '@angular/common/http';
+import { Observable, throwError } from 'rxjs';
+import { catchError, switchMap } from 'rxjs/operators';
+import { AuthService } from './auth.service';
+
+@Injectable()
+export class AuthInterceptor implements HttpInterceptor {
+  constructor(private authService: AuthService) {}
+  
+  intercept(request: HttpRequest<unknown>, next: HttpHandler): Observable<HttpEvent<unknown>> {
+    // 如果需要认证的请求，添加令牌
+    if (this.authService.isLoggedIn()) {
+      request = this.addToken(request, this.authService.getAccessToken());
+    }
+    
+    // 处理响应
+    return next.handle(request).pipe(
+      catchError((error: HttpErrorResponse) => {
+        // 如果401未授权错误且有刷新令牌，尝试刷新令牌
+        if (error.status === 401 && this.authService.hasRefreshToken()) {
+          return this.handle401Error(request, next);
+        }
+        
+        return throwError(() => error);
+      })
+    );
+  }
+  
+  // 添加认证令牌到请求头
+  private addToken(request: HttpRequest<any>, token: string): HttpRequest<any> {
+    return request.clone({
+      setHeaders: {
+        Authorization: `Bearer ${token}`
+      }
+    });
+  }
+  
+  // 处理401错误 - 尝试刷新令牌
+  private handle401Error(request: HttpRequest<any>, next: HttpHandler): Observable<HttpEvent<any>> {
+    return this.authService.refreshToken().pipe(
+      switchMap(token => {
+        return next.handle(this.addToken(request, token));
+      }),
+      catchError(error => {
+        // 刷新令牌也失败，登出用户
+        this.authService.logout();
+        return throwError(() => error);
+      })
+    );
+  }
+}
+```
+
+在应用模块中注册拦截器：
+
+```typescript title="app.module.ts"
+import { NgModule } from '@angular/core';
+import { BrowserModule } from '@angular/platform-browser';
+import { HTTP_INTERCEPTORS, HttpClientModule } from '@angular/common/http';
+import { AuthInterceptor } from './services/auth.interceptor';
+
+@NgModule({
+  declarations: [AppComponent],
+  imports: [
+    BrowserModule,
+    HttpClientModule
+  ],
+  providers: [
+    { provide: HTTP_INTERCEPTORS, useClass: AuthInterceptor, multi: true }
+  ],
+  bootstrap: [AppComponent]
+})
+export class AppModule { }
+``` 
+
+## 4. 缓存策略与性能优化
+
+### 4.1 服务缓存模式
+
+在与后端API通信时，实现缓存可以提高应用性能，减少网络请求：
+
+```typescript title="cached-product.service.ts"
+import { Injectable } from '@angular/core';
+import { HttpClient } from '@angular/common/http';
+import { Observable, of, throwError } from 'rxjs';
+import { tap, catchError, shareReplay } from 'rxjs/operators';
+import { Product } from '../models/product';
+
+@Injectable({
+  providedIn: 'root'
+})
+export class CachedProductService {
+  private apiUrl = 'https://api.example.com/products';
+  
+  // 缓存
+  private productsCache: { [key: string]: Observable<Product[]> } = {};
+  private productCache: { [id: string]: Observable<Product> } = {};
+  
+  // 缓存过期时间（毫秒）
+  private cacheExpiry = 5 * 60 * 1000; // 5分钟
+  private cacheTimestamps: { [key: string]: number } = {};
+  
+  constructor(private http: HttpClient) { }
+  
+  getProducts(category?: string): Observable<Product[]> {
+    const cacheKey = category || 'all';
+    
+    // 检查缓存是否过期
+    if (this.isCacheValid(cacheKey)) {
+      console.log(`Using cached products for category: ${cacheKey}`);
+      return this.productsCache[cacheKey];
+    }
+    
+    // 无缓存或已过期，发送新请求
+    const url = category ? `${this.apiUrl}?category=${category}` : this.apiUrl;
+    
+    // 使用shareReplay创建多播Observable，缓存最新结果
+    this.productsCache[cacheKey] = this.http.get<Product[]>(url).pipe(
+      tap(() => this.setCacheTimestamp(cacheKey)),
+      shareReplay(1),
+      catchError(error => {
+        delete this.productsCache[cacheKey]; // 移除失败的缓存
+        return throwError(() => error);
+      })
+    );
+    
+    return this.productsCache[cacheKey];
+  }
+  
+  getProduct(id: string): Observable<Product> {
+    // 检查缓存是否过期
+    if (this.isCacheValid(`product_${id}`)) {
+      console.log(`Using cached product: ${id}`);
+      return this.productCache[id];
+    }
+    
+    // 无缓存或已过期，发送新请求
+    this.productCache[id] = this.http.get<Product>(`${this.apiUrl}/${id}`).pipe(
+      tap(() => this.setCacheTimestamp(`product_${id}`)),
+      shareReplay(1),
+      catchError(error => {
+        delete this.productCache[id]; // 移除失败的缓存
+        return throwError(() => error);
+      })
+    );
+    
+    return this.productCache[id];
+  }
+  
+  // 清除特定产品缓存
+  clearProductCache(id: string): void {
+    if (this.productCache[id]) {
+      delete this.productCache[id];
+      delete this.cacheTimestamps[`product_${id}`];
+    }
+  }
+  
+  // 清除所有缓存
+  clearCache(): void {
+    this.productsCache = {};
+    this.productCache = {};
+    this.cacheTimestamps = {};
+  }
+  
+  // 检查缓存是否有效
+  private isCacheValid(key: string): boolean {
+    if (!this.productsCache[key] && !this.productCache[key]) {
+      return false; // 没有缓存
+    }
+    
+    const timestamp = this.cacheTimestamps[key];
+    if (!timestamp) return false;
+    
+    return (Date.now() - timestamp) < this.cacheExpiry;
+  }
+  
+  // 设置缓存时间戳
+  private setCacheTimestamp(key: string): void {
+    this.cacheTimestamps[key] = Date.now();
+  }
+}
+```
+
+### 4.2 服务测试
+
+Angular服务是非常适合测试的单元，因为它们不依赖DOM或组件生命周期：
+
+```typescript title="product.service.spec.ts"
+import { TestBed } from '@angular/core/testing';
+import { HttpClientTestingModule, HttpTestingController } from '@angular/common/http/testing';
+import { ProductService } from './product.service';
+import { Product } from '../models/product';
+
+describe('ProductService', () => {
+  let service: ProductService;
+  let httpMock: HttpTestingController;
+  
+  beforeEach(() => {
+    TestBed.configureTestingModule({
+      imports: [HttpClientTestingModule],
+      providers: [ProductService]
+    });
+    
+    service = TestBed.inject(ProductService);
+    httpMock = TestBed.inject(HttpTestingController);
+  });
+  
+  afterEach(() => {
+    // 验证没有未处理的请求
+    httpMock.verify();
+  });
+  
+  it('should be created', () => {
+    expect(service).toBeTruthy();
+  });
+  
+  describe('getProducts', () => {
+    it('should return products', () => {
+      const mockProducts: Product[] = [
+        { id: '1', name: 'Product 1', price: 100 },
+        { id: '2', name: 'Product 2', price: 200 }
+      ];
+      
+      // 调用服务方法
+      service.getProducts().subscribe(products => {
+        expect(products.length).toBe(2);
+        expect(products).toEqual(mockProducts);
+      });
+      
+      // 模拟HTTP请求
+      const req = httpMock.expectOne('https://api.example.com/products');
+      expect(req.request.method).toBe('GET');
+      
+      // 解析请求
+      req.flush(mockProducts);
+    });
+    
+    it('should include category in query params when provided', () => {
+      // 调用服务方法，传递category参数
+      service.getProducts(1, 10, 'electronics').subscribe();
+      
+      // 模拟并验证HTTP请求
+      const req = httpMock.expectOne(req => {
+        return req.url === 'https://api.example.com/products' &&
+               req.params.get('category') === 'electronics' &&
+               req.params.get('page') === '1' &&
+               req.params.get('limit') === '10';
+      });
+      
+      expect(req.request.method).toBe('GET');
+      req.flush([]);
+    });
+    
+    it('should handle error', () => {
+      // 调用服务方法
+      service.getProducts().subscribe({
+        next: () => fail('应该失败'),
+        error: error => {
+          expect(error).toBeTruthy();
+          expect(error.message).toContain('服务器错误代码: 500');
+        }
+      });
+      
+      // 模拟HTTP请求并返回错误
+      const req = httpMock.expectOne('https://api.example.com/products');
+      req.flush('Server error', { status: 500, statusText: 'Internal Server Error' });
+    });
+  });
+  
+  describe('getProduct', () => {
+    it('should return a single product', () => {
+      const mockProduct: Product = { id: '1', name: 'Product 1', price: 100 };
+      
+      // 调用服务方法
+      service.getProduct('1').subscribe(product => {
+        expect(product).toEqual(mockProduct);
+      });
+      
+      // 模拟HTTP请求
+      const req = httpMock.expectOne('https://api.example.com/products/1');
+      expect(req.request.method).toBe('GET');
+      
+      // 解析请求
+      req.flush(mockProduct);
+    });
+  });
+});
+```
+
+测试带有依赖的服务：
+
+```typescript title="auth.service.spec.ts"
+import { TestBed } from '@angular/core/testing';
+import { HttpClientTestingModule } from '@angular/common/http/testing';
+import { AuthService } from './auth.service';
+import { StorageService } from './storage.service';
+
+// 创建模拟服务
+class MockStorageService {
+  private data: { [key: string]: string } = {};
+  
+  getItem(key: string): string {
+    return this.data[key] || null;
+  }
+  
+  setItem(key: string, value: string): void {
+    this.data[key] = value;
+  }
+  
+  removeItem(key: string): void {
+    delete this.data[key];
+  }
+}
+
+describe('AuthService', () => {
+  let service: AuthService;
+  let storageService: StorageService;
+  
+  beforeEach(() => {
+    TestBed.configureTestingModule({
+      imports: [HttpClientTestingModule],
+      providers: [
+        AuthService,
+        { provide: StorageService, useClass: MockStorageService }
+      ]
+    });
+    
+    service = TestBed.inject(AuthService);
+    storageService = TestBed.inject(StorageService);
+  });
+  
+  it('should be created', () => {
+    expect(service).toBeTruthy();
+  });
+  
+  it('should return isLoggedIn as false when no token', () => {
+    // 使用jasmine spy模拟storageService.getItem方法
+    spyOn(storageService, 'getItem').and.returnValue(null);
+    
+    expect(service.isLoggedIn()).toBeFalse();
+    expect(storageService.getItem).toHaveBeenCalledWith('auth_token');
+  });
+  
+  it('should return isLoggedIn as true when token exists', () => {
+    spyOn(storageService, 'getItem').and.returnValue('fake-token');
+    
+    expect(service.isLoggedIn()).toBeTrue();
+    expect(storageService.getItem).toHaveBeenCalledWith('auth_token');
+  });
+});
+```
+
+## 5. 服务最佳实践
+
+### 5.1 服务设计原则
+
+设计高质量的Angular服务应遵循以下原则：
+
+1. **单一责任**：每个服务应该有一个明确的责任
+2. **封装**：隐藏内部实现细节，只暴露必要的公共API
+3. **可测试性**：服务应该易于单元测试
+4. **松耦合**：服务之间应该尽量减少依赖
+5. **不可变性**：尽量使用不可变数据结构，避免副作用
+
+### 5.2 服务组织模式
+
+#### 核心服务与特性服务
+
+将服务分为两类有助于更好地组织代码：
+
+1. **核心服务**：应用级别的单例服务，如认证、日志记录、HTTP通信
+2. **特性服务**：与特定功能模块关联的服务，如用户管理、产品管理
+
+```typescript title="core/core.module.ts"
+import { NgModule, Optional, SkipSelf } from '@angular/core';
+import { CommonModule } from '@angular/common';
+import { HttpClientModule, HTTP_INTERCEPTORS } from '@angular/common/http';
+
+import { AuthService } from './services/auth.service';
+import { LoggingService } from './services/logging.service';
+import { ApiService } from './services/api.service';
+import { AuthInterceptor } from './interceptors/auth.interceptor';
+import { LoggingInterceptor } from './interceptors/logging.interceptor';
+
+@NgModule({
+  imports: [
+    CommonModule,
+    HttpClientModule
+  ],
+  providers: [
+    AuthService,
+    LoggingService,
+    ApiService,
+    { provide: HTTP_INTERCEPTORS, useClass: AuthInterceptor, multi: true },
+    { provide: HTTP_INTERCEPTORS, useClass: LoggingInterceptor, multi: true }
+  ]
+})
+export class CoreModule {
+  // 防止CoreModule被多次导入
+  constructor(@Optional() @SkipSelf() parentModule: CoreModule) {
+    if (parentModule) {
+      throw new Error('CoreModule已经加载。应该只在AppModule中导入CoreModule。');
+    }
+  }
+}
+```
+
+#### 服务继承与组合
+
+选择合适的服务设计模式：
+
+```typescript title="继承示例"
+// 基础服务
+@Injectable()
+export class BaseApiService<T> {
+  constructor(protected http: HttpClient) {}
+  
+  getAll(url: string): Observable<T[]> {
+    return this.http.get<T[]>(url);
+  }
+  
+  getById(url: string, id: string): Observable<T> {
+    return this.http.get<T>(`${url}/${id}`);
+  }
+  
+  create(url: string, entity: T): Observable<T> {
+    return this.http.post<T>(url, entity);
+  }
+  
+  update(url: string, id: string, entity: T): Observable<T> {
+    return this.http.put<T>(`${url}/${id}`, entity);
+  }
+  
+  delete(url: string, id: string): Observable<void> {
+    return this.http.delete<void>(`${url}/${id}`);
+  }
+}
+
+// 派生服务
+@Injectable({
+  providedIn: 'root'
+})
+export class UserService extends BaseApiService<User> {
+  private apiUrl = 'https://api.example.com/users';
+  
+  constructor(http: HttpClient) {
+    super(http);
+  }
+  
+  getAllUsers(): Observable<User[]> {
+    return this.getAll(this.apiUrl);
+  }
+  
+  getUserById(id: string): Observable<User> {
+    return this.getById(this.apiUrl, id);
+  }
+  
+  // 特定于用户的方法
+  getUsersByDepartment(department: string): Observable<User[]> {
+    return this.http.get<User[]>(`${this.apiUrl}/department/${department}`);
+  }
+}
+```
+
+```typescript title="组合示例"
+@Injectable({
+  providedIn: 'root'
+})
+export class ProductService {
+  private apiUrl = 'https://api.example.com/products';
+  
+  constructor(
+    private api: ApiService,
+    private logger: LoggingService,
+    private analytics: AnalyticsService
+  ) {}
+  
+  getProducts(): Observable<Product[]> {
+    this.logger.log('Fetching products');
+    return this.api.getData<Product[]>(this.apiUrl).pipe(
+      tap(products => {
+        this.analytics.trackEvent('Products_Loaded', { count: products.length });
+      })
+    );
+  }
+}
+```
+
+### 5.3 性能与优化
+
+提高服务性能的技巧：
+
+1. **使用Observable操作符**：`shareReplay`、`distinctUntilChanged`、`debounceTime`等
+2. **实现缓存策略**：缓存频繁使用的数据
+3. **批量请求**：使用`forkJoin`合并多个请求
+4. **取消请求**：在不需要时取消HTTP请求
+5. **懒加载服务**：使用延迟加载特性模块延迟加载服务
+
+```typescript title="优化示例"
+@Injectable({
+  providedIn: 'root'
+})
+export class OptimizedDataService {
+  // 使用ReplaySubject缓存最新值
+  private _data$ = new ReplaySubject<any[]>(1);
+  
+  // 公开为只读Observable
+  readonly data$ = this._data$.asObservable();
+  
+  // 跟踪加载状态
+  private loading = false;
+  
+  constructor(private http: HttpClient) {}
+  
+  // 只在需要时加载数据
+  loadData(): Observable<any[]> {
+    if (!this.loading) {
+      this.loading = true;
+      
+      this.http.get<any[]>('api/data').pipe(
+        // 确保数据只被获取一次，即使有多个订阅者
+        shareReplay(1),
+        // 无论成功还是失败，都重置loading状态
+        finalize(() => this.loading = false)
+      ).subscribe(data => {
+        this._data$.next(data);
+      });
+    }
+    
+    return this.data$;
+  }
+  
+  // 批量请求示例
+  batchRequests(ids: string[]): Observable<any[]> {
+    // 创建多个请求的数组
+    const requests = ids.map(id => 
+      this.http.get<any>(`api/data/${id}`)
+    );
+    
+    // 并行执行所有请求，等待所有请求完成
+    return forkJoin(requests);
+  }
+  
+  // 可取消的请求
+  searchWithCancel(term: string, cancelPrevious: Subject<void>): Observable<any[]> {
+    // 取消之前的请求
+    cancelPrevious.next();
+    
+    return this.http.get<any[]>(`api/search?q=${term}`).pipe(
+      takeUntil(cancelPrevious)
+    );
+  }
+}
+``` 

@@ -1,850 +1,775 @@
 ---
-sidebar_position: 1
-title: "系统设计详解"
-description: "深入理解系统设计核心概念、架构模式与最佳实践"
+sidebar_position: 8
+title: "系统设计总结"
+description: "全面总结系统设计的关键技术与最佳实践"
 authors: [Laby]
 last_update:
   date: 2025-08-07
   author: Laby
 ---
 
-# 系统设计详解
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+import TOCInline from '@theme/TOCInline';
 
-系统设计是后端开发中的高级技能，涉及架构设计、性能优化、可扩展性等多个方面。掌握系统设计能力对于构建高可用、高性能、可扩展的分布式系统至关重要。
+# 系统设计总结
 
-:::tip 核心价值
-系统设计 = 架构设计 + 性能优化 + 高可用性 + 可扩展性 + 安全性
+本文总结了系统设计中的核心概念、关键技术和最佳实践，帮助你掌握构建高可用、高性能、高并发系统的方法。
+
+:::info 本文内容概览
+<TOCInline toc={toc} />
 :::
 
-## 1. 系统设计基础
+## 1. 系统设计核心概念
 
-### 1.1 设计原则
+```mermaid
+mindmap
+  root((系统设计))
+    可用性
+      冗余设计
+      故障转移
+      容错机制
+      熔断策略
+    可扩展性
+      水平扩展
+      垂直扩展
+      微服务架构
+      无状态设计
+    性能优化
+      缓存策略
+      异步处理
+      数据结构优化
+      算法优化
+    安全性
+      认证授权
+      数据加密
+      安全通信
+      攻击防护
+    可维护性
+      代码规范
+      文档管理
+      监控告警
+      CI/CD流程
+```
 
-系统设计遵循以下核心原则：
+系统设计是构建大规模软件系统的艺术和科学，需要考虑多个关键维度：
 
-| 原则 | 说明 | 实现方式 |
+<div className="card">
+<div className="card__body">
+
+1. **可用性 (Availability)**：系统持续提供服务的能力
+2. **可扩展性 (Scalability)**：系统应对增长的能力
+3. **性能 (Performance)**：系统响应速度和吞吐量
+4. **可靠性 (Reliability)**：系统在规定条件下正常运行的能力
+5. **安全性 (Security)**：系统抵御攻击和保护数据的能力
+6. **可维护性 (Maintainability)**：系统易于修改和扩展的能力
+
+</div>
+</div>
+
+## 2. 高可用系统设计
+
+高可用系统设计是确保系统能够持续提供服务，即使在面对故障和挑战时也能保持运行。
+
+### 2.1 可用性级别
+
+<Tabs>
+  <TabItem value="levels" label="可用性级别" default>
+  
+| 可用性级别 | 年度停机时间 | 描述 |
+|-----------|-------------|------|
+| 99% | 87.6小时 | 基本可用 |
+| 99.9% | 8.76小时 | 高可用 |
+| 99.99% | 52.56分钟 | 很高可用 |
+| 99.999% | 5.26分钟 | 极高可用 |
+| 99.9999% | 31.5秒 | 接近完全可用 |
+
+  </TabItem>
+  <TabItem value="calculation" label="可用性计算">
+  ```
+  可用性 = (总时间 - 故障时间) / 总时间
+  MTBF (平均故障间隔时间) = 总运行时间 / 故障次数
+  MTTR (平均故障修复时间) = 总修复时间 / 故障次数
+  ```
+  </TabItem>
+</Tabs>
+
+### 2.2 高可用架构模式
+
+```mermaid
+graph TD
+    A[客户端] --> B[负载均衡器]
+    B --> C[服务集群1]
+    B --> D[服务集群2]
+    B --> E[服务集群3]
+    C --> F[主数据库]
+    D --> F
+    E --> F
+    F --> G[从数据库1]
+    F --> H[从数据库2]
+    C -.-> I[缓存集群]
+    D -.-> I
+    E -.-> I
+    C -.-> J[消息队列]
+    D -.-> J
+    E -.-> J
+```
+
+<details>
+<summary>高可用架构要点</summary>
+
+1. **冗余设计**
+   - 硬件冗余：多服务器、多机房、异地多活
+   - 软件冗余：多实例、多副本、备份恢复
+
+2. **故障转移**
+   - 自动检测：健康检查、心跳机制
+   - 快速切换：主备切换、负载均衡
+
+3. **数据一致性**
+   - 强一致性：同步复制
+   - 最终一致性：异步复制
+   - CAP理论权衡
+
+4. **监控告警**
+   - 系统监控：CPU、内存、磁盘、网络
+   - 业务监控：接口延迟、错误率
+   - 智能告警：阈值告警、趋势告警
+
+</details>
+
+:::tip 高可用设计核心原则
+1. **消除单点故障**：系统中的每个组件都应该有冗余
+2. **可靠的跨区域复制**：数据和服务在地理上分散
+3. **自动化故障检测与恢复**：减少人工干预
+4. **优雅降级**：在部分组件故障时保持核心功能可用
+5. **可测试性**：定期进行故障演练和恢复测试
+:::
+
+## 3. 高性能系统设计
+
+高性能系统设计旨在优化系统的响应时间、吞吐量和资源利用率。
+
+### 3.1 性能指标
+
+| 指标 | 说明 | 优化方向 |
 |------|------|----------|
-| **可扩展性 (Scalability)** | 系统能够处理不断增长的工作负载 | 水平扩展、垂直扩展、自动扩缩容 |
-| **高可用性 (Availability)** | 系统能够持续提供服务 | 故障转移、冗余设计、容错机制 |
-| **一致性 (Consistency)** | 数据在不同节点间保持一致 | 强一致性、最终一致性、因果一致性 |
-| **可维护性 (Maintainability)** | 系统易于维护和修改 | 模块化设计、松耦合、标准化 |
+| **响应时间** | 请求得到响应的时间 | 越低越好 |
+| **吞吐量** | 单位时间内处理的请求数 | 越高越好 |
+| **并发用户数** | 系统同时支持的活跃用户 | 越高越好 |
+| **资源利用率** | CPU、内存等资源的使用效率 | 合理均衡 |
+| **延迟** | 请求在系统中传输的时间 | 越低越好 |
 
-```java title="系统设计原则示例"
-// 可扩展性设计 - 无状态服务
+### 3.2 性能优化策略
+
+```mermaid
+graph TD
+    A[性能优化] --> B[前端优化]
+    A --> C[网络优化]
+    A --> D[应用优化]
+    A --> E[数据优化]
+    A --> F[硬件优化]
+    
+    B --> B1[静态资源优化]
+    B --> B2[渲染优化]
+    
+    C --> C1[CDN加速]
+    C --> C2[协议优化]
+    
+    D --> D1[代码优化]
+    D --> D2[异步处理]
+    D --> D3[缓存策略]
+    
+    E --> E1[索引优化]
+    E --> E2[查询优化]
+    E --> E3[分库分表]
+    
+    F --> F1[垂直扩展]
+    F --> F2[水平扩展]
+```
+
+<Tabs>
+  <TabItem value="cache" label="缓存策略" default>
+  ```java
 @Service
 public class UserService {
     
-    @Autowired
-    private UserRepository userRepository;
-    
-    @Autowired
-    private RedisTemplate<String, Object> redisTemplate;
+      private final UserRepository userRepository;
+      private final CacheManager cacheManager;
     
     public User getUserById(Long id) {
-        // 先从缓存获取
-        String cacheKey = "user:" + id;
-        User user = (User) redisTemplate.opsForValue().get(cacheKey);
+          // 先查缓存
+          Cache cache = cacheManager.getCache("users");
+          User user = cache.get(id, User.class);
         
         if (user == null) {
-            // 缓存未命中，从数据库获取
+              // 缓存未命中，查询数据库
             user = userRepository.findById(id).orElse(null);
+              
+              // 放入缓存
             if (user != null) {
-                // 写入缓存
-                redisTemplate.opsForValue().set(cacheKey, user, Duration.ofMinutes(30));
+                  cache.put(id, user);
             }
         }
         
         return user;
     }
-}
+  }
+  ```
+  </TabItem>
+  <TabItem value="async" label="异步处理">
+  ```java
+  @Service
+  public class NotificationService {
+      
+      private final KafkaTemplate<String, String> kafkaTemplate;
+      private final ObjectMapper objectMapper;
+      
+      public void sendNotification(Notification notification) {
+          try {
+              // 异步发送通知
+              String message = objectMapper.writeValueAsString(notification);
+              kafkaTemplate.send("notifications", message);
+          } catch (Exception e) {
+              log.error("Failed to send notification", e);
+          }
+      }
+      
+      @KafkaListener(topics = "notifications")
+      public void processNotification(String message) {
+          try {
+              Notification notification = objectMapper.readValue(message, Notification.class);
+              // 处理通知逻辑
+              doSendNotification(notification);
+          } catch (Exception e) {
+              log.error("Failed to process notification", e);
+          }
+      }
+  }
+  ```
+  </TabItem>
+</Tabs>
 
-// 高可用性设计 - 熔断器模式
+## 4. 高并发系统设计
+
+高并发系统设计关注系统同时处理大量并发请求的能力。
+
+### 4.1 并发挑战
+
+<div className="card">
+<div className="card__body">
+
+1. **资源竞争**：多个线程/进程争夺同一资源
+2. **死锁**：两个或多个操作互相等待对方释放资源
+3. **一致性**：确保数据在并发访问中保持一致
+4. **性能瓶颈**：系统中限制并发处理能力的短板
+5. **扩展性**：系统随并发增长而扩展的能力
+
+</div>
+</div>
+
+### 4.2 并发处理策略
+
+```mermaid
+flowchart TD
+    A[并发请求] --> B{负载均衡}
+    B --> C[服务实例1]
+    B --> D[服务实例2]
+    B --> E[服务实例3]
+    C --> F[数据分片1]
+    D --> G[数据分片2]
+    E --> H[数据分片3]
+    I[缓存层] --> C
+    I --> D
+    I --> E
+    J[限流组件] --> B
+```
+
+<Tabs>
+  <TabItem value="scaling" label="水平扩展" default>
+  ```java
+  @Configuration
+  public class ServiceConfig {
+      
+      @Value("${service.instance.count}")
+      private int instanceCount;
+      
+      @Bean
+      public LoadBalancerClient loadBalancerClient() {
+          List<ServiceInstance> instances = new ArrayList<>();
+          
+          for (int i = 0; i < instanceCount; i++) {
+              instances.add(new DefaultServiceInstance(
+                  "service-" + i,
+                  "service",
+                  "localhost",
+                  8080 + i,
+                  false
+              ));
+          }
+          
+          return new RoundRobinLoadBalancerClient(instances);
+      }
+  }
+  ```
+  </TabItem>
+  <TabItem value="sharding" label="数据分片">
+  ```java
+  @Component
+  public class ShardingStrategy {
+      
+      private final int shardCount;
+      
+      public ShardingStrategy(@Value("${db.shard.count}") int shardCount) {
+          this.shardCount = shardCount;
+      }
+      
+      public int getShardId(String key) {
+          return Math.abs(key.hashCode()) % shardCount;
+      }
+      
+      public DataSource getDataSourceByShard(String key) {
+          int shardId = getShardId(key);
+          return getDataSourceById(shardId);
+      }
+      
+      private DataSource getDataSourceById(int shardId) {
+          // 返回对应分片的数据源
+          return null; // 实际实现中返回真实的数据源
+      }
+  }
+  ```
+  </TabItem>
+</Tabs>
+
+## 5. 容错与弹性设计
+
+容错与弹性设计确保系统能够在面对故障和压力时保持稳定运行。
+
+### 5.1 熔断器模式
+
+熔断器模式防止系统调用失败的服务，避免级联故障。
+
+```mermaid
+stateDiagram-v2
+    [*] --> 关闭
+    关闭 --> 开启: 失败次数超过阈值
+    开启 --> 半开: 超过超时时间
+    半开 --> 关闭: 成功调用恢复
+    半开 --> 开启: 持续失败
+```
+
+<details>
+<summary>熔断器实现示例</summary>
+
+```java
 @Component
 public class CircuitBreaker {
     
-    private AtomicInteger failureCount = new AtomicInteger(0);
-    private AtomicInteger successCount = new AtomicInteger(0);
-    private AtomicLong lastFailureTime = new AtomicLong(0);
+    private final String name;
+    private final AtomicReference<CircuitBreakerState> state = new AtomicReference<>(CircuitBreakerState.CLOSED);
+    private final AtomicInteger failureCount = new AtomicInteger(0);
+    private final AtomicLong lastFailureTime = new AtomicLong(0);
     
-    private static final int FAILURE_THRESHOLD = 5;
-    private static final long TIMEOUT = 60000; // 60秒
+    private final int failureThreshold;
+    private final long timeout;
     
-    public <T> T execute(Supplier<T> supplier) {
+    public CircuitBreaker(String name, int failureThreshold, long timeout) {
+        this.name = name;
+        this.failureThreshold = failureThreshold;
+        this.timeout = timeout;
+    }
+    
+    public <T> T execute(Supplier<T> supplier) throws CircuitBreakerOpenException {
         if (isOpen()) {
-            throw new CircuitBreakerOpenException("熔断器已打开");
+            throw new CircuitBreakerOpenException("Circuit breaker is open for " + name);
         }
         
         try {
             T result = supplier.get();
-            onSuccess();
+            reset();
             return result;
         } catch (Exception e) {
-            onFailure();
+            recordFailure();
             throw e;
         }
     }
     
     private boolean isOpen() {
-        if (failureCount.get() >= FAILURE_THRESHOLD) {
+        CircuitBreakerState currentState = state.get();
+        
+        if (currentState == CircuitBreakerState.OPEN) {
             long now = System.currentTimeMillis();
-            if (now - lastFailureTime.get() > TIMEOUT) {
+            if (now - lastFailureTime.get() > timeout) {
                 // 尝试半开状态
+                state.compareAndSet(CircuitBreakerState.OPEN, CircuitBreakerState.HALF_OPEN);
                 return false;
             }
             return true;
         }
+        
         return false;
     }
     
-    private void onSuccess() {
-        successCount.incrementAndGet();
-        failureCount.set(0);
-    }
-    
-    private void onFailure() {
-        failureCount.incrementAndGet();
+    private void recordFailure() {
+        CircuitBreakerState currentState = state.get();
         lastFailureTime.set(System.currentTimeMillis());
-    }
-}
-```
-
-### 1.2 设计模式
-
-#### 分层架构模式
-
-```java title="分层架构示例"
-// 表现层 (Presentation Layer)
-@RestController
-@RequestMapping("/api/users")
-public class UserController {
-    
-    @Autowired
-    private UserService userService;
-    
-    @GetMapping("/{id}")
-    public ResponseEntity<User> getUser(@PathVariable Long id) {
-        User user = userService.getUserById(id);
-        return ResponseEntity.ok(user);
-    }
-    
-    @PostMapping
-    public ResponseEntity<User> createUser(@RequestBody User user) {
-        User savedUser = userService.createUser(user);
-        return ResponseEntity.status(HttpStatus.CREATED).body(savedUser);
-    }
-}
-
-// 业务层 (Business Layer)
-@Service
-@Transactional
-public class UserService {
-    
-    @Autowired
-    private UserRepository userRepository;
-    
-    @Autowired
-    private EmailService emailService;
-    
-    public User createUser(User user) {
-        // 业务逻辑验证
-        validateUser(user);
         
-        // 保存用户
-        User savedUser = userRepository.save(user);
-        
-        // 发送欢迎邮件
-        emailService.sendWelcomeEmail(savedUser.getEmail());
-        
-        return savedUser;
-    }
-    
-    private void validateUser(User user) {
-        if (user.getName() == null || user.getName().trim().isEmpty()) {
-            throw new IllegalArgumentException("用户名不能为空");
-        }
-        if (user.getEmail() == null || !isValidEmail(user.getEmail())) {
-            throw new IllegalArgumentException("邮箱格式不正确");
-        }
-    }
-}
-
-// 数据层 (Data Layer)
-@Repository
-public interface UserRepository extends JpaRepository<User, Long> {
-    
-    Optional<User> findByEmail(String email);
-    
-    List<User> findByNameContaining(String name);
-    
-    @Query("SELECT u FROM User u WHERE u.createdAt >= :startDate")
-    List<User> findUsersCreatedAfter(@Param("startDate") LocalDateTime startDate);
-}
-```
-
-#### 微服务架构模式
-
-```java title="微服务架构示例"
-// 用户服务
-@SpringBootApplication
-@EnableDiscoveryClient
-public class UserServiceApplication {
-    public static void main(String[] args) {
-        SpringApplication.run(UserServiceApplication.class, args);
-    }
-}
-
-// 订单服务
-@SpringBootApplication
-@EnableDiscoveryClient
-public class OrderServiceApplication {
-    public static void main(String[] args) {
-        SpringApplication.run(OrderServiceApplication.class, args);
-    }
-}
-
-// 服务间通信
-@Service
-public class OrderService {
-    
-    @Autowired
-    @LoadBalanced
-    private RestTemplate restTemplate;
-    
-    public Order createOrder(OrderRequest request) {
-        // 调用用户服务验证用户
-        User user = restTemplate.getForObject(
-            "http://user-service/api/users/" + request.getUserId(),
-            User.class
-        );
-        
-        if (user == null) {
-            throw new UserNotFoundException("用户不存在");
-        }
-        
-        // 创建订单
-        Order order = new Order();
-        order.setUserId(user.getId());
-        order.setItems(request.getItems());
-        order.setTotalAmount(calculateTotal(request.getItems()));
-        
-        return orderRepository.save(order);
-    }
-}
-```
-
-## 2. 高可用设计
-
-### 2.1 故障转移机制
-
-```java title="故障转移示例"
-// 主从切换
-@Component
-public class DatabaseFailover {
-    
-    @Autowired
-    private DataSource primaryDataSource;
-    
-    @Autowired
-    private DataSource secondaryDataSource;
-    
-    private AtomicBoolean isPrimaryHealthy = new AtomicBoolean(true);
-    
-    public DataSource getActiveDataSource() {
-        if (isPrimaryHealthy.get()) {
-            return primaryDataSource;
-        } else {
-            return secondaryDataSource;
-        }
-    }
-    
-    @Scheduled(fixedRate = 5000)
-    public void healthCheck() {
-        try (Connection conn = primaryDataSource.getConnection()) {
-            conn.createStatement().execute("SELECT 1");
-            isPrimaryHealthy.set(true);
-        } catch (Exception e) {
-            isPrimaryHealthy.set(false);
-            log.error("主数据库健康检查失败", e);
-        }
-    }
-}
-
-// 负载均衡
-@Component
-public class LoadBalancer {
-    
-    private List<String> servers = Arrays.asList(
-        "server1:8080", "server2:8080", "server3:8080"
-    );
-    
-    private AtomicInteger currentIndex = new AtomicInteger(0);
-    
-    public String getNextServer() {
-        int index = currentIndex.getAndIncrement() % servers.size();
-        return servers.get(index);
-    }
-    
-    public String getServerByWeight() {
-        // 权重轮询算法
-        return servers.get(0); // 简化实现
-    }
-}
-```
-
-### 2.2 冗余设计
-
-```java title="冗余设计示例"
-// 数据冗余
-@Entity
-public class User {
-    
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
-    
-    private String name;
-    private String email;
-    
-    // 冗余字段，避免频繁关联查询
-    private String departmentName;
-    private String managerName;
-    
-    // 版本控制，用于乐观锁
-    @Version
-    private Long version;
-    
-    // 审计字段
-    @CreatedDate
-    private LocalDateTime createdAt;
-    
-    @LastModifiedDate
-    private LocalDateTime updatedAt;
-}
-
-// 服务冗余
-@Configuration
-public class ServiceRedundancyConfig {
-    
-    @Bean
-    @Primary
-    public EmailService primaryEmailService() {
-        return new PrimaryEmailService();
-    }
-    
-    @Bean
-    public EmailService backupEmailService() {
-        return new BackupEmailService();
-    }
-    
-    @Bean
-    public EmailServiceSelector emailServiceSelector() {
-        return new EmailServiceSelector();
-    }
-}
-
-@Component
-public class EmailServiceSelector {
-    
-    @Autowired
-    private EmailService primaryEmailService;
-    
-    @Autowired
-    private EmailService backupEmailService;
-    
-    public void sendEmail(String to, String subject, String content) {
-        try {
-            primaryEmailService.sendEmail(to, subject, content);
-        } catch (Exception e) {
-            log.warn("主邮件服务失败，使用备用服务", e);
-            backupEmailService.sendEmail(to, subject, content);
-        }
-    }
-}
-```
-
-## 3. 可扩展性设计
-
-### 3.1 水平扩展
-
-```java title="水平扩展示例"
-// 无状态设计
-@RestController
-public class StatelessController {
-    
-    @Autowired
-    private RedisTemplate<String, Object> redisTemplate;
-    
-    @GetMapping("/session/{sessionId}")
-    public ResponseEntity<SessionData> getSession(@PathVariable String sessionId) {
-        // 会话数据存储在外部Redis中，不依赖本地状态
-        SessionData sessionData = (SessionData) redisTemplate.opsForValue().get("session:" + sessionId);
-        return ResponseEntity.ok(sessionData);
-    }
-    
-    @PostMapping("/session")
-    public ResponseEntity<String> createSession(@RequestBody SessionData sessionData) {
-        String sessionId = UUID.randomUUID().toString();
-        redisTemplate.opsForValue().set("session:" + sessionId, sessionData, Duration.ofHours(24));
-        return ResponseEntity.ok(sessionId);
-    }
-}
-
-// 数据分片
-@Component
-public class ShardingStrategy {
-    
-    private List<DataSource> dataSources = Arrays.asList(
-        dataSource1, dataSource2, dataSource3, dataSource4
-    );
-    
-    public DataSource getDataSource(Long userId) {
-        int shardIndex = (int) (userId % dataSources.size());
-        return dataSources.get(shardIndex);
-    }
-    
-    public String getShardKey(Long userId) {
-        return "shard_" + (userId % 4);
-    }
-}
-
-// 一致性哈希
-@Component
-public class ConsistentHashing {
-    
-    private TreeMap<Integer, String> ring = new TreeMap<>();
-    private int virtualNodes = 150; // 虚拟节点数
-    
-    public ConsistentHashing(List<String> servers) {
-        for (String server : servers) {
-            for (int i = 0; i < virtualNodes; i++) {
-                String virtualNode = server + "&VN" + i;
-                int hash = hash(virtualNode);
-                ring.put(hash, server);
+        if (currentState == CircuitBreakerState.CLOSED) {
+            if (failureCount.incrementAndGet() >= failureThreshold) {
+                state.compareAndSet(CircuitBreakerState.CLOSED, CircuitBreakerState.OPEN);
             }
+        } else if (currentState == CircuitBreakerState.HALF_OPEN) {
+            state.compareAndSet(CircuitBreakerState.HALF_OPEN, CircuitBreakerState.OPEN);
         }
     }
     
-    public String getServer(String key) {
-        int hash = hash(key);
-        Map.Entry<Integer, String> entry = ring.ceilingEntry(hash);
-        if (entry == null) {
-            entry = ring.firstEntry();
+    private void reset() {
+        failureCount.set(0);
+        if (state.get() == CircuitBreakerState.HALF_OPEN) {
+            state.compareAndSet(CircuitBreakerState.HALF_OPEN, CircuitBreakerState.CLOSED);
         }
-        return entry.getValue();
-    }
-    
-    private int hash(String key) {
-        return Math.abs(key.hashCode());
     }
 }
 ```
 
-### 3.2 垂直扩展
+</details>
 
-```java title="垂直扩展示例"
-// 连接池优化
-@Configuration
-public class DataSourceConfig {
-    
-    @Bean
-    @Primary
-    public DataSource dataSource() {
-        HikariConfig config = new HikariConfig();
-        config.setJdbcUrl("jdbc:mysql://localhost:3306/test");
-        config.setUsername("root");
-        config.setPassword("password");
-        
-        // 连接池配置
-        config.setMaximumPoolSize(20);
-        config.setMinimumIdle(5);
-        config.setConnectionTimeout(30000);
-        config.setIdleTimeout(600000);
-        config.setMaxLifetime(1800000);
-        
-        return new HikariDataSource(config);
-    }
-}
+### 5.2 降级策略
 
-// 线程池优化
-@Configuration
-public class ThreadPoolConfig {
-    
-    @Bean
-    public ThreadPoolTaskExecutor asyncExecutor() {
-        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
-        executor.setCorePoolSize(10);
-        executor.setMaxPoolSize(50);
-        executor.setQueueCapacity(100);
-        executor.setThreadNamePrefix("Async-");
-        executor.setRejectedExecutionHandler(new ThreadPoolExecutor.CallerRunsPolicy());
-        executor.initialize();
-        return executor;
+降级策略在系统压力大时放弃次要功能，保证核心功能可用。
+
+<Tabs>
+  <TabItem value="fallback" label="服务降级" default>
+  ```java
+  @Service
+  public class ProductService {
+      
+      private final ProductRepository repository;
+      private final CircuitBreaker circuitBreaker;
+      private final Cache<Long, Product> cache;
+      
+      public Product getProductById(Long id) {
+          try {
+              return circuitBreaker.execute(() -> repository.findById(id).orElse(null));
+          } catch (CircuitBreakerOpenException e) {
+              return getFallbackProduct(id);
+          }
+      }
+      
+      private Product getFallbackProduct(Long id) {
+          // 尝试从缓存获取
+          Product cached = cache.getIfPresent(id);
+          if (cached != null) {
+              return cached;
+          }
+          
+          // 返回默认产品
+          return new Product(id, "默认产品", "暂时无法获取详细信息", 0.0);
     }
 }
 ```
-
-## 4. 性能优化
-
-### 4.1 缓存策略
-
-```java title="多级缓存示例"
-@Service
-public class MultiLevelCacheService {
-    
-    @Autowired
-    private RedisTemplate<String, Object> redisTemplate;
-    
-    private LoadingCache<String, Object> localCache = Caffeine.newBuilder()
-        .maximumSize(1000)
-        .expireAfterWrite(Duration.ofMinutes(5))
-        .build(key -> getFromRedis(key));
-    
-    public Object getData(String key) {
-        try {
-            return localCache.get(key);
-        } catch (Exception e) {
-            // 本地缓存失败，直接从Redis获取
-            return getFromRedis(key);
-        }
-    }
-    
-    private Object getFromRedis(String key) {
-        Object value = redisTemplate.opsForValue().get(key);
-        if (value == null) {
-            // Redis未命中，从数据库获取
-            value = getFromDatabase(key);
-            if (value != null) {
-                redisTemplate.opsForValue().set(key, value, Duration.ofMinutes(30));
-            }
-        }
-        return value;
-    }
-    
-    private Object getFromDatabase(String key) {
-        // 从数据库获取数据的逻辑
-        return null;
-    }
-}
-
-// 缓存预热
-@Component
-public class CacheWarmup {
-    
-    @Autowired
-    private UserService userService;
-    
-    @Autowired
-    private RedisTemplate<String, Object> redisTemplate;
-    
-    @EventListener(ApplicationReadyEvent.class)
-    public void warmupCache() {
-        log.info("开始缓存预热...");
-        
-        // 预热热门用户数据
-        List<Long> hotUserIds = Arrays.asList(1L, 2L, 3L, 4L, 5L);
-        for (Long userId : hotUserIds) {
-            try {
-                User user = userService.getUserById(userId);
-                if (user != null) {
-                    redisTemplate.opsForValue().set("user:" + userId, user, Duration.ofMinutes(30));
-                }
-            } catch (Exception e) {
-                log.error("预热用户数据失败: {}", userId, e);
-            }
-        }
-        
-        log.info("缓存预热完成");
+  </TabItem>
+  <TabItem value="graceful" label="优雅降级">
+  ```java
+  @Component
+  public class DegradationManager {
+      
+      private final AtomicInteger systemLoad = new AtomicInteger(0);
+      
+      // 定义降级级别
+      public enum DegradationLevel {
+          NONE,       // 正常服务
+          LOW,        // 轻度降级
+          MEDIUM,     // 中度降级
+          HIGH,       // 高度降级
+          EMERGENCY   // 紧急降级
+      }
+      
+      // 获取当前降级级别
+      public DegradationLevel getCurrentLevel() {
+          int load = systemLoad.get();
+          
+          if (load < 50) {
+              return DegradationLevel.NONE;
+          } else if (load < 70) {
+              return DegradationLevel.LOW;
+          } else if (load < 85) {
+              return DegradationLevel.MEDIUM;
+          } else if (load < 95) {
+              return DegradationLevel.HIGH;
+          } else {
+              return DegradationLevel.EMERGENCY;
+          }
+      }
+      
+      // 检查功能是否应该降级
+      public boolean shouldDegrade(String feature, DegradationLevel featureLevel) {
+          return getCurrentLevel().ordinal() >= featureLevel.ordinal();
     }
 }
 ```
+  </TabItem>
+</Tabs>
 
-### 4.2 数据库优化
+### 5.3 限流保护
 
-```java title="数据库优化示例"
-// 索引优化
-@Entity
-@Table(name = "users", indexes = {
-    @Index(name = "idx_email", columnList = "email"),
-    @Index(name = "idx_name_email", columnList = "name, email"),
-    @Index(name = "idx_created_at", columnList = "created_at")
-})
-public class User {
-    
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
-    
-    @Column(length = 100)
-    private String name;
-    
-    @Column(unique = true, length = 100)
-    private String email;
-    
-    @Column(name = "created_at")
-    private LocalDateTime createdAt;
-    
-    // getter和setter方法
-}
+限流保护通过控制请求速率防止系统过载。
 
-// 分库分表
-@Component
-public class ShardingDataSource {
+```mermaid
+graph LR
+    A[客户端请求] --> B{限流器}
+    B -- 允许 --> C[处理请求]
+    B -- 拒绝 --> D[返回限流响应]
     
-    private Map<String, DataSource> dataSources = new HashMap<>();
-    
-    public DataSource getDataSource(String shardKey) {
-        return dataSources.get(shardKey);
-    }
-    
-    public String getTableName(String baseTableName, Long id) {
-        int tableIndex = (int) (id % 10);
-        return baseTableName + "_" + tableIndex;
+    subgraph 限流算法
+    E[令牌桶]
+    F[漏桶]
+    G[滑动窗口]
+    H[计数器]
+    end
+```
+
+## 6. 微服务架构设计
+
+微服务架构将系统拆分为小型、自治的服务，每个服务负责特定业务功能。
+
+### 6.1 微服务优势与挑战
+
+<div className="card">
+<div className="card__header">
+<h4>微服务优势</h4>
+</div>
+<div className="card__body">
+
+- **技术异构性**：不同服务可以使用不同技术栈
+- **弹性**：单个服务故障不会导致整体系统故障
+- **可扩展性**：可以独立扩展单个服务
+- **部署灵活**：支持持续部署和发布
+- **团队自治**：小团队可以独立负责特定服务
+
+</div>
+</div>
+
+<div className="card">
+<div className="card__header">
+<h4>微服务挑战</h4>
+</div>
+<div className="card__body">
+
+- **分布式复杂性**：处理分布式系统的挑战
+- **数据一致性**：跨服务事务难以保证
+- **服务依赖管理**：处理服务间依赖和版本兼容
+- **测试复杂度**：端到端测试变得更加困难
+- **运维复杂度**：需要管理大量独立服务
+
+</div>
+</div>
+
+### 6.2 微服务核心组件
+
+```mermaid
+graph TD
+    A[API网关] --> B[服务注册发现]
+    A --> C[微服务1]
+    A --> D[微服务2]
+    A --> E[微服务3]
+    C -.-> B
+    D -.-> B
+    E -.-> B
+    F[配置中心] -.-> C
+    F -.-> D
+    F -.-> E
+    G[监控系统] -.监控.-> C
+    G -.监控.-> D
+    G -.监控.-> E
+    H[链路追踪] -.-> A
+    H -.-> C
+    H -.-> D
+    H -.-> E
+```
+
+<Tabs>
+  <TabItem value="gateway" label="API网关" default>
+  ```yaml
+  spring:
+    cloud:
+      gateway:
+        routes:
+        - id: user-service
+          uri: lb://user-service
+          predicates:
+          - Path=/api/users/**
+          filters:
+          - StripPrefix=1
+          - name: CircuitBreaker
+            args:
+              name: userServiceCircuitBreaker
+              fallbackUri: forward:/fallback/users
+        - id: order-service
+          uri: lb://order-service
+          predicates:
+          - Path=/api/orders/**
+          filters:
+          - StripPrefix=1
+          - name: RateLimit
+            args:
+              redis-rate-limiter.replenishRate: 10
+              redis-rate-limiter.burstCapacity: 20
+  ```
+  </TabItem>
+  <TabItem value="discovery" label="服务发现">
+  ```java
+  @SpringBootApplication
+  @EnableDiscoveryClient
+  public class ServiceApplication {
+  
+      @Bean
+      @LoadBalanced
+      public RestTemplate restTemplate() {
+          return new RestTemplate();
+      }
+  
+      public static void main(String[] args) {
+          SpringApplication.run(ServiceApplication.class, args);
+      }
+  }
+  
+  @Service
+  public class UserClient {
+      
+      private final RestTemplate restTemplate;
+      
+      public User getUser(Long id) {
+          return restTemplate.getForObject("http://user-service/users/{id}", User.class, id);
     }
 }
 ```
+  </TabItem>
+</Tabs>
 
-## 5. 安全设计
+## 7. 系统监控与可观测性
 
-### 5.1 认证授权
+### 7.1 监控指标
 
-```java title="安全设计示例"
-// JWT认证
-@Component
-public class JwtTokenProvider {
-    
-    @Value("${jwt.secret}")
-    private String jwtSecret;
-    
-    @Value("${jwt.expiration}")
-    private long jwtExpiration;
-    
-    public String generateToken(UserDetails userDetails) {
-        Date now = new Date();
-        Date expiryDate = new Date(now.getTime() + jwtExpiration);
-        
-        return Jwts.builder()
-            .setSubject(userDetails.getUsername())
-            .setIssuedAt(now)
-            .setExpiration(expiryDate)
-            .signWith(SignatureAlgorithm.HS512, jwtSecret)
-            .compact();
-    }
-    
-    public String getUsernameFromToken(String token) {
-        Claims claims = Jwts.parser()
-            .setSigningKey(jwtSecret)
-            .parseClaimsJws(token)
-            .getBody();
-        
-        return claims.getSubject();
-    }
-    
-    public boolean validateToken(String token) {
-        try {
-            Jwts.parser().setSigningKey(jwtSecret).parseClaimsJws(token);
-            return true;
-        } catch (Exception e) {
-            return false;
-        }
-    }
-}
+<Tabs>
+  <TabItem value="system" label="系统监控" default>
+    <ul>
+      <li><strong>CPU使用率</strong>：处理器使用情况</li>
+      <li><strong>内存使用率</strong>：内存使用情况</li>
+      <li><strong>磁盘I/O</strong>：磁盘读写速率</li>
+      <li><strong>网络流量</strong>：网络吞吐量</li>
+      <li><strong>线程数</strong>：活跃线程数量</li>
+    </ul>
+  </TabItem>
+  <TabItem value="application" label="应用监控">
+    <ul>
+      <li><strong>请求数</strong>：每秒请求数 (RPS)</li>
+      <li><strong>响应时间</strong>：平均、95/99百分位响应时间</li>
+      <li><strong>错误率</strong>：请求失败百分比</li>
+      <li><strong>吞吐量</strong>：系统处理的业务量</li>
+      <li><strong>并发用户数</strong>：同时活跃的用户数</li>
+    </ul>
+  </TabItem>
+  <TabItem value="business" label="业务监控">
+    <ul>
+      <li><strong>转化率</strong>：业务流程完成率</li>
+      <li><strong>订单量</strong>：每小时/天的订单数</li>
+      <li><strong>支付成功率</strong>：支付成功比例</li>
+      <li><strong>活跃用户数</strong>：DAU/MAU</li>
+      <li><strong>平均订单金额</strong>：用户消费情况</li>
+    </ul>
+  </TabItem>
+</Tabs>
 
-// RBAC权限控制
-@Entity
-@Table(name = "roles")
-public class Role {
-    
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
-    
-    private String name;
-    
-    @ManyToMany(fetch = FetchType.EAGER)
-    @JoinTable(
-        name = "role_permissions",
-        joinColumns = @JoinColumn(name = "role_id"),
-        inverseJoinColumns = @JoinColumn(name = "permission_id")
-    )
-    private Set<Permission> permissions = new HashSet<>();
-}
+### 7.2 日志、指标与追踪
 
-@Entity
-@Table(name = "permissions")
-public class Permission {
+```mermaid
+graph LR
+    A[微服务] --> B[日志收集]
+    A --> C[指标收集]
+    A --> D[链路追踪]
     
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
+    B --> E[ELK Stack]
+    C --> F[Prometheus]
+    D --> G[Jaeger/Zipkin]
     
-    private String name;
-    private String resource;
-    private String action;
-}
+    E --> H[日志分析]
+    F --> I[指标监控]
+    G --> J[分布式追踪]
+    
+    H --> K[统一监控平台]
+    I --> K
+    J --> K
 ```
 
-## 6. 监控告警
+## 8. 系统设计最佳实践
 
-### 6.1 系统监控
+### 8.1 设计原则
 
-```java title="监控示例"
-// 性能监控
-@Aspect
-@Component
-public class PerformanceMonitor {
-    
-    private final MeterRegistry meterRegistry;
-    
-    public PerformanceMonitor(MeterRegistry meterRegistry) {
-        this.meterRegistry = meterRegistry;
-    }
-    
-    @Around("@annotation(org.springframework.web.bind.annotation.RequestMapping)")
-    public Object monitorPerformance(ProceedingJoinPoint joinPoint) throws Throwable {
-        Timer.Sample sample = Timer.start(meterRegistry);
-        
-        try {
-            Object result = joinPoint.proceed();
-            sample.stop(Timer.builder("http.server.requests")
-                .tag("method", joinPoint.getSignature().getName())
-                .tag("status", "success")
-                .register(meterRegistry));
-            return result;
-        } catch (Exception e) {
-            sample.stop(Timer.builder("http.server.requests")
-                .tag("method", joinPoint.getSignature().getName())
-                .tag("status", "error")
-                .register(meterRegistry));
-            throw e;
-        }
-    }
-}
+<div className="card">
+<div className="card__body">
 
-// 健康检查
-@Component
-public class CustomHealthIndicator implements HealthIndicator {
-    
-    @Override
-    public Health health() {
-        try {
-            // 检查数据库连接
-            checkDatabase();
-            
-            // 检查外部服务
-            checkExternalService();
-            
-            return Health.up()
-                .withDetail("database", "UP")
-                .withDetail("external-service", "UP")
-                .build();
-        } catch (Exception e) {
-            return Health.down()
-                .withDetail("error", e.getMessage())
-                .build();
-        }
-    }
-    
-    private void checkDatabase() {
-        // 数据库健康检查逻辑
-    }
-    
-    private void checkExternalService() {
-        // 外部服务健康检查逻辑
-    }
-}
+1. **简单性**：保持系统设计简单，避免不必要的复杂性
+2. **松耦合**：组件之间最小化依赖，提高系统灵活性
+3. **高内聚**：相关功能应该组织在一起
+4. **可测试性**：系统设计应便于测试
+5. **可扩展性**：系统应能适应未来的增长
+6. **容错设计**：预期会有故障并设计应对机制
+7. **安全优先**：在设计之初就考虑安全性
+
+</div>
+</div>
+
+### 8.2 架构决策记录
+
+记录架构决策是保证系统长期可维护性的关键。
+
+```markdown
+# 架构决策记录 (ADR)
+
+## 标题
+使用Redis作为分布式缓存
+
+## 状态
+已接受
+
+## 背景
+系统需要一个高性能的分布式缓存解决方案来减轻数据库负载并提高响应时间。
+
+## 决策
+我们决定使用Redis作为分布式缓存解决方案。
+
+## 原因
+- 高性能：Redis是内存数据库，提供极高的读写性能
+- 丰富的数据结构：支持字符串、哈希、列表等多种数据结构
+- 持久化选项：支持RDB和AOF持久化
+- 集群支持：可以构建高可用集群
+- 社区活跃：有大量的文档和社区支持
+
+## 替代方案
+- Memcached：只支持简单键值存储，功能较少
+- Hazelcast：Java原生但资源消耗较大
+- Ehcache：主要用于单机场景
+
+## 影响
+- 需要管理额外的Redis服务器
+- 需要处理缓存一致性问题
+- 团队需要学习Redis的使用和运维
+
+## 相关决策
+- 数据库选型
+- 缓存策略设计
 ```
 
-## 7. 面试题精选
-
-### 7.1 基础概念题
-
-**Q: 系统设计的基本原则有哪些？**
-
-A: 系统设计的基本原则包括：
-- **可扩展性**：系统能够处理不断增长的工作负载
-- **高可用性**：系统能够持续提供服务，具备故障恢复能力
-- **一致性**：数据在不同节点间保持一致
-- **可维护性**：系统易于维护、修改和扩展
-- **安全性**：保护系统和数据的安全
-- **性能**：满足响应时间和吞吐量要求
-
-**Q: 如何设计一个高可用系统？**
-
-A: 设计高可用系统的方法：
-- **冗余设计**：硬件冗余、软件冗余、地理冗余
-- **故障转移**：自动故障检测和切换机制
-- **负载均衡**：分散请求压力，提高系统容量
-- **容错机制**：熔断器、降级策略、重试机制
-- **监控告警**：实时监控系统状态，及时发现问题
-
-### 7.2 架构设计题
-
-**Q: 如何设计一个高并发系统？**
-
-A: 设计高并发系统的策略：
-- **缓存优化**：多级缓存、缓存预热、缓存更新
-- **异步处理**：消息队列、异步调用、事件驱动
-- **数据库优化**：读写分离、分库分表、索引优化
-- **负载均衡**：应用层负载均衡、数据库负载均衡
-- **水平扩展**：无状态设计、服务拆分、数据分片
-
-**Q: 如何设计一个分布式系统？**
-
-A: 设计分布式系统的考虑：
-- **服务拆分**：按业务功能拆分服务
-- **服务治理**：服务注册发现、负载均衡、熔断降级
-- **数据一致性**：分布式事务、最终一致性、补偿机制
-- **网络通信**：RPC、消息队列、事件总线
-- **监控追踪**：分布式链路追踪、性能监控
-
-### 7.3 实际应用题
-
-**Q: 如何设计一个电商系统？**
-
-A: 电商系统设计要点：
-- **用户系统**：注册登录、用户管理、权限控制
-- **商品系统**：商品管理、库存管理、价格管理
-- **订单系统**：订单创建、支付处理、物流跟踪
-- **支付系统**：支付网关、风控系统、对账系统
-- **推荐系统**：个性化推荐、搜索优化、营销活动
-
-**Q: 如何设计一个社交网络？**
-
-A: 社交网络设计要点：
-- **用户关系**：好友关系、关注关系、群组管理
-- **内容管理**：动态发布、内容审核、推荐算法
-- **消息系统**：即时消息、推送通知、消息队列
-- **存储方案**：关系数据、内容数据、媒体文件
-- **隐私控制**：权限管理、数据保护、内容可见性
-
-### 7.4 性能优化题
-
-**Q: 如何优化系统性能？**
-
-A: 系统性能优化方法：
-- **缓存优化**：多级缓存、缓存策略、缓存穿透防护
-- **数据库优化**：索引优化、查询优化、连接池优化
-- **代码优化**：算法优化、内存管理、并发控制
-- **架构优化**：异步处理、微服务、事件驱动
-- **基础设施**：CDN、负载均衡、容器化部署
-
-**Q: 如何进行容量规划？**
-
-A: 容量规划步骤：
-- **需求分析**：用户规模、业务增长、性能要求
-- **资源评估**：CPU、内存、存储、网络需求
-- **性能测试**：压力测试、性能基准、瓶颈分析
-- **扩展策略**：水平扩展、垂直扩展、自动扩缩容
-- **成本控制**：资源利用率、成本优化、预算管理
-
-:::tip 系统设计学习要点
-1. **掌握基础概念**：理解可扩展性、高可用性、一致性等核心概念
-2. **熟悉架构模式**：学会分层架构、微服务、事件驱动等模式
-3. **掌握设计原则**：遵循SOLID原则、DRY原则、KISS原则
-4. **学会性能优化**：掌握缓存、数据库、代码优化技术
-5. **了解最佳实践**：学习业界成熟的设计模式和解决方案
+:::tip 系统设计核心要点
+1. **全面考虑**：从可用性、可扩展性、性能等多维度考虑系统设计
+2. **预见变化**：设计系统时考虑未来的增长和变化
+3. **适度设计**：不过度设计，也不欠设计，做到刚好够用
+4. **持续优化**：系统设计是持续进行的过程，而非一次性工作
+5. **学习借鉴**：学习成功的案例和模式，避免重复发明轮子
 :::
 
 ---
 
-通过本章的学习，你应该已经掌握了系统设计的核心概念、架构模式和最佳实践。系统设计是构建高质量软件系统的重要技能，掌握系统设计能力可以帮助你设计出高可用、高性能、可扩展的分布式系统。在实际项目中，合理运用系统设计原则和方法可以大大提高系统的质量和可靠性。 
+通过本章的学习，你应该对系统设计的核心概念和关键技术有了全面的理解。在实际项目中，需要根据具体需求和约束条件，综合运用这些技术和最佳实践，设计出高质量的系统架构。系统设计是一个持续学习和改进的过程，不断实践和总结是提升系统设计能力的关键。 

@@ -1,0 +1,1281 @@
+---
+sidebar_position: 4
+title: Vue状态管理方案
+description: Vue应用中的状态管理策略，包含Pinia、Vuex与Composition API状态管理
+authors: [Laby]
+tags: [Vue.js, Pinia, Vuex, 状态管理, 响应式状态]
+last_update:
+  date: 2025-08-15
+  author: Laby
+---
+
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+import CodeBlock from '@theme/CodeBlock';
+
+# Vue状态管理方案
+
+随着Vue应用规模的增长，组件间的状态共享和管理变得尤为重要。本文将介绍Vue生态系统中的各种状态管理方案，包括Pinia、Vuex以及使用Composition API的状态管理策略。
+
+:::tip 核心价值
+**Vue状态管理的价值**
+- 📊 **集中式状态**：提供应用的单一状态源
+- 🔄 **可预测的变更**：通过明确的规则修改状态
+- 🧩 **模块化设计**：将复杂状态分解为可管理的模块
+- 🔍 **开发工具**：提供时间旅行、状态快照等调试功能
+- ⚡ **性能优化**：优化组件更新和渲染
+:::
+
+## 1. Pinia - 新一代状态管理
+
+Pinia是Vue官方推荐的新一代状态管理库，相比Vuex更轻量、更TypeScript友好，并且提供了更好的开发体验。
+
+### 1.1 Pinia基础设置
+
+首先安装Pinia：
+
+```bash
+npm install pinia
+```
+
+在Vue应用中注册Pinia：
+
+```js title="src/main.js"
+import { createApp } from 'vue'
+import { createPinia } from 'pinia'
+import App from './App.vue'
+
+const app = createApp(App)
+const pinia = createPinia()
+
+app.use(pinia)
+app.mount('#app')
+```
+
+### 1.2 创建Pinia Store
+
+使用`defineStore`创建一个store：
+
+```js title="src/stores/counter.js"
+import { defineStore } from 'pinia'
+
+// 基于Option API风格的store
+export const useCounterStore = defineStore('counter', {
+  // state
+  state: () => ({
+    count: 0,
+    name: 'Counter',
+    users: []
+  }),
+  
+  // getters
+  getters: {
+    doubleCount: (state) => state.count * 2,
+    // 访问其他getter
+    doubleCountPlusOne() {
+      return this.doubleCount + 1
+    }
+  },
+  
+  // actions
+  actions: {
+    increment() {
+      this.count++
+    },
+    async fetchUsers() {
+      try {
+        const response = await fetch('https://jsonplaceholder.typicode.com/users')
+        const data = await response.json()
+        this.users = data
+      } catch (error) {
+        console.error('Failed to fetch users:', error)
+      }
+    }
+  }
+})
+```
+
+使用Composition API风格创建store：
+
+```js title="src/stores/user.js"
+import { defineStore } from 'pinia'
+import { ref, computed } from 'vue'
+
+// 基于组合式API风格的store
+export const useUserStore = defineStore('user', () => {
+  // state
+  const user = ref(null)
+  const isLoggedIn = ref(false)
+  const token = ref(localStorage.getItem('token') || null)
+  const error = ref(null)
+  
+  // getters
+  const userFullName = computed(() => {
+    if (!user.value) return ''
+    return `${user.value.firstName} ${user.value.lastName}`
+  })
+  
+  // actions
+  async function login(credentials) {
+    try {
+      error.value = null
+      // 模拟API调用
+      const response = await fetch('/api/login', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(credentials)
+      })
+      
+      if (!response.ok) {
+        throw new Error('Login failed')
+      }
+      
+      const data = await response.json()
+      user.value = data.user
+      token.value = data.token
+      isLoggedIn.value = true
+      
+      // 保存token到本地存储
+      localStorage.setItem('token', data.token)
+      
+      return true
+    } catch (e) {
+      error.value = e.message
+      return false
+    }
+  }
+  
+  function logout() {
+    user.value = null
+    token.value = null
+    isLoggedIn.value = false
+    localStorage.removeItem('token')
+  }
+  
+  async function fetchUserProfile() {
+    if (!token.value) return null
+    
+    try {
+      const response = await fetch('/api/profile', {
+        headers: {
+          'Authorization': `Bearer ${token.value}`
+        }
+      })
+      
+      if (!response.ok) {
+        throw new Error('Failed to fetch profile')
+      }
+      
+      user.value = await response.json()
+      isLoggedIn.value = true
+      
+      return user.value
+    } catch (e) {
+      error.value = e.message
+      return null
+    }
+  }
+  
+  return {
+    // state
+    user,
+    isLoggedIn,
+    token,
+    error,
+    // getters
+    userFullName,
+    // actions
+    login,
+    logout,
+    fetchUserProfile
+  }
+})
+```
+
+### 1.3 在组件中使用Pinia
+
+```vue title="使用Pinia的组件示例"
+<template>
+  <div class="user-profile">
+    <div v-if="userStore.isLoggedIn">
+      <h1>欢迎, {{ userStore.userFullName }}</h1>
+      <button @click="userStore.logout">退出登录</button>
+    </div>
+    <div v-else>
+      <h2>用户登录</h2>
+      <form @submit.prevent="handleLogin">
+        <input v-model="email" type="email" placeholder="邮箱" required />
+        <input v-model="password" type="password" placeholder="密码" required />
+        <p v-if="userStore.error" class="error">{{ userStore.error }}</p>
+        <button type="submit" :disabled="isLoading">
+          {{ isLoading ? '登录中...' : '登录' }}
+        </button>
+      </form>
+    </div>
+    
+    <div class="counter-section">
+      <h3>计数器: {{ counterStore.count }}</h3>
+      <p>双倍值: {{ counterStore.doubleCount }}</p>
+      <button @click="counterStore.increment">增加</button>
+    </div>
+  </div>
+</template>
+
+<script setup>
+import { ref } from 'vue'
+import { useUserStore } from '../stores/user'
+import { useCounterStore } from '../stores/counter'
+
+const userStore = useUserStore()
+const counterStore = useCounterStore()
+
+const email = ref('')
+const password = ref('')
+const isLoading = ref(false)
+
+const handleLogin = async () => {
+  isLoading.value = true
+  try {
+    const success = await userStore.login({
+      email: email.value,
+      password: password.value
+    })
+    
+    if (success) {
+      email.value = ''
+      password.value = ''
+    }
+  } finally {
+    isLoading.value = false
+  }
+}
+</script>
+```
+
+### 1.4 Pinia高级特性
+
+#### Store间通信
+
+Store之间可以相互引用和交互：
+
+```js title="stores/cart.js"
+import { defineStore } from 'pinia'
+import { useProductStore } from './product'
+import { useUserStore } from './user'
+
+export const useCartStore = defineStore('cart', {
+  state: () => ({
+    items: [],
+  }),
+  
+  getters: {
+    totalItems: (state) => state.items.length,
+    totalPrice: (state) => {
+      const productStore = useProductStore()
+      return state.items.reduce((total, item) => {
+        const product = productStore.getProductById(item.productId)
+        return total + (product?.price || 0) * item.quantity
+      }, 0)
+    },
+    cartWithProducts: (state) => {
+      const productStore = useProductStore()
+      return state.items.map(item => {
+        const product = productStore.getProductById(item.productId)
+        return { 
+          ...item,
+          product,
+          subtotal: (product?.price || 0) * item.quantity 
+        }
+      })
+    }
+  },
+  
+  actions: {
+    addToCart(productId, quantity = 1) {
+      const existingItem = this.items.find(item => item.productId === productId)
+      
+      if (existingItem) {
+        existingItem.quantity += quantity
+      } else {
+        this.items.push({
+          productId,
+          quantity
+        })
+      }
+      
+      this.saveCart()
+    },
+    
+    removeItem(productId) {
+      const index = this.items.findIndex(item => item.productId === productId)
+      if (index > -1) {
+        this.items.splice(index, 1)
+        this.saveCart()
+      }
+    },
+    
+    updateQuantity(productId, quantity) {
+      const item = this.items.find(item => item.productId === productId)
+      if (item) {
+        item.quantity = quantity
+        this.saveCart()
+      }
+    },
+    
+    async checkout() {
+      const userStore = useUserStore()
+      
+      if (!userStore.isLoggedIn) {
+        throw new Error('请先登录')
+      }
+      
+      try {
+        // 创建订单
+        const orderData = {
+          userId: userStore.user.id,
+          items: this.items,
+          totalAmount: this.totalPrice
+        }
+        
+        // 模拟API调用
+        const response = await fetch('/api/orders', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${userStore.token}`
+          },
+          body: JSON.stringify(orderData)
+        })
+        
+        if (!response.ok) {
+          throw new Error('结算失败')
+        }
+        
+        // 清空购物车
+        this.clearCart()
+        
+        return await response.json()
+      } catch (error) {
+        console.error('结算错误:', error)
+        throw error
+      }
+    },
+    
+    clearCart() {
+      this.items = []
+      this.saveCart()
+    },
+    
+    loadCart() {
+      const savedCart = localStorage.getItem('cart')
+      if (savedCart) {
+        this.items = JSON.parse(savedCart)
+      }
+    },
+    
+    saveCart() {
+      localStorage.setItem('cart', JSON.stringify(this.items))
+    }
+  }
+})
+```
+
+#### 持久化状态
+
+使用Pinia插件实现状态持久化：
+
+```js title="src/plugins/piniaPersist.js"
+import { toRaw } from 'vue'
+
+export function piniaPersistPlugin({ options, store }) {
+  // 从本地存储恢复状态
+  if (options.persist) {
+    const storageKey = `pinia-${store.$id}`
+    const savedState = localStorage.getItem(storageKey)
+    
+    if (savedState) {
+      store.$patch(JSON.parse(savedState))
+    }
+    
+    // 监听状态变化并保存
+    store.$subscribe((mutation, state) => {
+      localStorage.setItem(storageKey, JSON.stringify(toRaw(state)))
+    })
+  }
+}
+```
+
+在应用中使用插件：
+
+```js title="src/main.js"
+import { createApp } from 'vue'
+import { createPinia } from 'pinia'
+import App from './App.vue'
+import { piniaPersistPlugin } from './plugins/piniaPersist'
+
+const app = createApp(App)
+const pinia = createPinia()
+
+// 注册Pinia插件
+pinia.use(piniaPersistPlugin)
+
+app.use(pinia)
+app.mount('#app')
+```
+
+配置Store启用持久化：
+
+```js title="src/stores/theme.js"
+import { defineStore } from 'pinia'
+
+export const useThemeStore = defineStore('theme', {
+  state: () => ({
+    darkMode: false,
+    accentColor: '#3b82f6',
+    fontSize: 'medium'
+  }),
+  
+  actions: {
+    toggleDarkMode() {
+      this.darkMode = !this.darkMode
+      document.documentElement.classList.toggle('dark', this.darkMode)
+    },
+    setAccentColor(color) {
+      this.accentColor = color
+      document.documentElement.style.setProperty('--accent-color', color)
+    }
+  },
+  
+  // 启用持久化
+  persist: true
+})
+```
+
+#### 热重载与开发工具
+
+Pinia支持热模块替换(HMR)和Vue开发工具：
+
+```js title="src/stores/counter.js"
+import { defineStore } from 'pinia'
+
+export const useCounterStore = defineStore('counter', {
+  state: () => ({
+    count: 0
+  }),
+  actions: {
+    increment() {
+      this.count++
+    }
+  }
+})
+
+// 启用热重载
+if (import.meta.hot) {
+  import.meta.hot.accept(acceptHMRUpdate(useCounterStore, import.meta.hot))
+}
+```
+
+## 2. Vuex - 经典状态管理
+
+虽然Pinia是新一代状态管理库，但许多项目仍在使用Vuex。了解Vuex对维护现有项目非常重要。
+
+### 2.1 Vuex基础设置
+
+安装Vuex：
+
+```bash
+# 对于Vue 3项目
+npm install vuex@next
+```
+
+创建Vuex store：
+
+```js title="src/store/index.js"
+import { createStore } from 'vuex'
+
+export default createStore({
+  state() {
+    return {
+      count: 0,
+      todos: [],
+      user: null
+    }
+  },
+  
+  mutations: {
+    INCREMENT(state) {
+      state.count++
+    },
+    SET_TODOS(state, todos) {
+      state.todos = todos
+    },
+    ADD_TODO(state, todo) {
+      state.todos.push(todo)
+    },
+    SET_USER(state, user) {
+      state.user = user
+    }
+  },
+  
+  actions: {
+    increment({ commit }) {
+      commit('INCREMENT')
+    },
+    async fetchTodos({ commit }) {
+      try {
+        const response = await fetch('https://jsonplaceholder.typicode.com/todos')
+        const todos = await response.json()
+        commit('SET_TODOS', todos)
+        return todos
+      } catch (error) {
+        console.error('Error fetching todos:', error)
+        return []
+      }
+    },
+    async login({ commit }, credentials) {
+      try {
+        const response = await fetch('/api/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(credentials)
+        })
+        
+        if (!response.ok) {
+          throw new Error('Login failed')
+        }
+        
+        const data = await response.json()
+        commit('SET_USER', data.user)
+        localStorage.setItem('token', data.token)
+        return true
+      } catch (error) {
+        console.error('Login error:', error)
+        return false
+      }
+    }
+  },
+  
+  getters: {
+    completedTodos(state) {
+      return state.todos.filter(todo => todo.completed)
+    },
+    incompleteTodos(state) {
+      return state.todos.filter(todo => !todo.completed)
+    },
+    todoCount(state) {
+      return state.todos.length
+    },
+    isLoggedIn(state) {
+      return !!state.user
+    }
+  }
+})
+```
+
+在Vue应用中注册Vuex：
+
+```js title="src/main.js"
+import { createApp } from 'vue'
+import App from './App.vue'
+import store from './store'
+
+const app = createApp(App)
+app.use(store)
+app.mount('#app')
+```
+
+### 2.2 在组件中使用Vuex
+
+选项式API中使用Vuex：
+
+```vue title="使用选项式API的Vuex示例"
+<template>
+  <div class="todo-app">
+    <h1>待办事项 ({{ todoCount }})</h1>
+    
+    <div v-if="isLoading">加载中...</div>
+    <div v-else>
+      <form @submit.prevent="addNewTodo">
+        <input v-model="newTodo" placeholder="添加新待办..." />
+        <button type="submit">添加</button>
+      </form>
+      
+      <ul class="todo-list">
+        <li 
+          v-for="todo in todos" 
+          :key="todo.id"
+          :class="{ completed: todo.completed }"
+        >
+          {{ todo.title }}
+        </li>
+      </ul>
+      
+      <div class="todo-stats">
+        <p>完成: {{ completedTodos.length }}</p>
+        <p>未完成: {{ incompleteTodos.length }}</p>
+      </div>
+    </div>
+  </div>
+</template>
+
+<script>
+import { mapState, mapGetters, mapActions } from 'vuex'
+
+export default {
+  data() {
+    return {
+      isLoading: false,
+      newTodo: ''
+    }
+  },
+  
+  computed: {
+    ...mapState(['todos']),
+    ...mapGetters(['completedTodos', 'incompleteTodos', 'todoCount'])
+  },
+  
+  methods: {
+    ...mapActions(['fetchTodos']),
+    
+    async addNewTodo() {
+      if (!this.newTodo.trim()) return
+      
+      this.$store.commit('ADD_TODO', {
+        id: Date.now(),
+        title: this.newTodo,
+        completed: false
+      })
+      
+      this.newTodo = ''
+    }
+  },
+  
+  async mounted() {
+    this.isLoading = true
+    await this.fetchTodos()
+    this.isLoading = false
+  }
+}
+</script>
+```
+
+组合式API中使用Vuex：
+
+```vue title="使用组合式API的Vuex示例"
+<template>
+  <div class="user-profile">
+    <div v-if="isLoggedIn">
+      <h1>欢迎, {{ user?.name }}</h1>
+      <button @click="handleLogout">退出登录</button>
+    </div>
+    <div v-else>
+      <h2>用户登录</h2>
+      <form @submit.prevent="handleLogin">
+        <input v-model="email" type="email" placeholder="邮箱" required />
+        <input v-model="password" type="password" placeholder="密码" required />
+        <button type="submit" :disabled="isLoading">
+          {{ isLoading ? '登录中...' : '登录' }}
+        </button>
+      </form>
+    </div>
+    
+    <div class="counter-section">
+      <h3>计数器: {{ count }}</h3>
+      <button @click="increment">增加</button>
+    </div>
+  </div>
+</template>
+
+<script setup>
+import { ref, computed } from 'vue'
+import { useStore } from 'vuex'
+
+const store = useStore()
+const email = ref('')
+const password = ref('')
+const isLoading = ref(false)
+
+// 计算属性
+const count = computed(() => store.state.count)
+const user = computed(() => store.state.user)
+const isLoggedIn = computed(() => store.getters.isLoggedIn)
+
+// 方法
+const increment = () => {
+  store.dispatch('increment')
+}
+
+const handleLogin = async () => {
+  if (!email.value || !password.value) return
+  
+  isLoading.value = true
+  try {
+    const success = await store.dispatch('login', {
+      email: email.value,
+      password: password.value
+    })
+    
+    if (success) {
+      email.value = ''
+      password.value = ''
+    }
+  } finally {
+    isLoading.value = false
+  }
+}
+
+const handleLogout = () => {
+  store.commit('SET_USER', null)
+  localStorage.removeItem('token')
+}
+</script>
+```
+
+### 2.3 Vuex模块化
+
+对于大型应用，Vuex支持将store分割成模块：
+
+```js title="src/store/modules/auth.js"
+export default {
+  namespaced: true,
+  
+  state: () => ({
+    user: null,
+    token: localStorage.getItem('token') || null,
+    error: null
+  }),
+  
+  mutations: {
+    SET_USER(state, user) {
+      state.user = user
+    },
+    SET_TOKEN(state, token) {
+      state.token = token
+      if (token) {
+        localStorage.setItem('token', token)
+      } else {
+        localStorage.removeItem('token')
+      }
+    },
+    SET_ERROR(state, error) {
+      state.error = error
+    }
+  },
+  
+  actions: {
+    async login({ commit }, credentials) {
+      commit('SET_ERROR', null)
+      try {
+        const response = await fetch('/api/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(credentials)
+        })
+        
+        if (!response.ok) {
+          throw new Error('Login failed')
+        }
+        
+        const data = await response.json()
+        commit('SET_USER', data.user)
+        commit('SET_TOKEN', data.token)
+        
+        return true
+      } catch (error) {
+        commit('SET_ERROR', error.message)
+        return false
+      }
+    },
+    
+    logout({ commit }) {
+      commit('SET_USER', null)
+      commit('SET_TOKEN', null)
+    },
+    
+    async fetchUserProfile({ commit, state }) {
+      if (!state.token) return null
+      
+      try {
+        const response = await fetch('/api/profile', {
+          headers: {
+            'Authorization': `Bearer ${state.token}`
+          }
+        })
+        
+        if (!response.ok) {
+          throw new Error('Failed to fetch profile')
+        }
+        
+        const user = await response.json()
+        commit('SET_USER', user)
+        
+        return user
+      } catch (error) {
+        commit('SET_ERROR', error.message)
+        return null
+      }
+    }
+  },
+  
+  getters: {
+    isLoggedIn(state) {
+      return !!state.user
+    },
+    userRole(state) {
+      return state.user?.role || 'guest'
+    },
+    hasPermission: (state) => (permission) => {
+      return state.user?.permissions?.includes(permission) || false
+    }
+  }
+}
+```
+
+```js title="src/store/modules/products.js"
+export default {
+  namespaced: true,
+  
+  state: () => ({
+    products: [],
+    loading: false,
+    error: null
+  }),
+  
+  mutations: {
+    SET_PRODUCTS(state, products) {
+      state.products = products
+    },
+    SET_LOADING(state, loading) {
+      state.loading = loading
+    },
+    SET_ERROR(state, error) {
+      state.error = error
+    }
+  },
+  
+  actions: {
+    async fetchProducts({ commit }) {
+      commit('SET_LOADING', true)
+      commit('SET_ERROR', null)
+      
+      try {
+        const response = await fetch('/api/products')
+        if (!response.ok) {
+          throw new Error('Failed to fetch products')
+        }
+        
+        const products = await response.json()
+        commit('SET_PRODUCTS', products)
+        return products
+      } catch (error) {
+        commit('SET_ERROR', error.message)
+        return []
+      } finally {
+        commit('SET_LOADING', false)
+      }
+    },
+    
+    async fetchProductById({ commit, state }, id) {
+      // 如果已经在本地存储，直接返回
+      const existingProduct = state.products.find(p => p.id === id)
+      if (existingProduct) return existingProduct
+      
+      // 否则从API获取
+      commit('SET_LOADING', true)
+      commit('SET_ERROR', null)
+      
+      try {
+        const response = await fetch(`/api/products/${id}`)
+        if (!response.ok) {
+          throw new Error(`Failed to fetch product ${id}`)
+        }
+        
+        const product = await response.json()
+        // 添加到本地产品列表
+        commit('SET_PRODUCTS', [...state.products, product])
+        return product
+      } catch (error) {
+        commit('SET_ERROR', error.message)
+        return null
+      } finally {
+        commit('SET_LOADING', false)
+      }
+    }
+  },
+  
+  getters: {
+    featuredProducts(state) {
+      return state.products.filter(p => p.featured)
+    },
+    productById: (state) => (id) => {
+      return state.products.find(p => p.id === id)
+    }
+  }
+}
+```
+
+组合模块到主store：
+
+```js title="src/store/index.js"
+import { createStore } from 'vuex'
+import auth from './modules/auth'
+import products from './modules/products'
+import cart from './modules/cart'
+
+export default createStore({
+  modules: {
+    auth,
+    products,
+    cart
+  }
+})
+```
+
+在组件中使用模块化store：
+
+```vue
+<template>
+  <div>
+    <!-- 商品列表 -->
+    <div v-if="loading">加载中...</div>
+    <div v-else-if="error">{{ error }}</div>
+    <div v-else class="product-grid">
+      <div 
+        v-for="product in products" 
+        :key="product.id"
+        class="product-card"
+      >
+        <h3>{{ product.name }}</h3>
+        <p>{{ product.price | currency }}</p>
+        <button @click="addToCart(product.id)">加入购物车</button>
+      </div>
+    </div>
+  </div>
+</template>
+
+<script setup>
+import { computed, onMounted } from 'vue'
+import { useStore } from 'vuex'
+
+const store = useStore()
+
+// 映射模块状态
+const products = computed(() => store.state.products.products)
+const loading = computed(() => store.state.products.loading)
+const error = computed(() => store.state.products.error)
+
+// 方法
+const fetchProducts = () => store.dispatch('products/fetchProducts')
+const addToCart = (productId) => store.dispatch('cart/addToCart', productId)
+
+onMounted(fetchProducts)
+</script>
+```
+
+## 3. Composition API状态管理
+
+对于中小型应用，可以使用Vue 3的Composition API创建自定义状态管理方案，无需引入额外库。
+
+### 3.1 简单状态管理
+
+使用`provide/inject`和`reactive`创建简单状态管理：
+
+```js title="src/composables/useThemeState.js"
+import { reactive, provide, inject } from 'vue'
+
+// 创建一个唯一的key
+const ThemeStateSymbol = Symbol('ThemeState')
+
+export function provideThemeState() {
+  // 创建响应式状态
+  const state = reactive({
+    darkMode: false,
+    fontSize: 'medium',
+    colorScheme: 'blue'
+  })
+  
+  // 主题切换函数
+  function toggleDarkMode() {
+    state.darkMode = !state.darkMode
+    document.documentElement.classList.toggle('dark', state.darkMode)
+  }
+  
+  // 设置字体大小
+  function setFontSize(size) {
+    state.fontSize = size
+    document.documentElement.setAttribute('data-font-size', size)
+  }
+  
+  // 设置颜色主题
+  function setColorScheme(scheme) {
+    state.colorScheme = scheme
+    document.documentElement.setAttribute('data-color-scheme', scheme)
+  }
+  
+  // 提供状态和方法
+  provide(ThemeStateSymbol, {
+    state,
+    toggleDarkMode,
+    setFontSize,
+    setColorScheme
+  })
+}
+
+export function useThemeState() {
+  // 注入状态和方法
+  const theme = inject(ThemeStateSymbol)
+  
+  if (!theme) {
+    throw new Error('useThemeState() must be used within a component that calls provideThemeState()')
+  }
+  
+  return theme
+}
+```
+
+在应用中使用：
+
+```vue title="src/App.vue"
+<template>
+  <div :class="{ 'dark-theme': state.darkMode }">
+    <header>
+      <button @click="toggleDarkMode">
+        {{ state.darkMode ? '切换到亮色模式' : '切换到暗色模式' }}
+      </button>
+      
+      <div class="font-size-controls">
+        <button @click="setFontSize('small')">小</button>
+        <button @click="setFontSize('medium')">中</button>
+        <button @click="setFontSize('large')">大</button>
+      </div>
+    </header>
+    
+    <router-view />
+  </div>
+</template>
+
+<script setup>
+import { provideThemeState, useThemeState } from './composables/useThemeState'
+
+// 提供主题状态
+provideThemeState()
+
+// 使用主题状态
+const { state, toggleDarkMode, setFontSize } = useThemeState()
+</script>
+```
+
+### 3.2 完整状态管理
+
+创建一个具有类似Vuex/Pinia特性的状态管理解决方案：
+
+```js title="src/composables/createStore.js"
+import { reactive, readonly, provide, inject, computed, watch } from 'vue'
+
+export function createStore(options) {
+  // 创建唯一symbol
+  const storeSymbol = Symbol('store')
+  
+  function useCreateStore() {
+    // 状态初始化
+    const state = reactive(typeof options.state === 'function' ? options.state() : options.state || {})
+    
+    // 处理getters
+    const getters = {}
+    if (options.getters) {
+      Object.keys(options.getters).forEach(getterName => {
+        getters[getterName] = computed(() => options.getters[getterName](state, getters))
+      })
+    }
+    
+    // 处理actions
+    const actions = {}
+    if (options.actions) {
+      Object.keys(options.actions).forEach(actionName => {
+        actions[actionName] = (...args) => options.actions[actionName]({ state, getters, actions }, ...args)
+      })
+    }
+    
+    // 持久化支持
+    if (options.persist?.enabled) {
+      const storageKey = options.persist.key || storeSymbol.toString()
+      const storage = options.persist.storage || localStorage
+      
+      // 从存储中恢复状态
+      const savedState = storage.getItem(storageKey)
+      if (savedState) {
+        const parsed = JSON.parse(savedState)
+        Object.assign(state, parsed)
+      }
+      
+      // 保存状态到存储
+      watch(
+        () => JSON.parse(JSON.stringify(state)),
+        (newState) => {
+          storage.setItem(storageKey, JSON.stringify(newState))
+        },
+        { deep: true }
+      )
+    }
+    
+    return {
+      state: readonly(state),
+      getters: readonly(getters),
+      actions,
+      // 内部使用，用于重置状态
+      _reset: () => Object.assign(state, typeof options.state === 'function' ? options.state() : options.state || {})
+    }
+  }
+  
+  const store = useCreateStore()
+  
+  // 提供store
+  function provideStore() {
+    provide(storeSymbol, store)
+    return store
+  }
+  
+  // 注入store
+  function useStore() {
+    const injectedStore = inject(storeSymbol, null)
+    if (!injectedStore) {
+      throw new Error('Store not provided. Make sure to call provideStore() in a parent component.')
+    }
+    return injectedStore
+  }
+  
+  return {
+    provideStore,
+    useStore
+  }
+}
+```
+
+使用自定义store：
+
+```js title="src/stores/userStore.js"
+import { createStore } from '../composables/createStore'
+
+export const { provideStore: provideUserStore, useStore: useUserStore } = createStore({
+  state: () => ({
+    user: null,
+    token: localStorage.getItem('token') || null,
+    isLoading: false,
+    error: null
+  }),
+  
+  getters: {
+    isLoggedIn: (state) => !!state.token && !!state.user,
+    username: (state) => state.user?.name || 'Guest',
+    userRole: (state) => state.user?.role || 'guest'
+  },
+  
+  actions: {
+    async login({ state }, credentials) {
+      state.isLoading = true
+      state.error = null
+      
+      try {
+        const response = await fetch('/api/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(credentials)
+        })
+        
+        if (!response.ok) {
+          throw new Error('Login failed')
+        }
+        
+        const data = await response.json()
+        state.user = data.user
+        state.token = data.token
+        localStorage.setItem('token', data.token)
+        
+        return true
+      } catch (error) {
+        state.error = error.message
+        return false
+      } finally {
+        state.isLoading = false
+      }
+    },
+    
+    logout({ state }) {
+      state.user = null
+      state.token = null
+      localStorage.removeItem('token')
+    }
+  },
+  
+  persist: {
+    enabled: true,
+    key: 'user-store',
+    storage: localStorage
+  }
+})
+```
+
+在应用中使用：
+
+```vue title="src/App.vue"
+<template>
+  <div class="app">
+    <header>
+      <nav>
+        <span v-if="isLoggedIn">欢迎, {{ username }}</span>
+        <button v-if="isLoggedIn" @click="actions.logout">退出登录</button>
+        <router-link v-else to="/login">登录</router-link>
+      </nav>
+    </header>
+    
+    <router-view />
+  </div>
+</template>
+
+<script setup>
+import { provideUserStore, useUserStore } from './stores/userStore'
+
+// 提供用户store
+provideUserStore()
+
+// 使用用户store
+const { state, getters, actions } = useUserStore()
+const { isLoggedIn, username } = getters
+</script>
+```
+
+## 4. 状态管理最佳实践
+
+### 4.1 何时使用状态管理
+
+状态管理不是必须的，应根据应用复杂度决定：
+
+1. **小型应用**: 使用props、emits和简单的provide/inject
+2. **中型应用**: 使用Composition API状态管理或轻量级Pinia
+3. **大型应用**: 使用Pinia或Vuex进行模块化状态管理
+
+### 4.2 状态组织原则
+
+1. **单一职责**: 每个store只管理一个领域的状态
+2. **最小化状态**: 只存储必要的状态，避免冗余数据
+3. **规范命名**: 使用一致的命名约定
+4. **避免重复**: 避免在多个store中存储相同数据
+5. **层次结构**: 复杂状态采用合理的层次结构
+
+### 4.3 性能优化
+
+1. **避免过度订阅**: 仅订阅需要的状态
+2. **使用计算属性**: 缓存派生状态
+3. **懒加载模块**: 按需加载状态模块
+4. **精细化更新**: 避免整体状态对象替换
+5. **防抖/节流**: 频繁变化的状态使用防抖/节流
+
+### 4.4 调试技巧
+
+1. **使用Vue开发工具**: Vue Devtools可检查Pinia/Vuex状态
+2. **时间旅行调试**: 使用开发工具的时间旅行功能
+3. **日志插件**: 添加日志插件记录状态变化
+4. **状态快照**: 在关键点保存状态快照
+5. **中间件**: 使用中间件拦截状态操作 

@@ -12,19 +12,23 @@ last_update:
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 import CodeBlock from '@theme/CodeBlock';
+import TOCInline from '@theme/TOCInline';
 
 # Java反射机制完全指南
 
 Java反射（Reflection）是Java语言最强大的特性之一，它允许程序在运行时检查和操作类、接口、字段和方法的信息。反射机制为Java提供了强大的动态编程能力，是Spring、Hibernate等主流框架的核心技术基础。
 
+:::info 本文内容概览
+<TOCInline toc={toc} />
+:::
+
 :::tip 核心价值
-**反射机制 = 运行时类型信息 + 动态操作能力 + 框架基础 + 元编程支持**
-- 🔍 **类型检查**：运行时获取类的完整信息和元数据
-- 🛠️ **动态操作**：动态创建对象、调用方法、访问字段
-- 🏗️ **框架基础**：Spring IoC、Hibernate ORM等框架的核心
-- 🔧 **工具支持**：IDE、调试器、序列化工具的基础技术
-- 📊 **元编程**：基于元数据的编程模式和代码生成
-- 🎯 **灵活性**：突破编译时限制，实现高度灵活的程序设计
+**反射 = 运行时自省 + 动态调用 + 框架基础 + 元编程能力**
+- 🔍 **自省机制**：运行时检查类型信息，实现动态特性
+- 🔄 **动态调用**：运行时创建对象、调用方法，提供极大灵活性
+- 🏗️ **框架基础**：支持依赖注入、序列化等底层框架能力
+- 🛠️ **工具开发**：编写各类开发工具，如调试器、代码生成器
+- 🔌 **扩展性设计**：构建可配置、可扩展的应用架构
 :::
 
 ## 1. 反射基础概念与原理
@@ -1484,3 +1488,151 @@ public class AnnotationReflectionDemo {
 :::
 
 通过掌握Java反射机制的核心概念和实践技巧，你可以更好地理解和使用各种Java框架，同时具备开发自己的框架和工具的能力。
+
+## 7. 面试题精选
+
+### 7.1 什么是Java反射？它的作用和应用场景有哪些？
+
+**答案：** Java反射是一种在运行时检查、访问和修改类、接口、字段和方法的机制。它允许程序在运行时而非编译时获取类的信息并操作类的对象。
+
+**作用和应用场景：**
+1. **依赖注入框架**：Spring框架使用反射实现依赖注入和控制反转(IoC)
+2. **ORM框架**：Hibernate等ORM框架使用反射将对象映射到数据库表
+3. **单元测试框架**：JUnit使用反射来识别和运行测试方法
+4. **序列化和反序列化**：Jackson、Gson等JSON库使用反射自动序列化对象
+5. **动态代理**：实现AOP(面向切面编程)
+6. **注解处理**：在运行时处理和解释注解
+7. **插件和模块化系统**：动态加载和使用模块或插件
+8. **IDE开发工具**：代码补全、调试器等功能
+
+### 7.2 Java反射的核心API有哪些？如何获取Class对象？
+
+**答案：** Java反射的核心API位于`java.lang.reflect`包中，主要包括：
+
+1. **Class**：表示类或接口的类型信息
+2. **Field**：表示类的字段（成员变量）
+3. **Method**：表示类的方法
+4. **Constructor**：表示类的构造方法
+5. **Modifier**：提供对类和成员访问修饰符的信息
+6. **Array**：提供动态创建和访问数组的静态方法
+7. **Parameter**：表示方法或构造函数参数（Java 8+）
+
+**获取Class对象的方式：**
+```java
+// 方式1：通过类名.class（编译时确定）
+Class<String> clazz1 = String.class;
+
+// 方式2：通过对象的getClass()方法（运行时确定）
+String str = "Hello";
+Class<?> clazz2 = str.getClass();
+
+// 方式3：通过Class.forName()（动态加载，最常用）
+Class<?> clazz3 = Class.forName("java.lang.String");
+
+// 方式4：通过类加载器
+ClassLoader classLoader = Thread.currentThread().getContextClassLoader();
+Class<?> clazz4 = classLoader.loadClass("java.lang.String");
+```
+
+### 7.3 Java反射的优缺点是什么？如何提高反射性能？
+
+**答案：**
+
+**优点：**
+1. **灵活性**：允许在运行时检查和修改类的行为
+2. **可扩展性**：支持创建可扩展的应用和框架
+3. **动态性**：能够动态创建对象和调用方法
+4. **解耦**：帮助实现松耦合设计
+
+**缺点：**
+1. **性能损失**：反射操作比直接代码调用慢，有性能开销
+2. **安全限制**：可能违反访问控制规则
+3. **代码复杂性**：反射代码难以理解和维护
+4. **编译时检查缺失**：类型错误在运行时才会发现
+
+**提高反射性能的方法：**
+1. **缓存反射对象**：重用Class、Method、Field等反射对象
+2. **使用setAccessible(true)**：避免Java安全检查的开销
+3. **批量操作**：一次获取所有需要的反射信息，避免重复查找
+4. **限制使用范围**：只在必要时使用反射
+5. **使用MethodHandles**：Java 7引入的MethodHandle比传统反射性能更好
+
+### 7.4 反射中的setAccessible(true)作用是什么？为什么需要它？
+
+**答案：** setAccessible(true)方法用于取消Java语言访问检查，使得可以访问和修改原本无法访问的成员（如private字段或方法）。
+
+**作用：**
+1. **访问私有成员**：允许访问类的private字段、方法和构造器
+2. **提高性能**：绕过JVM的安全检查，提高反射操作的性能
+
+**为什么需要它：**
+1. **框架开发**：框架需要访问用户类的私有成员
+2. **测试目的**：单元测试时可能需要访问私有方法或字段
+3. **序列化/反序列化**：序列化库需要访问所有字段，包括私有字段
+4. **性能优化**：在反射频繁使用的场景下，提高执行效率
+
+```java
+// 访问私有字段示例
+Field field = targetClass.getDeclaredField("privateField");
+field.setAccessible(true);  // 关键步骤
+field.set(targetObject, newValue);
+
+// 调用私有方法示例
+Method method = targetClass.getDeclaredMethod("privateMethod", String.class);
+method.setAccessible(true);  // 关键步骤
+method.invoke(targetObject, "parameter");
+```
+
+**注意事项：** 虽然setAccessible(true)可以绕过访问控制，但在实际应用中应谨慎使用，以免破坏封装性。从Java 9开始，模块系统可以限制非法反射访问。
+
+### 7.5 如何通过反射调用方法？如何处理方法的异常？
+
+**答案：** 通过Method对象的invoke()方法可以反射调用方法：
+
+```java
+public static void invokeMethod() {
+    try {
+        // 获取Class对象
+        Class<?> clazz = Class.forName("java.util.ArrayList");
+        
+        // 创建实例
+        Object list = clazz.getDeclaredConstructor().newInstance();
+        
+        // 获取add方法
+        Method addMethod = clazz.getMethod("add", Object.class);
+        
+        // 调用add方法
+        boolean result = (boolean)addMethod.invoke(list, "Hello");
+        
+        // 获取size方法
+        Method sizeMethod = clazz.getMethod("size");
+        
+        // 调用size方法
+        int size = (int)sizeMethod.invoke(list);
+        
+        System.out.println("添加结果: " + result);
+        System.out.println("列表大小: " + size);
+        
+    } catch (ClassNotFoundException e) {
+        System.out.println("类未找到: " + e.getMessage());
+    } catch (NoSuchMethodException e) {
+        System.out.println("方法未找到: " + e.getMessage());
+    } catch (InstantiationException | IllegalAccessException e) {
+        System.out.println("实例化错误: " + e.getMessage());
+    } catch (InvocationTargetException e) {
+        // 处理目标方法抛出的异常
+        System.out.println("方法执行异常: " + e.getTargetException().getMessage());
+    }
+}
+```
+
+**处理反射方法的异常：**
+1. **InvocationTargetException**：表示被调用的方法本身抛出了异常，通过getTargetException()可以获取原始异常
+2. **NoSuchMethodException**：当请求的方法不存在时抛出
+3. **IllegalAccessException**：当访问控制不允许执行操作时抛出
+4. **IllegalArgumentException**：当参数类型不匹配时抛出
+
+**最佳实践：**
+- 总是捕获并处理InvocationTargetException，它包装了目标方法的原始异常
+- 检查参数类型的兼容性，避免类型转换异常
+- 考虑使用try-with-resources语句处理可能需要关闭的资源

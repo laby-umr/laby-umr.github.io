@@ -8,19 +8,54 @@ last_update:
   author: Laby
 ---
 
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+import TOCInline from '@theme/TOCInline';
+
 # Java 线程基础详解
 
 线程是Java并发编程的基础，理解线程的基本概念、创建方式、生命周期管理对于掌握并发编程至关重要。本文将详细介绍Java线程的核心知识。
 
+:::info 本文内容概览
+<TOCInline toc={toc} />
+:::
+
+:::tip 核心价值
+**Java线程 = 轻量级处理单元 + 并发执行 + 资源共享 + 高效通信 + 可靠性保障**
+- 🚀 **轻量级处理**：比进程创建更轻量，系统开销小
+- 👥 **并发执行**：多线程并行处理任务，提高CPU利用率
+- 🔄 **资源共享**：共享进程内存空间，减少通信开销
+- ⚡ **响应性能**：提高应用响应性能，避免阻塞主线程
+- 🛡️ **隔离性**：各线程独立执行，互不干扰
+:::
+
 ## 1. 线程概述
 
 ### 1.1 什么是线程？
+
+```mermaid
+graph TD
+    A[进程] --> B[线程1]
+    A --> C[线程2]
+    A --> D[线程3]
+    B --> E[执行栈]
+    B --> F[PC寄存器]
+    B --> G[本地变量]
+    C --> H[执行栈]
+    C --> I[PC寄存器]
+    C --> J[本地变量]
+    A --> K[共享内存]
+    A --> L[共享文件资源]
+```
 
 :::tip 核心概念
 线程是程序执行的最小单位，是CPU调度的基本单元。一个进程可以包含多个线程，线程共享进程的内存空间，但拥有独立的执行栈。
 :::
 
 ### 1.2 线程与进程的关系
+
+<div className="card">
+<div className="card__body">
 
 | 特性 | 进程 | 线程 |
 |------|------|------|
@@ -30,514 +65,449 @@ last_update:
 | **通信方式** | 进程间通信(IPC) | 直接共享内存 |
 | **切换开销** | 较大 | 较小 |
 | **并发性** | 进程级并发 | 线程级并发 |
+| **稳定性** | 一个进程崩溃不影响其他进程 | 一个线程崩溃可能导致整个进程崩溃 |
+
+</div>
+</div>
 
 ### 1.3 线程的优势
 
-```java title="线程优势示例"
-public class ThreadAdvantages {
-    
-    /**
-     * 1. 提高程序响应性
-     * 主线程处理UI，工作线程处理耗时操作
-     */
-    public void responsiveExample() {
-        // 主线程保持响应
-        System.out.println("主线程开始处理用户界面");
+<Tabs>
+  <TabItem value="responsive" label="提高响应性" default>
+  ```java
+  // 主线程保持UI响应
+  SwingUtilities.invokeLater(() -> {
+      // UI相关操作
+      frame.setVisible(true);
+  });
         
-        // 工作线程处理耗时操作
-        Thread workerThread = new Thread(() -> {
-            System.out.println("工作线程开始处理耗时任务");
-            try {
-                Thread.sleep(5000); // 模拟耗时操作
-            } catch (InterruptedException e) {
-                e.printStackTrace();
-            }
-            System.out.println("工作线程完成耗时任务");
-        });
-        workerThread.start();
-        
-        System.out.println("主线程继续响应用户操作");
-    }
+  // 工作线程处理耗时操作
+  new Thread(() -> {
+      // 处理耗时的数据加载
+      loadLargeDataset();
+      
+      // 完成后更新UI
+      SwingUtilities.invokeLater(() -> {
+          updateUIWithResults();
+      });
+  }).start();
+  ```
+  </TabItem>
+  <TabItem value="resource" label="资源共享">
+  ```java
+  // 共享数据
+  SharedData sharedData = new SharedData();
     
-    /**
-     * 2. 资源共享
-     * 多个线程共享进程的内存空间
-     */
-    public void resourceSharingExample() {
-        // 共享数据
-        SharedData sharedData = new SharedData();
-        
-        // 多个线程访问共享数据
-        Thread thread1 = new Thread(() -> {
-            sharedData.increment();
-            System.out.println("线程1: " + sharedData.getValue());
-        });
-        
-        Thread thread2 = new Thread(() -> {
-            sharedData.increment();
-            System.out.println("线程2: " + sharedData.getValue());
-        });
-        
-        thread1.start();
-        thread2.start();
-    }
+  // 多个线程访问共享数据
+  Thread thread1 = new Thread(() -> {
+      sharedData.increment();
+      System.out.println("线程1: " + sharedData.getValue());
+  });
     
-    /**
-     * 3. 经济性
-     * 创建线程比创建进程开销小
-     */
-    public void economicalExample() {
-        // 创建多个线程处理任务
-        for (int i = 0; i < 10; i++) {
-            final int taskId = i;
-            Thread thread = new Thread(() -> {
-                System.out.println("处理任务: " + taskId);
-            });
-            thread.start();
-        }
-    }
-}
-
-class SharedData {
-    private int value = 0;
+  Thread thread2 = new Thread(() -> {
+      sharedData.increment();
+      System.out.println("线程2: " + sharedData.getValue());
+  });
     
-    public synchronized void increment() {
-        value++;
-    }
-    
-    public synchronized int getValue() {
-        return value;
-    }
-}
-```
+  thread1.start();
+  thread2.start();
+  ```
+  </TabItem>
+  <TabItem value="efficient" label="经济性">
+  ```java
+  // 创建多个线程处理任务，比创建多个进程开销小
+  for (int i = 0; i < 10; i++) {
+      final int taskId = i;
+      Thread thread = new Thread(() -> {
+          System.out.println("处理任务: " + taskId);
+          processTask(taskId);
+      });
+      thread.start();
+  }
+  ```
+  </TabItem>
+</Tabs>
 
 ## 2. 线程创建方式详解
 
+<details>
+<summary><strong>线程创建方法对比</strong></summary>
+
+```mermaid
+graph LR
+    A[线程创建方式] --> B[继承Thread]
+    A --> C[实现Runnable]
+    A --> D[实现Callable]
+    
+    B --> B1["优点: 简单直接\n缺点: 单继承限制"]
+    C --> C1["优点: 避免单继承\n缺点: 无法直接访问Thread方法"]
+    D --> D1["优点: 可返回值、抛异常\n缺点: 使用较复杂"]
+```
+
+| 创建方式 | 优点 | 缺点 | 适用场景 |
+|---------|------|------|----------|
+| **继承Thread** | 简单直接，可访问线程方法 | 单继承限制，不能继承其他类 | 简单任务，需要直接操作线程 |
+| **实现Runnable** | 避免单继承限制，更灵活 | 不能直接访问线程方法 | 大多数场景下的首选方式 |
+| **实现Callable** | 可返回结果，可抛出异常 | 使用相对复杂，需要Future | 需要返回值或异常处理的任务 |
+
+</details>
+
 ### 2.1 继承Thread类
 
-继承Thread类是最直接的线程创建方式，但限制了类的继承结构。
-
-```java title="继承Thread类示例"
-public class ThreadInheritanceExample {
-    
-    /**
-     * 自定义线程类
-     * 优点：简单直接，可以访问Thread类的所有方法
-     * 缺点：Java单继承限制，无法继承其他类
-     */
-    public static class CustomThread extends Thread {
-        private String threadName;
-        private int sleepTime;
-        
-        public CustomThread(String threadName, int sleepTime) {
-            this.threadName = threadName;
-            this.sleepTime = sleepTime;
-        }
-        
-    @Override
-    public void run() {
-            System.out.println("线程 " + threadName + " 开始执行");
-            
-            try {
-                for (int i = 0; i < 5; i++) {
-                    System.out.println(threadName + " - 计数: " + i);
-                    Thread.sleep(sleepTime);
-                }
-            } catch (InterruptedException e) {
-                System.out.println(threadName + " 被中断");
-                Thread.currentThread().interrupt(); // 重新设置中断状态
-            }
-            
-            System.out.println("线程 " + threadName + " 执行完成");
-        }
-    }
-    
-    public static void main(String[] args) {
-        System.out.println("=== 继承Thread类示例 ===");
-        
-        // 创建线程实例
-        CustomThread thread1 = new CustomThread("工作线程1", 1000);
-        CustomThread thread2 = new CustomThread("工作线程2", 800);
-        
-        // 设置线程属性
-        thread1.setPriority(Thread.MAX_PRIORITY); // 最高优先级
-        thread2.setPriority(Thread.MIN_PRIORITY); // 最低优先级
-        
-        // 启动线程
-        thread1.start();
-        thread2.start();
-        
-        // 主线程等待子线程完成
-        try {
-            thread1.join(); // 等待thread1完成
-            thread2.join(); // 等待thread2完成
-        } catch (InterruptedException e) {
-            e.printStackTrace();
-        }
-        
-        System.out.println("所有线程执行完成");
-    }
-}
-```
+<Tabs>
+  <TabItem value="code" label="代码实现" default>
+  ```java
+  // 自定义线程类
+  public class CustomThread extends Thread {
+      private String threadName;
+      
+      public CustomThread(String threadName) {
+          this.threadName = threadName;
+      }
+      
+      @Override
+      public void run() {
+          System.out.println("线程 " + threadName + " 开始执行");
+          // 线程任务代码...
+          System.out.println("线程 " + threadName + " 执行完成");
+      }
+  }
+  
+  // 使用方式
+  CustomThread thread = new CustomThread("工作线程");
+  thread.start(); // 启动线程
+  ```
+  </TabItem>
+  <TabItem value="features" label="特点分析">
+  <div className="card">
+  <div className="card__header">
+  <h4>继承Thread类特点</h4>
+  </div>
+  <div className="card__body">
+  <ul>
+  <li><strong>优点</strong>：直接访问Thread的方法（如getName(), getPriority()等）</li>
+  <li><strong>缺点</strong>：Java单继承限制，无法再继承其他类</li>
+  <li><strong>控制</strong>：可以直接控制线程的行为</li>
+  <li><strong>耦合度</strong>：任务逻辑与线程控制耦合在一起</li>
+  </ul>
+  </div>
+  </div>
+  </TabItem>
+  <TabItem value="usage" label="使用示例">
+  ```java
+  public class ThreadExample {
+      public static void main(String[] args) {
+          // 创建线程实例
+          CustomThread thread1 = new CustomThread("工作线程1");
+          CustomThread thread2 = new CustomThread("工作线程2");
+          
+          // 设置线程属性
+          thread1.setPriority(Thread.MAX_PRIORITY); // 最高优先级
+          thread2.setPriority(Thread.MIN_PRIORITY); // 最低优先级
+          
+          // 启动线程
+          thread1.start();
+          thread2.start();
+          
+          try {
+              thread1.join(); // 等待thread1完成
+              thread2.join(); // 等待thread2完成
+          } catch (InterruptedException e) {
+              Thread.currentThread().interrupt();
+          }
+      }
+  }
+  ```
+  </TabItem>
+</Tabs>
 
 ### 2.2 实现Runnable接口
 
-实现Runnable接口是推荐的线程创建方式，避免了单继承限制。
+<Tabs>
+  <TabItem value="basic" label="基本实现" default>
+  ```java
+  // 实现Runnable接口
+  public class TaskRunnable implements Runnable {
+      private String taskName;
+      
+      public TaskRunnable(String taskName) {
+          this.taskName = taskName;
+      }
+      
+      @Override
+      public void run() {
+          System.out.println("任务 " + taskName + " 开始执行");
+          // 任务代码...
+          System.out.println("任务 " + taskName + " 执行完成");
+      }
+  }
+  
+  // 使用方式
+  TaskRunnable task = new TaskRunnable("数据处理");
+  Thread thread = new Thread(task);
+  thread.start();
+  ```
+  </TabItem>
+  <TabItem value="lambda" label="Lambda表达式">
+  ```java
+  // 使用Lambda表达式创建线程
+  Thread thread = new Thread(() -> {
+      System.out.println("Lambda线程开始执行");
+      // 任务代码...
+      System.out.println("Lambda线程执行完成");
+  });
+  
+  thread.start();
+  ```
+  </TabItem>
+  <TabItem value="method" label="方法引用">
+  ```java
+  public class RunnableExample {
+      // 任务方法
+      public static void performTask() {
+          System.out.println("方法引用任务开始执行");
+          // 任务代码...
+          System.out.println("方法引用任务执行完成");
+      }
+      
+      public static void main(String[] args) {
+          // 使用方法引用
+          Thread thread = new Thread(RunnableExample::performTask);
+          thread.start();
+      }
+  }
+  ```
+  </TabItem>
+  <TabItem value="features" label="特点分析">
+  <div className="card">
+  <div className="card__header">
+  <h4>Runnable接口特点</h4>
+  </div>
+  <div className="card__body">
+  <ul>
+  <li><strong>优点</strong>：避免单继承限制，可以继承其他类</li>
+  <li><strong>灵活性</strong>：同一个Runnable可以被多个线程使用</li>
+  <li><strong>分离关注点</strong>：将任务逻辑与线程控制分离</li>
+  <li><strong>函数式风格</strong>：支持Lambda表达式，代码更简洁</li>
+  <li><strong>缺点</strong>：无法直接访问Thread的方法，需要通过Thread.currentThread()</li>
+  </ul>
+  </div>
+  </div>
+  </TabItem>
+</Tabs>
 
-```java title="实现Runnable接口示例"
-public class RunnableImplementationExample {
-    
-    /**
-     * 自定义Runnable实现
-     * 优点：避免单继承限制，更灵活
-     * 缺点：无法直接访问Thread类的方法
-     */
-    public static class TaskRunnable implements Runnable {
-        private String taskName;
-        private int taskCount;
-        
-        public TaskRunnable(String taskName, int taskCount) {
-            this.taskName = taskName;
-            this.taskCount = taskCount;
-        }
-        
-        @Override
-        public void run() {
-            System.out.println("任务 " + taskName + " 开始执行");
-            
-            try {
-                for (int i = 0; i < taskCount; i++) {
-                    System.out.println(taskName + " - 执行步骤: " + (i + 1));
-                    Thread.sleep(500);
-                }
-            } catch (InterruptedException e) {
-                System.out.println(taskName + " 被中断");
-                Thread.currentThread().interrupt();
-            }
-            
-            System.out.println("任务 " + taskName + " 执行完成");
-        }
-    }
-    
-    /**
-     * Lambda表达式创建Runnable
-     * 简洁的匿名实现方式
-     */
-    public static void lambdaExample() {
-        System.out.println("=== Lambda表达式示例 ===");
-        
-        // 使用Lambda表达式创建线程
-Thread lambdaThread = new Thread(() -> {
-            System.out.println("Lambda线程开始执行");
-            for (int i = 0; i < 3; i++) {
-                System.out.println("Lambda线程 - 步骤: " + (i + 1));
-                try {
-                    Thread.sleep(300);
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
-                    break;
-                }
-            }
-            System.out.println("Lambda线程执行完成");
-        });
-        
-lambdaThread.start();
-        
-        try {
-            lambdaThread.join();
-        } catch (InterruptedException e) {
-            e.printStackTrace();
-        }
-    }
-    
-    /**
-     * 方法引用创建Runnable
-     * 引用现有方法作为线程任务
-     */
-    public static void methodReferenceExample() {
-        System.out.println("=== 方法引用示例 ===");
-        
-        // 使用方法引用
-        Thread methodThread = new Thread(RunnableImplementationExample::performTask);
-        methodThread.start();
-        
-        try {
-            methodThread.join();
-        } catch (InterruptedException e) {
-            e.printStackTrace();
-        }
-    }
-    
-    public static void performTask() {
-        System.out.println("方法引用任务开始执行");
-        try {
-            Thread.sleep(1000);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-        }
-        System.out.println("方法引用任务执行完成");
-    }
-    
-    public static void main(String[] args) {
-        System.out.println("=== 实现Runnable接口示例 ===");
-        
-        // 创建Runnable实例
-        TaskRunnable task1 = new TaskRunnable("数据处理", 3);
-        TaskRunnable task2 = new TaskRunnable("文件操作", 4);
-        
-        // 创建线程并传入Runnable
-        Thread thread1 = new Thread(task1, "数据处理线程");
-        Thread thread2 = new Thread(task2, "文件操作线程");
-        
-        // 启动线程
-        thread1.start();
-        thread2.start();
-        
-        // 等待线程完成
-        try {
-            thread1.join();
-            thread2.join();
-        } catch (InterruptedException e) {
-            e.printStackTrace();
-        }
-        
-        // 演示其他创建方式
-        lambdaExample();
-        methodReferenceExample();
-    }
-}
-```
+:::tip 最佳实践
+在大多数情况下，实现Runnable接口是创建线程的推荐方式，它提供了更好的灵活性和可扩展性。
+:::
 
 ### 2.3 实现Callable接口
 
-Callable接口允许线程返回结果和抛出异常，是Future模式的基础。
-
-```java title="实现Callable接口示例"
-import java.util.concurrent.Callable;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.FutureTask;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
-
-public class CallableImplementationExample {
-    
-    /**
-     * 自定义Callable实现
-     * 优点：可以返回结果，可以抛出异常
-     * 缺点：需要FutureTask包装，使用相对复杂
-     */
-    public static class CalculationTask implements Callable<Integer> {
-        private int start;
-        private int end;
-        private String taskName;
-        
-        public CalculationTask(String taskName, int start, int end) {
-            this.taskName = taskName;
-            this.start = start;
-            this.end = end;
-        }
-        
-        @Override
-        public Integer call() throws Exception {
-            System.out.println(taskName + " 开始计算");
-            
-            int sum = 0;
-            for (int i = start; i <= end; i++) {
-                sum += i;
-                Thread.sleep(100); // 模拟计算时间
-            }
-            
-            System.out.println(taskName + " 计算完成，结果: " + sum);
-            return sum;
-        }
-    }
-    
-    /**
-     * 带异常处理的Callable
-     */
-    public static class ExceptionTask implements Callable<String> {
-        private boolean shouldThrowException;
-        
-        public ExceptionTask(boolean shouldThrowException) {
-            this.shouldThrowException = shouldThrowException;
-        }
-        
-    @Override
-    public String call() throws Exception {
-            if (shouldThrowException) {
-                throw new RuntimeException("模拟异常");
-            }
-            return "任务执行成功";
-        }
-    }
-    
-    /**
-     * 使用FutureTask获取结果
-     */
-    public static void futureTaskExample() {
-        System.out.println("=== FutureTask示例 ===");
-        
-        // 创建Callable任务
-        CalculationTask task = new CalculationTask("求和任务", 1, 10);
-        
-        // 使用FutureTask包装
-        FutureTask<Integer> futureTask = new FutureTask<>(task);
-        
-        // 创建线程执行任务
-        Thread thread = new Thread(futureTask);
-        thread.start();
-        
-        try {
-            // 获取结果（阻塞等待）
-            Integer result = futureTask.get();
-            System.out.println("计算结果: " + result);
-            
-            // 带超时的获取结果
-            // Integer result = futureTask.get(5, TimeUnit.SECONDS);
-            
-        } catch (InterruptedException e) {
-            System.out.println("等待被中断");
-            Thread.currentThread().interrupt();
-        } catch (ExecutionException e) {
-            System.out.println("任务执行异常: " + e.getCause());
-        }
-    }
-    
-    /**
-     * 异常处理示例
-     */
-    public static void exceptionHandlingExample() {
-        System.out.println("=== 异常处理示例 ===");
-        
-        // 正常任务
-        ExceptionTask normalTask = new ExceptionTask(false);
-        FutureTask<String> normalFuture = new FutureTask<>(normalTask);
-        Thread normalThread = new Thread(normalFuture);
-        normalThread.start();
-        
-        // 异常任务
-        ExceptionTask exceptionTask = new ExceptionTask(true);
-        FutureTask<String> exceptionFuture = new FutureTask<>(exceptionTask);
-        Thread exceptionThread = new Thread(exceptionFuture);
-        exceptionThread.start();
-        
-        try {
-            // 处理正常任务
-            String normalResult = normalFuture.get();
-            System.out.println("正常任务结果: " + normalResult);
-            
-            // 处理异常任务
-            String exceptionResult = exceptionFuture.get();
-            System.out.println("异常任务结果: " + exceptionResult);
-            
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-        } catch (ExecutionException e) {
-            System.out.println("捕获到异常: " + e.getCause().getMessage());
-        }
-    }
-    
-    /**
-     * 超时处理示例
-     */
-    public static void timeoutExample() {
-        System.out.println("=== 超时处理示例 ===");
-        
-        // 创建长时间运行的任务
-        Callable<String> longTask = () -> {
-            Thread.sleep(10000); // 10秒
-            return "长时间任务完成";
-        };
-        
-        FutureTask<String> futureTask = new FutureTask<>(longTask);
-Thread thread = new Thread(futureTask);
-thread.start();
-
-try {
-            // 设置5秒超时
-            String result = futureTask.get(5, TimeUnit.SECONDS);
-            System.out.println("任务结果: " + result);
-        } catch (TimeoutException e) {
-            System.out.println("任务超时");
-            thread.interrupt(); // 中断线程
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-        } catch (ExecutionException e) {
-            System.out.println("任务执行异常: " + e.getCause());
-        }
-    }
-    
-    public static void main(String[] args) {
-        System.out.println("=== Callable接口示例 ===");
-        
-        // 基本使用示例
-        futureTaskExample();
-        
-        // 异常处理示例
-        exceptionHandlingExample();
-        
-        // 超时处理示例
-        timeoutExample();
-    }
-}
-```
+<Tabs>
+  <TabItem value="basic" label="基本实现" default>
+  ```java
+  import java.util.concurrent.Callable;
+  import java.util.concurrent.FutureTask;
+  
+  // 实现Callable接口
+  public class CalculationTask implements Callable<Integer> {
+      private int number;
+      
+      public CalculationTask(int number) {
+          this.number = number;
+      }
+      
+      @Override
+      public Integer call() throws Exception {
+          System.out.println("计算任务开始");
+          if (number < 0) {
+              throw new IllegalArgumentException("负数不支持");
+          }
+          int result = number * number;
+          System.out.println("计算结果: " + result);
+          return result;
+      }
+  }
+  
+  // 使用方式
+  CalculationTask task = new CalculationTask(10);
+  FutureTask<Integer> futureTask = new FutureTask<>(task);
+  Thread thread = new Thread(futureTask);
+  thread.start();
+  
+  // 获取结果
+  try {
+      Integer result = futureTask.get(); // 阻塞等待结果
+      System.out.println("获取到计算结果: " + result);
+  } catch (Exception e) {
+      e.printStackTrace();
+  }
+  ```
+  </TabItem>
+  <TabItem value="lambda" label="Lambda表达式">
+  ```java
+  import java.util.concurrent.Callable;
+  import java.util.concurrent.FutureTask;
+  
+  // 使用Lambda表达式创建Callable
+  Callable<String> callable = () -> {
+      System.out.println("Callable任务开始执行");
+      Thread.sleep(2000); // 模拟耗时操作
+      return "任务执行结果";
+  };
+  
+  FutureTask<String> futureTask = new FutureTask<>(callable);
+  Thread thread = new Thread(futureTask);
+  thread.start();
+  
+  // 获取结果
+  try {
+      String result = futureTask.get();
+      System.out.println("结果: " + result);
+  } catch (Exception e) {
+      e.printStackTrace();
+  }
+  ```
+  </TabItem>
+  <TabItem value="timeout" label="超时处理">
+  ```java
+  import java.util.concurrent.Callable;
+  import java.util.concurrent.FutureTask;
+  import java.util.concurrent.TimeUnit;
+  import java.util.concurrent.TimeoutException;
+  
+  // 长时间运行的任务
+  Callable<String> longTask = () -> {
+      Thread.sleep(10000); // 10秒
+      return "长时间任务完成";
+  };
+  
+  FutureTask<String> futureTask = new FutureTask<>(longTask);
+  Thread thread = new Thread(futureTask);
+  thread.start();
+  
+  try {
+      // 设置5秒超时
+      String result = futureTask.get(5, TimeUnit.SECONDS);
+      System.out.println("任务结果: " + result);
+  } catch (TimeoutException e) {
+      System.out.println("任务超时");
+      thread.interrupt(); // 中断线程
+  } catch (Exception e) {
+      e.printStackTrace();
+  }
+  ```
+  </TabItem>
+  <TabItem value="features" label="特点分析">
+  <div className="card">
+  <div className="card__header">
+  <h4>Callable接口特点</h4>
+  </div>
+  <div className="card__body">
+  <ul>
+  <li><strong>返回值</strong>：可以返回任务执行结果</li>
+  <li><strong>异常处理</strong>：可以抛出检查型异常</li>
+  <li><strong>Future支持</strong>：支持获取结果、取消任务、检查完成状态</li>
+  <li><strong>超时机制</strong>：支持设置等待结果的超时时间</li>
+  <li><strong>缺点</strong>：使用较复杂，需要通过FutureTask包装</li>
+  </ul>
+  </div>
+  </div>
+  </TabItem>
+</Tabs>
 
 ## 3. 线程生命周期详解
 
-### 3.1 线程状态
+### 3.1 线程状态概述
 
-Java线程有6种状态，每种状态都有特定的含义和转换条件。
+<Tabs>
+  <TabItem value="states" label="线程状态" default>
+    <div className="card">
+    <div className="card__header">
+    <h4>Java线程的6种状态</h4>
+    </div>
+    <div className="card__body">
+    <ol>
+    <li><strong>NEW</strong>：新创建的线程，尚未启动</li>
+    <li><strong>RUNNABLE</strong>：可运行状态，可能正在运行也可能在等待CPU资源</li>
+    <li><strong>BLOCKED</strong>：阻塞状态，等待获取监视器锁</li>
+    <li><strong>WAITING</strong>：等待状态，等待其他线程执行特定操作</li>
+    <li><strong>TIMED_WAITING</strong>：超时等待状态，指定时间内等待其他线程</li>
+    <li><strong>TERMINATED</strong>：终止状态，线程执行完毕</li>
+    </ol>
+    </div>
+    </div>
+  </TabItem>
+  <TabItem value="code" label="状态检查">
+  ```java
+  Thread thread = new Thread(() -> {
+      try {
+          Thread.sleep(2000);
+      } catch (InterruptedException e) {
+          Thread.currentThread().interrupt();
+      }
+  });
+  
+  System.out.println("初始状态: " + thread.getState()); // NEW
+  
+  thread.start();
+  System.out.println("启动后状态: " + thread.getState()); // RUNNABLE
+  
+  try {
+      Thread.sleep(1000); // 让线程进入睡眠状态
+      System.out.println("睡眠中状态: " + thread.getState()); // TIMED_WAITING
+      
+      thread.join(); // 等待线程结束
+      System.out.println("结束后状态: " + thread.getState()); // TERMINATED
+  } catch (InterruptedException e) {
+      Thread.currentThread().interrupt();
+  }
+  ```
+  </TabItem>
+  <TabItem value="table" label="状态转换">
+  | 当前状态 | 触发条件 | 目标状态 |
+  |---------|----------|---------|
+  | **NEW** | 调用start()方法 | RUNNABLE |
+  | **RUNNABLE** | 获取synchronized锁失败 | BLOCKED |
+  | **RUNNABLE** | 调用wait()方法 | WAITING |
+  | **RUNNABLE** | 调用sleep(time)或wait(time)方法 | TIMED_WAITING |
+  | **BLOCKED** | 获得锁 | RUNNABLE |
+  | **WAITING** | 调用notify/notifyAll | RUNNABLE/BLOCKED |
+  | **TIMED_WAITING** | 超时或被唤醒 | RUNNABLE/BLOCKED |
+  | **RUNNABLE** | 执行完成 | TERMINATED |
+  </TabItem>
+</Tabs>
 
-```java title="线程状态示例"
-public class ThreadStateExample {
+### 3.2 线程状态转换图
+
+```mermaid
+stateDiagram-v2
+    [*] --> NEW: 创建线程
+    NEW --> RUNNABLE: start()
+    RUNNABLE --> BLOCKED: 等待锁
+    BLOCKED --> RUNNABLE: 获得锁
+    RUNNABLE --> WAITING: wait()/join()
+    WAITING --> RUNNABLE: notify()/notifyAll()
+    RUNNABLE --> TIMED_WAITING: sleep(time)/wait(time)
+    TIMED_WAITING --> RUNNABLE: 超时/被唤醒
+    RUNNABLE --> [*]: 执行完毕
     
-    /**
-     * 演示线程的各种状态
-     */
-    public static void demonstrateThreadStates() {
-        System.out.println("=== 线程状态演示 ===");
-        
-        // 1. NEW状态 - 线程被创建但未启动
-        Thread thread = new Thread(() -> {
-            try {
-                Thread.sleep(2000);
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-            }
-        });
-        
-        System.out.println("创建后状态: " + thread.getState()); // NEW
-        
-        // 2. RUNNABLE状态 - 线程启动后
-        thread.start();
-        System.out.println("启动后状态: " + thread.getState()); // RUNNABLE
-        
-        // 3. TIMED_WAITING状态 - 线程睡眠
-        try {
-            Thread.sleep(1000);
-            System.out.println("睡眠中状态: " + thread.getState()); // TIMED_WAITING
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-        }
-        
-        // 4. TERMINATED状态 - 线程执行完成
-        try {
-            thread.join();
-            System.out.println("执行完成后状态: " + thread.getState()); // TERMINATED
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-        }
-    }
+    note right of NEW: 线程被创建未启动
+    note right of RUNNABLE: 线程正在运行或等待CPU
+    note right of BLOCKED: 线程等待监视器锁
+    note right of WAITING: 无限期等待
+    note right of TIMED_WAITING: 限时等待
+```
+
+### 3.3 线程状态示例
+
+<details>
+<summary><strong>BLOCKED状态示例</strong></summary>
+
+```java
+public class BlockedStateExample {
+    private static final Object lock = new Object();
     
-    /**
-     * 演示BLOCKED状态
-     */
-    public static void demonstrateBlockedState() {
-        System.out.println("=== BLOCKED状态演示 ===");
-        
-        Object lock = new Object();
-        
-        // 线程1：获取锁并长时间持有
+    public static void main(String[] args) throws InterruptedException {
         Thread thread1 = new Thread(() -> {
             synchronized (lock) {
                 System.out.println("线程1获得锁");
@@ -546,52 +516,36 @@ public class ThreadStateExample {
                 } catch (InterruptedException e) {
                     Thread.currentThread().interrupt();
                 }
-                System.out.println("线程1释放锁");
             }
         });
         
-        // 线程2：尝试获取锁，会被阻塞
+        // 线程2将被阻塞
         Thread thread2 = new Thread(() -> {
-            System.out.println("线程2尝试获取锁");
             synchronized (lock) {
                 System.out.println("线程2获得锁");
             }
         });
         
         thread1.start();
-        try {
-            Thread.sleep(100); // 确保线程1先启动
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-        }
+        Thread.sleep(100); // 确保线程1先启动
         
         thread2.start();
+        Thread.sleep(1000); // 给线程2时间进入BLOCKED状态
         
-        // 检查线程2的状态
-        try {
-            Thread.sleep(1000);
-            System.out.println("线程2状态: " + thread2.getState()); // BLOCKED
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-        }
-        
-        try {
-            thread1.join();
-            thread2.join();
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-        }
+        System.out.println("线程2状态: " + thread2.getState()); // 输出BLOCKED
     }
+}
+```
+</details>
+
+<details>
+<summary><strong>WAITING状态示例</strong></summary>
+
+```java
+public class WaitingStateExample {
+    private static final Object lock = new Object();
     
-    /**
-     * 演示WAITING状态
-     */
-    public static void demonstrateWaitingState() {
-        System.out.println("=== WAITING状态演示 ===");
-        
-        Object lock = new Object();
-        
-        // 等待线程
+    public static void main(String[] args) throws InterruptedException {
         Thread waitingThread = new Thread(() -> {
             synchronized (lock) {
                 try {
@@ -604,7 +558,6 @@ public class ThreadStateExample {
             }
         });
         
-        // 通知线程
         Thread notifyThread = new Thread(() -> {
             try {
                 Thread.sleep(2000); // 等待2秒
@@ -618,649 +571,943 @@ public class ThreadStateExample {
         });
         
         waitingThread.start();
+        Thread.sleep(500); // 确保等待线程先执行
+        System.out.println("等待线程状态: " + waitingThread.getState()); // 输出WAITING
+        
         notifyThread.start();
-        
-        // 检查等待线程的状态
-        try {
-            Thread.sleep(1000);
-            System.out.println("等待线程状态: " + waitingThread.getState()); // WAITING
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-        }
-        
-        try {
-            waitingThread.join();
-            notifyThread.join();
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-        }
-    }
-    
-    public static void main(String[] args) {
-        demonstrateThreadStates();
-        demonstrateBlockedState();
-        demonstrateWaitingState();
     }
 }
 ```
+</details>
 
-### 3.2 状态转换图
+<details>
+<summary><strong>TIMED_WAITING状态示例</strong></summary>
 
-```mermaid
-graph TD
-    A[NEW] --> B[RUNNABLE]
-    B --> C[BLOCKED]
-    B --> D[WAITING]
-    B --> E[TIMED_WAITING]
-    B --> F[TERMINATED]
-    C --> B
-    D --> B
-    E --> B
-    
-    style A fill:#e1f5fe
-    style B fill:#c8e6c9
-    style C fill:#fff3e0
-    style D fill:#f3e5f5
-    style E fill:#fce4ec
-    style F fill:#ffebee
-```
-
-### 3.3 状态转换条件
-
-| 状态转换 | 触发条件 | 示例 |
-|----------|----------|------|
-| NEW → RUNNABLE | 调用start()方法 | `thread.start()` |
-| RUNNABLE → BLOCKED | 尝试获取锁失败 | `synchronized(lock)` |
-| RUNNABLE → WAITING | 调用wait()方法 | `lock.wait()` |
-| RUNNABLE → TIMED_WAITING | 调用sleep()或wait(timeout) | `Thread.sleep(1000)` |
-| BLOCKED → RUNNABLE | 获得锁 | 锁被释放后获得 |
-| WAITING → RUNNABLE | 被notify()唤醒 | `lock.notify()` |
-| TIMED_WAITING → RUNNABLE | 超时或被唤醒 | 时间到期或notify() |
-| RUNNABLE → TERMINATED | 执行完成或异常 | run()方法结束 |
-
-## 4. 线程控制方法详解
-
-### 4.1 基本控制方法
-
-```java title="线程控制方法示例"
-public class ThreadControlExample {
-    
-    /**
-     * 线程中断机制
-     * 中断是一种协作机制，不会强制停止线程
-     */
-    public static void interruptExample() {
-        System.out.println("=== 线程中断示例 ===");
-        
-        Thread interruptibleThread = new Thread(() -> {
-            System.out.println("可中断线程开始执行");
-            
-            while (!Thread.currentThread().isInterrupted()) {
-                try {
-                    System.out.println("线程正在工作...");
-                    Thread.sleep(1000);
-                } catch (InterruptedException e) {
-                    System.out.println("线程被中断");
-                    Thread.currentThread().interrupt(); // 重新设置中断状态
-                    break;
-                }
-            }
-            
-            System.out.println("可中断线程结束");
-        });
-        
-        interruptibleThread.start();
-        
-        try {
-            Thread.sleep(3000); // 让线程工作3秒
-            interruptibleThread.interrupt(); // 中断线程
-            interruptibleThread.join();
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-        }
-    }
-    
-    /**
-     * 线程等待和通知
-     */
-    public static void waitNotifyExample() {
-        System.out.println("=== 等待通知示例 ===");
-        
-        Object lock = new Object();
-        boolean[] condition = {false};
-        
-        // 等待线程
-        Thread waiter = new Thread(() -> {
-            synchronized (lock) {
-                while (!condition[0]) {
-                    try {
-                        System.out.println("等待线程进入等待状态");
-                        lock.wait(); // 释放锁并等待
-                        System.out.println("等待线程被唤醒");
-                    } catch (InterruptedException e) {
-                        Thread.currentThread().interrupt();
-                        break;
-                    }
-                }
-                System.out.println("等待线程继续执行");
-            }
-        });
-        
-        // 通知线程
-        Thread notifier = new Thread(() -> {
+```java
+public class TimedWaitingStateExample {
+    public static void main(String[] args) throws InterruptedException {
+        Thread sleepingThread = new Thread(() -> {
             try {
-                Thread.sleep(2000); // 模拟工作
-                synchronized (lock) {
-                    condition[0] = true;
-                    System.out.println("通知线程设置条件并通知");
-                    lock.notify(); // 唤醒等待线程
-                }
+                System.out.println("线程开始睡眠5秒");
+                Thread.sleep(5000);
+                System.out.println("线程睡眠结束");
             } catch (InterruptedException e) {
+                System.out.println("线程睡眠被中断");
                 Thread.currentThread().interrupt();
             }
         });
         
-        waiter.start();
-        notifier.start();
+        sleepingThread.start();
+        Thread.sleep(1000); // 给线程时间进入TIMED_WAITING状态
         
-        try {
-            waiter.join();
-            notifier.join();
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-        }
-    }
-    
-    /**
-     * 线程优先级
-     */
-    public static void priorityExample() {
-        System.out.println("=== 线程优先级示例 ===");
-        
-        // 高优先级线程
-        Thread highPriority = new Thread(() -> {
-            for (int i = 0; i < 5; i++) {
-                System.out.println("高优先级线程: " + i);
-                try {
-                    Thread.sleep(100);
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
-                    break;
-                }
-            }
-        });
-        
-        // 低优先级线程
-        Thread lowPriority = new Thread(() -> {
-            for (int i = 0; i < 5; i++) {
-                System.out.println("低优先级线程: " + i);
-                try {
-                    Thread.sleep(100);
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
-                    break;
-                }
-            }
-        });
-        
-        // 设置优先级
-        highPriority.setPriority(Thread.MAX_PRIORITY); // 10
-        lowPriority.setPriority(Thread.MIN_PRIORITY);  // 1
-        
-        System.out.println("高优先级线程优先级: " + highPriority.getPriority());
-        System.out.println("低优先级线程优先级: " + lowPriority.getPriority());
-        
-        lowPriority.start();
-        highPriority.start();
-        
-        try {
-            highPriority.join();
-            lowPriority.join();
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-        }
-    }
-    
-    /**
-     * 守护线程
-     */
-    public static void daemonExample() {
-        System.out.println("=== 守护线程示例 ===");
-        
-        // 守护线程
-        Thread daemonThread = new Thread(() -> {
-            while (true) {
-                System.out.println("守护线程正在运行...");
-                try {
-                    Thread.sleep(1000);
-                } catch (InterruptedException e) {
-                    System.out.println("守护线程被中断");
-                    break;
-                }
-            }
-        });
-        
-        // 工作线程
-        Thread workerThread = new Thread(() -> {
-            for (int i = 0; i < 3; i++) {
-                System.out.println("工作线程: " + i);
-                try {
-                    Thread.sleep(2000);
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
-                    break;
-                }
-            }
-            System.out.println("工作线程完成");
-        });
-        
-        daemonThread.setDaemon(true); // 设置为守护线程
-        daemonThread.start();
-        workerThread.start();
-        
-        try {
-            workerThread.join(); // 等待工作线程完成
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-        }
-        
-        System.out.println("主线程结束，守护线程也会结束");
-    }
-    
-    public static void main(String[] args) {
-        interruptExample();
-        waitNotifyExample();
-        priorityExample();
-        daemonExample();
+        System.out.println("线程状态: " + sleepingThread.getState()); // 输出TIMED_WAITING
     }
 }
 ```
+</details>
+
+## 4. 线程控制方法详解
+
+### 4.1 线程控制核心方法
+
+<div className="card">
+<div className="card__body">
+
+| 控制方法 | 描述 | 注意事项 |
+|---------|------|---------|
+| **start()** | 启动线程，使线程进入就绪状态 | 不能多次调用同一线程的start() |
+| **join()** | 等待线程终止 | 可能导致调用线程阻塞 |
+| **join(long)** | 等待线程终止，有超时时间 | 超时后继续执行，不管线程是否完成 |
+| **sleep(long)** | 当前线程休眠指定时间 | 不会释放对象锁 |
+| **yield()** | 提示线程调度器让出CPU执行权 | 只是提示，调度器可能忽略 |
+| **interrupt()** | 中断线程 | 设置线程的中断状态 |
+| **isInterrupted()** | 检查线程是否被中断 | 不会清除中断状态 |
+| **interrupted()** | 检查当前线程是否被中断 | 会清除中断状态 |
+
+</div>
+</div>
+
+### 4.2 线程中断机制
+
+<Tabs>
+  <TabItem value="basic" label="基本中断" default>
+  ```java
+  // 可中断的线程任务
+  Thread thread = new Thread(() -> {
+      while (!Thread.currentThread().isInterrupted()) {
+          try {
+              System.out.println("线程工作中...");
+              Thread.sleep(1000);
+          } catch (InterruptedException e) {
+              System.out.println("线程被中断");
+              // 重新设置中断状态（因为InterruptedException会清除中断状态）
+              Thread.currentThread().interrupt();
+              break;
+          }
+      }
+      System.out.println("线程退出");
+  });
+  
+  thread.start();
+  
+  // 等待一段时间后中断线程
+  try {
+      Thread.sleep(3000);
+      thread.interrupt(); // 中断线程
+  } catch (InterruptedException e) {
+      Thread.currentThread().interrupt();
+  }
+  ```
+  </TabItem>
+  <TabItem value="polling" label="轮询中断状态">
+  ```java
+  Thread thread = new Thread(() -> {
+      // 循环检查中断状态
+      while (!Thread.currentThread().isInterrupted()) {
+          // 执行一段非阻塞操作
+          System.out.println("执行计算任务...");
+          
+          // 模拟计算工作
+          long sum = 0;
+          for (int i = 0; i < 1000000; i++) {
+              sum += i;
+          }
+          
+          // 在适当的检查点检查中断
+          if (Thread.currentThread().isInterrupted()) {
+              System.out.println("检测到中断，准备退出");
+              break;
+          }
+      }
+      System.out.println("线程正常退出");
+  });
+  
+  thread.start();
+  thread.interrupt(); // 中断线程
+  ```
+  </TabItem>
+  <TabItem value="flag" label="自定义标志">
+  ```java
+  public class ControlledThread extends Thread {
+      private volatile boolean running = true;
+      
+      public void stopThread() {
+          running = false;
+      }
+      
+      @Override
+      public void run() {
+          while (running) {
+              System.out.println("线程运行中...");
+              try {
+                  Thread.sleep(500);
+              } catch (InterruptedException e) {
+                  System.out.println("睡眠被中断");
+              }
+          }
+          System.out.println("线程停止");
+      }
+  }
+  
+  // 使用方式
+  ControlledThread thread = new ControlledThread();
+  thread.start();
+  
+  // 等待一段时间后停止线程
+  try {
+      Thread.sleep(2000);
+      thread.stopThread(); // 优雅停止
+  } catch (InterruptedException e) {
+      Thread.currentThread().interrupt();
+  }
+  ```
+  </TabItem>
+</Tabs>
+
+:::caution 注意事项
+1. 永远不要使用已废弃的`Thread.stop()`、`Thread.suspend()`和`Thread.resume()`方法
+2. 中断是一种**协作机制**，不会强制终止线程
+3. 线程在`InterruptedException`异常处理中应当重新设置中断状态或传递异常
+:::
+
+### 4.3 线程等待与通知
+
+<details>
+<summary><strong>wait/notify机制详解</strong></summary>
+
+```mermaid
+sequenceDiagram
+    participant 线程A as 线程A
+    participant 对象锁 as 共享对象锁
+    participant 线程B as 线程B
+    
+    线程A->>对象锁: 获取锁(synchronized)
+    线程B-->>对象锁: 尝试获取锁(被阻塞)
+    线程A->>对象锁: 调用wait()
+    Note over 线程A,对象锁: 线程A释放锁并进入等待队列
+    线程B->>对象锁: 获得锁并执行
+    线程B->>对象锁: 调用notify()
+    Note over 对象锁,线程A: 线程A被唤醒，等待重新获取锁
+    线程B->>对象锁: 执行完毕，释放锁
+    线程A->>对象锁: 重新获得锁，从wait()返回继续执行
+```
+
+**重要说明：**
+1. `wait()`、`notify()`和`notifyAll()`方法必须在**同步代码块**或**同步方法**中调用
+2. 这些方法是`Object`类的方法，不是`Thread`类的方法
+3. `wait()`会释放锁，而`sleep()`不会释放锁
+4. 调用`notify()`后，被通知的线程不会立即执行，而是需要等待当前线程释放锁
+
+</details>
+
+```java title="等待/通知示例"
+public class WaitNotifyExample {
+    private static final Object lock = new Object();
+    private static boolean dataReady = false;
+    private static String data = null;
+    
+    public static void main(String[] args) {
+        // 消费者线程
+        Thread consumer = new Thread(() -> {
+            synchronized (lock) {
+                System.out.println("消费者等待数据...");
+                while (!dataReady) { // 使用循环检查条件防止虚假唤醒
+                    try {
+                        lock.wait(); // 释放锁并等待
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                        return;
+                    }
+                }
+                System.out.println("消费者消费数据: " + data);
+            }
+        });
+        
+        // 生产者线程
+        Thread producer = new Thread(() -> {
+            try {
+                Thread.sleep(2000); // 模拟耗时操作
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                return;
+            }
+            
+            synchronized (lock) {
+                data = "重要数据";
+                dataReady = true;
+                System.out.println("生产者准备数据: " + data);
+                lock.notify(); // 通知等待的消费者
+            }
+        });
+        
+        consumer.start();
+        producer.start();
+    }
+}
+```
+
+### 4.4 线程优先级和守护线程
+
+<Tabs>
+  <TabItem value="priority" label="线程优先级" default>
+  ```java
+  public class ThreadPriorityExample {
+      public static void main(String[] args) {
+          // 创建三个优先级不同的线程
+          Thread lowPriority = new Thread(() -> {
+              for (int i = 0; i < 5; i++) {
+                  System.out.println("低优先级线程: " + i);
+                  Thread.yield(); // 提示可以让出CPU
+              }
+          });
+          
+          Thread normalPriority = new Thread(() -> {
+              for (int i = 0; i < 5; i++) {
+                  System.out.println("普通优先级线程: " + i);
+                  Thread.yield();
+              }
+          });
+          
+          Thread highPriority = new Thread(() -> {
+              for (int i = 0; i < 5; i++) {
+                  System.out.println("高优先级线程: " + i);
+                  Thread.yield();
+              }
+          });
+          
+          // 设置优先级
+          lowPriority.setPriority(Thread.MIN_PRIORITY); // 1
+          normalPriority.setPriority(Thread.NORM_PRIORITY); // 5
+          highPriority.setPriority(Thread.MAX_PRIORITY); // 10
+          
+          // 启动线程
+          lowPriority.start();
+          normalPriority.start();
+          highPriority.start();
+      }
+  }
+  ```
+  </TabItem>
+  <TabItem value="daemon" label="守护线程">
+  ```java
+  public class DaemonThreadExample {
+      public static void main(String[] args) {
+          // 创建守护线程
+          Thread daemonThread = new Thread(() -> {
+              while (true) {
+                  try {
+                      System.out.println("守护线程运行中...");
+                      Thread.sleep(1000);
+                  } catch (InterruptedException e) {
+                      break;
+                  }
+              }
+          });
+          
+          // 设置为守护线程（必须在start前设置）
+          daemonThread.setDaemon(true);
+          daemonThread.start();
+          
+          // 主线程（用户线程）
+          try {
+              System.out.println("主线程运行3秒后退出");
+              Thread.sleep(3000);
+          } catch (InterruptedException e) {
+              Thread.currentThread().interrupt();
+          }
+          
+          System.out.println("主线程退出，守护线程将自动终止");
+      }
+  }
+  ```
+  </TabItem>
+</Tabs>
+
+:::tip 守护线程特点
+1. 守护线程的优先级较低，但具体调度取决于操作系统
+2. 当JVM中只剩下守护线程时，JVM将退出
+3. 典型的守护线程如垃圾回收器、JIT编译器线程
+4. 守护线程创建的线程也是守护线程
+:::
 
 ## 5. 实际应用场景
 
 ### 5.1 并行计算
 
-```java title="并行计算示例"
-public class ParallelComputationExample {
-    
-    /**
-     * 并行数组求和
-     */
-    public static void parallelArraySum() {
-        System.out.println("=== 并行数组求和 ===");
-        
-        int[] numbers = new int[1000000];
-        for (int i = 0; i < numbers.length; i++) {
-            numbers[i] = i + 1;
-        }
-        
-        int threadCount = Runtime.getRuntime().availableProcessors();
-        int chunkSize = numbers.length / threadCount;
-        
-        long startTime = System.currentTimeMillis();
-        
-        // 创建线程数组
-        Thread[] threads = new Thread[threadCount];
-        long[] partialSums = new long[threadCount];
-        
-        // 启动计算线程
-        for (int i = 0; i < threadCount; i++) {
-            final int start = i * chunkSize;
-            final int end = (i == threadCount - 1) ? numbers.length : (i + 1) * chunkSize;
-            final int threadIndex = i;
-            
-            threads[i] = new Thread(() -> {
-                long sum = 0;
-                for (int j = start; j < end; j++) {
-                    sum += numbers[j];
-                }
-                partialSums[threadIndex] = sum;
-                System.out.println("线程 " + threadIndex + " 计算完成，部分和: " + sum);
-            });
-            threads[i].start();
-        }
-        
-        // 等待所有线程完成
-        for (Thread thread : threads) {
-            try {
-                thread.join();
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-            }
-        }
-        
-        // 合并结果
-        long totalSum = 0;
-        for (long partialSum : partialSums) {
-            totalSum += partialSum;
-        }
-        
-        long endTime = System.currentTimeMillis();
-        
-        System.out.println("并行计算结果: " + totalSum);
-        System.out.println("计算时间: " + (endTime - startTime) + "ms");
-        
-        // 验证结果
-        long expectedSum = (long) numbers.length * (numbers.length + 1) / 2;
-        System.out.println("期望结果: " + expectedSum);
-        System.out.println("结果正确: " + (totalSum == expectedSum));
-    }
-    
-    /**
-     * 并行文件处理
-     */
-    public static void parallelFileProcessing() {
-        System.out.println("=== 并行文件处理 ===");
-        
-        String[] files = {"file1.txt", "file2.txt", "file3.txt", "file4.txt"};
-        
-        Thread[] processors = new Thread[files.length];
-        
-        for (int i = 0; i < files.length; i++) {
-            final String fileName = files[i];
-            final int fileIndex = i;
-            
-            processors[i] = new Thread(() -> {
-                System.out.println("开始处理文件: " + fileName);
-                try {
-                    // 模拟文件处理
-                    Thread.sleep(1000 + (int)(Math.random() * 2000));
-                    System.out.println("文件 " + fileName + " 处理完成");
-                } catch (InterruptedException e) {
-                    System.out.println("文件 " + fileName + " 处理被中断");
-                    Thread.currentThread().interrupt();
-                }
-            });
-            processors[i].start();
-        }
-        
-        // 等待所有文件处理完成
-        for (Thread processor : processors) {
-            try {
-                processor.join();
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-            }
-        }
-        
-        System.out.println("所有文件处理完成");
-    }
-    
-    public static void main(String[] args) {
-        parallelArraySum();
-        parallelFileProcessing();
-    }
-}
-```
+<Tabs>
+  <TabItem value="calculation" label="并行数组计算" default>
+  ```java
+  public class ParallelCalculation {
+      public static void main(String[] args) {
+          int[] numbers = new int[10_000_000]; // 一千万个数
+          // 初始化数组
+          for (int i = 0; i < numbers.length; i++) {
+              numbers[i] = i + 1;
+          }
+          
+          // 使用多线程并行计算
+          int processors = Runtime.getRuntime().availableProcessors();
+          System.out.println("CPU核心数: " + processors);
+          
+          // 创建线程池
+          ParallelCalculator[] calculators = new ParallelCalculator[processors];
+          Thread[] threads = new Thread[processors];
+          int segmentSize = numbers.length / processors;
+          
+          long startTime = System.currentTimeMillis();
+          
+          // 分配任务并启动线程
+          for (int i = 0; i < processors; i++) {
+              int startIndex = i * segmentSize;
+              int endIndex = (i == processors - 1) ? numbers.length : (i + 1) * segmentSize;
+              
+              calculators[i] = new ParallelCalculator(numbers, startIndex, endIndex);
+              threads[i] = new Thread(calculators[i]);
+              threads[i].start();
+          }
+          
+          // 等待所有线程完成并合并结果
+          long sum = 0;
+          for (int i = 0; i < processors; i++) {
+              try {
+                  threads[i].join();
+                  sum += calculators[i].getResult();
+              } catch (InterruptedException e) {
+                  Thread.currentThread().interrupt();
+              }
+          }
+          
+          long endTime = System.currentTimeMillis();
+          System.out.println("并行计算结果: " + sum);
+          System.out.println("耗时: " + (endTime - startTime) + "ms");
+      }
+      
+      static class ParallelCalculator implements Runnable {
+          private final int[] numbers;
+          private final int startIndex;
+          private final int endIndex;
+          private long result = 0;
+          
+          public ParallelCalculator(int[] numbers, int startIndex, int endIndex) {
+              this.numbers = numbers;
+              this.startIndex = startIndex;
+              this.endIndex = endIndex;
+          }
+          
+          @Override
+          public void run() {
+              for (int i = startIndex; i < endIndex; i++) {
+                  result += numbers[i];
+              }
+          }
+          
+          public long getResult() {
+              return result;
+          }
+      }
+  }
+  ```
+  </TabItem>
+  <TabItem value="processing" label="并行文件处理">
+  ```java
+  import java.io.*;
+  import java.nio.file.*;
+  import java.util.concurrent.*;
+  
+  public class ParallelFileProcessor {
+      public static void main(String[] args) {
+          final Path directory = Paths.get("./data");
+          final String searchKeyword = "important";
+          
+          try {
+              // 获取目录中的所有文件
+              if (!Files.exists(directory)) {
+                  System.err.println("目录不存在: " + directory);
+                  return;
+              }
+              
+              File[] files = directory.toFile().listFiles();
+              if (files == null || files.length == 0) {
+                  System.out.println("没有找到文件");
+                  return;
+              }
+              
+              // 创建线程池并行处理文件
+              int threadCount = Math.min(files.length, Runtime.getRuntime().availableProcessors());
+              ExecutorService executor = Executors.newFixedThreadPool(threadCount);
+              CountDownLatch latch = new CountDownLatch(files.length);
+              
+              // 提交搜索任务
+              for (File file : files) {
+                  if (file.isFile()) {
+                      executor.submit(() -> {
+                          try {
+                              long occurrences = searchInFile(file, searchKeyword);
+                              System.out.println("文件 " + file.getName() + 
+                                               " 中找到 " + occurrences + " 个匹配项");
+                          } finally {
+                              latch.countDown();
+                          }
+                      });
+                  } else {
+                      latch.countDown();
+                  }
+              }
+              
+              // 等待所有任务完成
+              latch.await();
+              System.out.println("所有文件处理完成");
+              
+              // 关闭线程池
+              executor.shutdown();
+              
+          } catch (IOException | InterruptedException e) {
+              e.printStackTrace();
+          }
+      }
+      
+      private static long searchInFile(File file, String keyword) throws IOException {
+          long count = 0;
+          try (BufferedReader reader = new BufferedReader(new FileReader(file))) {
+              String line;
+              while ((line = reader.readLine()) != null) {
+                  if (line.contains(keyword)) {
+                      count++;
+                  }
+              }
+          }
+          return count;
+      }
+  }
+  ```
+  </TabItem>
+</Tabs>
 
 ### 5.2 异步任务处理
 
-```java title="异步任务处理示例"
-public class AsyncTaskProcessingExample {
+<div className="code-with-callout">
+
+```java
+import java.util.concurrent.*;
+import java.util.ArrayList;
+import java.util.List;
+
+public class AsyncTaskProcessing {
+    private final int MAX_TASKS = 10;
+    private final BlockingQueue<Runnable> taskQueue = new LinkedBlockingQueue<>();
+    private final List<WorkerThread> workers = new ArrayList<>();
+    private volatile boolean isRunning = true;
     
-    /**
-     * 异步任务处理器
-     */
-    public static class AsyncTaskProcessor {
-        private final int maxConcurrentTasks;
-        private final Thread[] workers;
-        private volatile boolean shutdown = false;
-        
-        public AsyncTaskProcessor(int maxConcurrentTasks) {
-            this.maxConcurrentTasks = maxConcurrentTasks;
-            this.workers = new Thread[maxConcurrentTasks];
-            startWorkers();
-        }
-        
-        private void startWorkers() {
-            for (int i = 0; i < maxConcurrentTasks; i++) {
-                workers[i] = new Thread(() -> {
-                    while (!shutdown) {
-                        // 模拟任务处理
-                        try {
-                            Thread.sleep(100);
-                        } catch (InterruptedException e) {
-                            Thread.currentThread().interrupt();
-                            break;
-                        }
-                    }
-                }, "Worker-" + i);
-                workers[i].start();
-            }
-        }
-        
-        public void shutdown() {
-            shutdown = true;
-            for (Thread worker : workers) {
-                worker.interrupt();
-            }
-        }
-        
-        public void awaitTermination() {
-            for (Thread worker : workers) {
-                try {
-                    worker.join();
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
-                }
-            }
+    public AsyncTaskProcessing(int workerCount) {
+        // 创建并启动工作线程
+        for (int i = 0; i < workerCount; i++) {
+            WorkerThread worker = new WorkerThread("Worker-" + i);
+            workers.add(worker);
+            worker.start();
         }
     }
     
-    /**
-     * 异步任务示例
-     */
-    public static void asyncTaskExample() {
-        System.out.println("=== 异步任务处理示例 ===");
-        
-        // 创建异步任务处理器
-        AsyncTaskProcessor processor = new AsyncTaskProcessor(3);
-        
-        // 提交多个任务
-        for (int i = 0; i < 10; i++) {
-            final int taskId = i;
-            new Thread(() -> {
-                System.out.println("提交任务: " + taskId);
-                try {
-                    Thread.sleep(500 + (int)(Math.random() * 1000));
-                    System.out.println("任务 " + taskId + " 完成");
-                } catch (InterruptedException e) {
-                    System.out.println("任务 " + taskId + " 被中断");
-                    Thread.currentThread().interrupt();
-                }
-            }).start();
+    // 提交任务
+    public void submitTask(Runnable task) throws InterruptedException {
+        if (!isRunning) {
+            throw new RejectedExecutionException("任务处理器已关闭");
+        }
+        taskQueue.put(task);
+    }
+    
+    // 关闭任务处理器
+    public void shutdown() {
+        isRunning = false;
+        for (WorkerThread worker : workers) {
+            worker.interrupt();
+        }
+    }
+    
+    // 工作线程
+    private class WorkerThread extends Thread {
+        public WorkerThread(String name) {
+            super(name);
         }
         
-        // 等待一段时间后关闭处理器
+        @Override
+        public void run() {
+            while (isRunning || !taskQueue.isEmpty()) {
+                try {
+                    Runnable task = taskQueue.poll(1, TimeUnit.SECONDS);
+                    if (task != null) {
+                        System.out.println(getName() + " 处理任务...");
+                        task.run();
+                    }
+                } catch (InterruptedException e) {
+                    System.out.println(getName() + " 被中断");
+                    Thread.currentThread().interrupt();
+                    break;
+                } catch (Exception e) {
+                    System.err.println(getName() + " 执行任务时出错: " + e.getMessage());
+                }
+            }
+            System.out.println(getName() + " 已终止");
+        }
+    }
+    
+    // 使用示例
+    public static void main(String[] args) {
+        AsyncTaskProcessing processor = new AsyncTaskProcessing(3);
+        
         try {
+            // 提交多个任务
+            for (int i = 0; i < 10; i++) {
+                final int taskId = i;
+                processor.submitTask(() -> {
+                    try {
+                        System.out.println("执行任务 " + taskId);
+                        Thread.sleep((long) (Math.random() * 1000));
+                        System.out.println("任务 " + taskId + " 完成");
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                    }
+                });
+            }
+            
+            // 等待一段时间后关闭处理器
             Thread.sleep(5000);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
+        } finally {
+            processor.shutdown();
         }
-        
-        processor.shutdown();
-        processor.awaitTermination();
-        System.out.println("异步任务处理器已关闭");
-    }
-    
-    public static void main(String[] args) {
-        asyncTaskExample();
     }
 }
 ```
 
-## 6. 最佳实践总结
-
-### 6.1 线程创建最佳实践
-
-:::tip 核心原则
-选择合适的线程创建方式需要考虑以下因素：
-- **继承限制**：避免单继承限制，优先使用Runnable
-- **返回值需求**：需要返回值时使用Callable
-- **异常处理**：需要异常处理时使用Callable
-- **代码简洁性**：简单任务可以使用Lambda表达式
+:::info 异步任务处理的优势
+1. **非阻塞操作**：提交任务后立即返回，不等待任务完成
+2. **并发处理**：可同时处理多个任务，提高吞吐量
+3. **资源控制**：通过工作线程数量限制并发量
+4. **优雅关闭**：支持完成已提交任务后关闭
 :::
 
-### 6.2 线程控制最佳实践
+</div>
 
-| 最佳实践 | 说明 | 示例 |
-|----------|------|------|
-| **正确的中断处理** | 检查中断状态并正确响应 | `Thread.currentThread().isInterrupted()` |
-| **避免强制停止** | 不要使用stop()方法 | 使用中断机制协作停止 |
-| **合理设置优先级** | 不要过度依赖优先级 | 仅在必要时调整优先级 |
-| **使用守护线程** | 后台任务使用守护线程 | `thread.setDaemon(true)` |
-| **正确处理异常** | 在run()方法中捕获异常 | 避免线程静默失败 |
+### 5.3 实时事件处理
 
-### 6.3 性能优化建议
+<details>
+<summary><strong>实时事件处理架构</strong></summary>
 
-1. **避免创建过多线程**
-   ```java
-   // 不推荐：创建大量线程
-   for (int i = 0; i < 10000; i++) {
-       new Thread(() -> { /* 任务 */ }).start();
-   }
-   
-   // 推荐：使用线程池
-   ExecutorService executor = Executors.newFixedThreadPool(10);
-   for (int i = 0; i < 10000; i++) {
-       executor.submit(() -> { /* 任务 */ });
-   }
-   ```
+```mermaid
+graph TD
+    A[事件源] -->|产生事件| B[事件队列]
+    B -->|分发事件| C[事件分发器线程]
+    C -->|处理| D[事件处理器1]
+    C -->|处理| E[事件处理器2]
+    C -->|处理| F[事件处理器3]
+    D --> G[结果处理]
+    E --> G
+    F --> G
+```
 
-2. **合理使用join()**
-   ```java
-   // 避免无限等待
-   thread.join(); // 可能无限等待
-   
-   // 使用超时等待
-   thread.join(5000); // 最多等待5秒
-   ```
+**关键组件：**
+1. **事件源**：产生需要处理的事件
+2. **事件队列**：存储待处理的事件
+3. **事件分发器**：独立线程，从队列取出事件并分发
+4. **事件处理器**：处理特定类型的事件
+5. **结果处理**：汇总处理结果
 
-3. **避免线程泄漏**
-   ```java
-   // 确保线程正确结束
-   try {
-       thread.join();
-   } catch (InterruptedException e) {
-       thread.interrupt(); // 重新设置中断状态
-   }
-   ```
+</details>
 
-## 7. 常见问题与解决方案
-
-### 7.1 线程安全问题
-
-```java title="线程安全问题示例"
-public class ThreadSafetyIssues {
+```java
+public class EventProcessor {
+    private final BlockingQueue<Event> eventQueue = new LinkedBlockingQueue<>();
+    private final Map<EventType, EventHandler> handlers = new HashMap<>();
+    private final Thread dispatcherThread;
+    private volatile boolean running = true;
     
-    /**
-     * 竞态条件示例
-     */
-    public static class RaceConditionExample {
-        private int counter = 0;
+    public EventProcessor() {
+        // 注册事件处理器
+        handlers.put(EventType.USER_ACTION, new UserActionHandler());
+        handlers.put(EventType.SYSTEM_ALERT, new SystemAlertHandler());
+        handlers.put(EventType.DATA_CHANGE, new DataChangeHandler());
         
-        public void increment() {
-            counter++; // 非原子操作
-        }
+        // 创建分发线程
+        dispatcherThread = new Thread(() -> {
+            while (running) {
+                try {
+                    Event event = eventQueue.take();
+                    processEvent(event);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    break;
+                }
+            }
+        }, "EventDispatcher");
         
-        public int getCounter() {
-            return counter;
+        dispatcherThread.start();
+    }
+    
+    public void submitEvent(Event event) {
+        try {
+            eventQueue.put(event);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
         }
     }
     
-    /**
-     * 解决方案：使用同步
-     */
-    public static class SafeCounter {
-        private int counter = 0;
-        private final Object lock = new Object();
-        
-        public void increment() {
-            synchronized (lock) {
-                counter++;
+    private void processEvent(Event event) {
+        EventHandler handler = handlers.get(event.getType());
+        if (handler != null) {
+            try {
+                handler.handle(event);
+            } catch (Exception e) {
+                System.err.println("处理事件时出错: " + e.getMessage());
             }
+        } else {
+            System.out.println("未找到事件处理器: " + event.getType());
+        }
+    }
+    
+    public void shutdown() {
+        running = false;
+        dispatcherThread.interrupt();
+    }
+    
+    // 事件类型和处理器接口 (为简化示例仅展示骨架)
+    enum EventType { USER_ACTION, SYSTEM_ALERT, DATA_CHANGE }
+    
+    static class Event {
+        private final EventType type;
+        private final Object data;
+        
+        public Event(EventType type, Object data) {
+            this.type = type;
+            this.data = data;
         }
         
-        public int getCounter() {
-            synchronized (lock) {
-                return counter;
-            }
+        public EventType getType() { return type; }
+        public Object getData() { return data; }
+    }
+    
+    interface EventHandler {
+        void handle(Event event);
+    }
+    
+    // 具体处理器实现
+    static class UserActionHandler implements EventHandler {
+        @Override
+        public void handle(Event event) {
+            System.out.println("处理用户动作: " + event.getData());
+        }
+    }
+    
+    static class SystemAlertHandler implements EventHandler {
+        @Override
+        public void handle(Event event) {
+            System.out.println("处理系统警报: " + event.getData());
+        }
+    }
+    
+    static class DataChangeHandler implements EventHandler {
+        @Override
+        public void handle(Event event) {
+            System.out.println("处理数据变更: " + event.getData());
         }
     }
 }
 ```
 
-### 7.2 死锁问题
+## 6. 线程安全和最佳实践
 
-```java title="死锁问题示例"
-public class DeadlockExample {
-    
-    private final Object lock1 = new Object();
-    private final Object lock2 = new Object();
-    
-    public void method1() {
-        synchronized (lock1) {
-            try {
-                Thread.sleep(100);
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-            }
-            synchronized (lock2) {
-                System.out.println("Method 1");
+### 6.1 线程安全问题
+
+<Tabs>
+  <TabItem value="problem" label="竞态条件问题" default>
+  ```java
+  // 非线程安全的计数器
+  public class UnsafeCounter {
+      private int count = 0;
+      
+      public void increment() {
+          count++; // 非原子操作，可能导致竞态条件
+      }
+      
+      public int getCount() {
+          return count;
+      }
+      
+      public static void main(String[] args) throws InterruptedException {
+          UnsafeCounter counter = new UnsafeCounter();
+          
+          // 创建多个线程同时递增计数器
+          Thread[] threads = new Thread[1000];
+          for (int i = 0; i < threads.length; i++) {
+              threads[i] = new Thread(() -> {
+                  for (int j = 0; j < 1000; j++) {
+                      counter.increment();
+                  }
+              });
+              threads[i].start();
+          }
+          
+          // 等待所有线程完成
+          for (Thread thread : threads) {
+              thread.join();
+          }
+          
+          // 理论上结果应该是1,000,000，但实际可能小于这个值
+          System.out.println("计数器最终值: " + counter.getCount());
+      }
+  }
+  ```
+  </TabItem>
+  <TabItem value="solution" label="线程安全解决方案">
+  ```java
+  import java.util.concurrent.atomic.AtomicInteger;
+  
+  // 线程安全的计数器：使用synchronized
+  public class ThreadSafeCounter {
+      private int syncCount = 0;
+      private final AtomicInteger atomicCount = new AtomicInteger(0);
+      
+      // 方案1: 使用synchronized
+      public synchronized void incrementSync() {
+          syncCount++;
+      }
+      
+      public synchronized int getSyncCount() {
+          return syncCount;
+      }
+      
+      // 方案2: 使用AtomicInteger
+      public void incrementAtomic() {
+          atomicCount.incrementAndGet();
+      }
+      
+      public int getAtomicCount() {
+          return atomicCount.get();
+      }
+      
+      public static void main(String[] args) throws InterruptedException {
+          ThreadSafeCounter counter = new ThreadSafeCounter();
+          
+          // 创建多个线程
+          Thread[] threads = new Thread[1000];
+          for (int i = 0; i < threads.length; i++) {
+              threads[i] = new Thread(() -> {
+                  for (int j = 0; j < 1000; j++) {
+                      counter.incrementSync();
+                      counter.incrementAtomic();
+                  }
+              });
+              threads[i].start();
+          }
+          
+          // 等待所有线程完成
+          for (Thread thread : threads) {
+              thread.join();
+          }
+          
+          System.out.println("synchronized计数器: " + counter.getSyncCount());
+          System.out.println("AtomicInteger计数器: " + counter.getAtomicCount());
+      }
+  }
+  ```
+  </TabItem>
+</Tabs>
+
+### 6.2 线程安全性策略
+
+<div className="card">
+<div className="card__header">
+<h4>确保线程安全的策略</h4>
+</div>
+<div className="card__body">
+
+1. **不可变性**：使用不可变对象避免状态变化
+2. **线程封闭**：将数据限制在单个线程内使用
+3. **同步机制**：
+   - 使用synchronized同步访问共享数据
+   - 使用显式锁(ReentrantLock等)管理访问
+   - volatile变量确保可见性
+   - 原子类避免复合操作问题
+4. **线程安全集合**：使用并发容器(ConcurrentHashMap等)
+5. **安全发布**：确保对象安全地在线程之间传递
+
+</div>
+</div>
+
+### 6.3 线程池最佳实践
+
+:::tip 线程池使用建议
+1. **合理设置大小**：线程池大小 = CPU核心数 * (1 + 等待时间/计算时间)
+2. **区分任务类型**：CPU密集型任务池应小一些，IO密集型任务池可以大一些
+3. **使用工厂方法**：使用ThreadFactory为线程池创建的线程设置有意义的名称
+4. **处理异常**：捕获并处理提交任务内的所有异常
+5. **优雅关闭**：使用shutdown()而非shutdownNow()，确保任务完成
+6. **监控线程池**：跟踪活动线程数、完成任务数、队列大小等指标
+:::
+
+### 6.4 避免死锁的建议
+
+```java
+public class DeadlockAvoidance {
+    // 规则1: 按固定顺序获取锁
+    public void correctResourceAccess(Object resource1, Object resource2) {
+        // 总是先获取resource1，再获取resource2
+        synchronized (resource1) {
+            System.out.println("获取第一个锁");
+            synchronized (resource2) {
+                System.out.println("获取第二个锁");
+                // 使用资源...
             }
         }
     }
-        
-    public void method2() {
-        synchronized (lock2) {
-            try {
-                Thread.sleep(100);
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
+    
+    // 规则2: 使用超时获取锁
+    public boolean tryResourceAccess(Lock lock1, Lock lock2) {
+        try {
+            // 尝试获取锁，但不永远等待
+            if (lock1.tryLock(1, TimeUnit.SECONDS)) {
+                try {
+                    if (lock2.tryLock(1, TimeUnit.SECONDS)) {
+                        try {
+                            // 使用资源...
+                            return true;
+                        } finally {
+                            lock2.unlock();
+                        }
+                    }
+                } finally {
+                    lock1.unlock();
+                }
             }
-            synchronized (lock1) {
-                System.out.println("Method 2");
-            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+        return false; // 未能获取所有锁
+    }
+    
+    // 规则3: 避免在持有锁时调用外部方法
+    public void avoidNestedLocking(Object lock) {
+        synchronized (lock) {
+            // 不要在这里调用可能获取其他锁的方法
+            safeOperation(); // 只调用不获取锁的安全方法
         }
     }
     
-    /**
-     * 解决方案：固定锁顺序
-     */
-    public void safeMethod1() {
-        synchronized (lock1) {
-            synchronized (lock2) {
-                System.out.println("Safe Method 1");
-            }
-        }
-    }
-    
-    public void safeMethod2() {
-        synchronized (lock1) { // 使用相同的锁顺序
-            synchronized (lock2) {
-                System.out.println("Safe Method 2");
-            }
-        }
+    private void safeOperation() {
+        // 不获取任何锁的操作
     }
 }
 ```
 
-## 8. 总结
+## 7. 总结
 
-Java线程基础是并发编程的基石，掌握线程的创建、控制和生命周期管理对于构建高性能的并发应用至关重要。
+### 7.1 线程核心知识点总结
 
-### 8.1 关键要点
+<div className="card">
+<div className="card__body">
 
-1. **线程创建方式**：继承Thread、实现Runnable、实现Callable
-2. **线程状态**：NEW、RUNNABLE、BLOCKED、WAITING、TIMED_WAITING、TERMINATED
-3. **线程控制**：中断、等待通知、优先级、守护线程
-4. **最佳实践**：正确的中断处理、避免死锁、合理使用同步
+- **线程创建**：继承Thread、实现Runnable、实现Callable
+- **线程状态**：NEW、RUNNABLE、BLOCKED、WAITING、TIMED_WAITING、TERMINATED
+- **线程控制**：start()、join()、sleep()、yield()、interrupt()
+- **线程通信**：wait()、notify()、notifyAll()
+- **线程安全**：同步、锁、原子变量、线程安全集合
+- **应用场景**：并行计算、异步任务、实时事件处理
 
-### 8.2 学习建议
+</div>
+</div>
 
-1. **理论结合实践**：理解概念后多写代码验证
-2. **循序渐进**：从简单示例开始，逐步增加复杂度
-3. **关注性能**：注意线程创建和销毁的开销
-4. **重视安全**：始终考虑线程安全问题
+### 7.2 学习路径与深入方向
 
-通过深入理解和熟练运用这些线程基础知识，我们能够构建出更加高效、健壮和可维护的Java并发应用程序。 
+```mermaid
+mindmap
+  root((Java线程学习路径))
+    基础概念
+      线程生命周期
+      线程状态转换
+      线程优先级
+    创建与控制
+      创建方式
+      控制方法
+      中断机制
+    线程安全
+      同步机制
+      锁机制
+      线程通信
+    并发工具
+      线程池
+      并发容器
+      同步工具
+    高级特性
+      ThreadLocal
+      协程/纤程
+      并发编程模型
+```
+
+### 7.3 性能与调试建议
+
+1. **适量创建线程**：线程数不应远超CPU核心数
+2. **避免过度同步**：仅在必要时进行同步
+3. **使用线程栈**：利用线程栈快速定位问题
+4. **善用JVM参数**：调整线程栈大小(`-Xss`)
+5. **使用线程转储**：通过`jstack`获取线程转储分析死锁
+6. **性能分析**：使用JVisualVM、YourKit等工具监控线程性能 

@@ -12,19 +12,23 @@ last_update:
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 import CodeBlock from '@theme/CodeBlock';
+import TOCInline from '@theme/TOCInline';
 
 # Java Stream API完全指南
 
 Java 8引入的Stream API是Java函数式编程的重要里程碑，它提供了一种声明式的方式来处理集合数据。Stream API不仅让代码更加简洁、可读，还支持并行处理，大大提升了Java处理数据的能力和开发效率。
 
+:::info 本文内容概览
+<TOCInline toc={toc} />
+:::
+
 :::tip 核心价值
-**Stream API = 函数式编程 + 声明式处理 + 并行计算 + 链式操作 + 惰性求值**
-- 🔄 **函数式编程**：支持Lambda表达式和方法引用，代码更简洁
-- 📝 **声明式处理**：关注做什么，而不是怎么做，提高代码可读性
-- ⚡ **并行计算**：轻松实现并行数据处理，充分利用多核CPU
-- 🔗 **链式操作**：流畅的API设计，操作可以链式调用
-- 🎯 **惰性求值**：中间操作延迟执行，只有遇到终端操作才执行
-- 🛠️ **丰富操作**：过滤、映射、归约等丰富的数据处理操作
+**Stream API = 声明式编程 + 函数式风格 + 并行处理 + 流水线操作**
+- 📝 **声明式编程**：关注做什么而非怎么做，提高代码可读性
+- λ **函数式风格**：使用函数组合和表达式，减少副作用
+- ⚡ **并行处理**：简单切换并行执行，充分利用多核处理能力
+- 🔄 **流水线操作**：链式API支持多阶段处理，简化复杂数据转换
+- 🧩 **内置操作**：丰富的内置操作符，简化常见数据处理任务
 :::
 
 ## 1. Stream基础概念与原理
@@ -1316,3 +1320,160 @@ public class ParallelStreamOptimization {
 :::
 
 通过掌握Stream API的这些核心概念和最佳实践，你可以编写出更加简洁、高效、易维护的Java代码，充分发挥函数式编程的优势。
+
+## 6. 面试题精选
+
+### 6.1 什么是Stream API？它有什么优势？
+
+**答案：** Stream API是Java 8引入的处理集合的API，它允许以声明式方式处理数据集合，支持函数式编程范式。
+
+Stream API的主要优势：
+1. **声明式编程**：关注"做什么"而非"怎么做"，代码更加简洁、可读
+2. **函数式风格**：支持Lambda表达式和方法引用，减少样板代码
+3. **并行处理**：轻松切换并行/串行执行，充分利用多核处理能力
+4. **惰性求值**：中间操作延迟执行，只有在终端操作时才会执行，提高性能
+5. **链式操作**：支持多步骤流水线处理，API设计流畅
+6. **内置丰富操作**：提供filter、map、reduce等多种数据处理操作
+7. **无副作用**：不修改数据源，符合函数式编程原则
+
+### 6.2 Stream的中间操作和终端操作有什么区别？常用的操作有哪些？
+
+**答案：** 
+- **中间操作(Intermediate Operations)**：返回一个新的Stream，可以链式调用多个中间操作，不会立即执行
+- **终端操作(Terminal Operations)**：触发实际计算，返回一个非Stream的结果，执行后Stream不能再被使用
+
+**常用中间操作：**
+- `filter(Predicate)`: 过滤元素
+- `map(Function)`: 转换元素
+- `flatMap(Function)`: 扁平化嵌套集合
+- `distinct()`: 去除重复
+- `sorted()`: 排序
+- `peek(Consumer)`: 查看元素(调试)
+- `limit(n)`: 限制元素数量
+- `skip(n)`: 跳过元素
+
+**常用终端操作：**
+- `collect(Collector)`: 收集结果到容器
+- `forEach(Consumer)`: 遍历每个元素
+- `reduce(BinaryOperator)`: 归约操作
+- `count()`: 计数
+- `anyMatch(Predicate)`: 是否存在匹配元素
+- `allMatch(Predicate)`: 是否全部匹配
+- `noneMatch(Predicate)`: 是否全部不匹配
+- `findFirst()/findAny()`: 查找元素
+- `min()/max()`: 查找最小/最大值
+
+```java
+// 中间操作示例
+List<String> result = names.stream()  // 创建Stream
+    .filter(name -> name.length() > 5)  // 中间操作1
+    .map(String::toUpperCase)  // 中间操作2
+    .sorted()  // 中间操作3
+    .collect(Collectors.toList());  // 终端操作
+```
+
+### 6.3 Stream与Collection的区别是什么？
+
+**答案：** Stream与Collection的主要区别：
+
+| 特性 | Stream | Collection |
+|------|--------|------------|
+| **目的** | 处理数据 | 存储数据 |
+| **数据存储** | 不存储数据 | 存储数据 |
+| **执行方式** | 惰性计算 | 立即计算 |
+| **消费性** | 只能遍历一次 | 可以多次遍历 |
+| **数据修改** | 不修改数据源 | 可以修改数据 |
+| **并行处理** | 内置支持并行 | 需手动实现并行 |
+| **无限大小** | 可以表示无限序列 | 总是有限大小 |
+
+### 6.4 如何正确使用并行流(parallelStream)？什么情况下应该避免使用？
+
+**答案：** 
+
+**正确使用并行流的原则：**
+1. **数据量足够大**：对于小数据集，并行处理的开销可能超过收益
+2. **操作足够重**：CPU密集型操作更适合并行处理
+3. **数据结构易拆分**：ArrayList、数组分解高效，LinkedList分解效率低
+4. **避免共享可变状态**：并行操作中避免修改共享变量
+5. **合理设置线程池大小**：根据CPU核心数和任务特性调整并行度
+
+```java
+// 并行流示例
+long sum = IntStream.rangeClosed(1, 10_000_000)
+    .parallel()  // 切换到并行模式
+    .filter(n -> n % 2 == 0)
+    .mapToLong(n -> n * n)
+    .sum();
+
+// 自定义并行度
+System.setProperty("java.util.concurrent.ForkJoinPool.common.parallelism", "8");
+```
+
+**避免使用并行流的场景：**
+1. **I/O绑定操作**：如文件读写、网络操作
+2. **顺序敏感操作**：结果依赖于元素处理顺序
+3. **很小的数据量**：并行开销可能大于收益(通常低于1万元素)
+4. **不可分割的数据源**：如LinkedList等难以有效分割的结构
+5. **使用非线程安全的操作或收集器**：如普通ArrayList::add
+
+### 6.5 请解释Stream中的Collector收集器，并列举几个常用的收集器。
+
+**答案：** Collector是一种终端操作，用于将Stream中的元素累积到结果容器中，如List、Map等。Collectors类提供了多种预定义的收集器。
+
+**常用收集器：**
+
+1. **转换为集合**：
+```java
+// 转为List
+List<String> list = stream.collect(Collectors.toList());
+// 转为Set
+Set<String> set = stream.collect(Collectors.toSet());
+// 转为特定集合
+TreeSet<String> treeSet = stream.collect(Collectors.toCollection(TreeSet::new));
+```
+
+2. **字符串连接**：
+```java
+// 简单连接
+String joined = stream.collect(Collectors.joining());
+// 带分隔符
+String joined = stream.collect(Collectors.joining(", "));
+// 带前缀和后缀
+String joined = stream.collect(Collectors.joining(", ", "[", "]"));
+```
+
+3. **分组和分区**：
+```java
+// 按属性分组
+Map<Department, List<Employee>> byDept = employees.stream()
+    .collect(Collectors.groupingBy(Employee::getDepartment));
+// 多级分组
+Map<Department, Map<EmployeeType, List<Employee>>> byDeptAndType = employees.stream()
+    .collect(Collectors.groupingBy(Employee::getDepartment,
+             Collectors.groupingBy(Employee::getType)));
+// 分区(特殊分组)
+Map<Boolean, List<Employee>> partitioned = employees.stream()
+    .collect(Collectors.partitioningBy(emp -> emp.getSalary() > 50000));
+```
+
+4. **统计和汇总**：
+```java
+// 求和
+int total = stream.collect(Collectors.summingInt(User::getAge));
+// 平均值
+double avg = stream.collect(Collectors.averagingInt(User::getAge));
+// 汇总统计
+IntSummaryStatistics stats = stream.collect(Collectors.summarizingInt(User::getAge));
+```
+
+5. **归约和映射**：
+```java
+// 归约(类似reduce)
+Optional<User> oldest = users.stream()
+    .collect(Collectors.reducing((u1, u2) -> u1.getAge() > u2.getAge() ? u1 : u2));
+// 映射后收集
+Map<Integer, String> idToName = users.stream()
+    .collect(Collectors.toMap(User::getId, User::getName));
+```
+
+**自定义收集器**：可以通过实现Collector接口或使用Collector.of()方法创建自定义收集器，满足特殊需求。

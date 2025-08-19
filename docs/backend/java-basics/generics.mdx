@@ -40,7 +40,12 @@ graph TD
 ```
 
 :::tip 核心价值
-泛型 = 类型安全 + 代码复用 + 消除类型转换 + 编译时检查
+**泛型 = 类型安全 + 代码重用 + 性能优化 + 编译时检查**
+- 🔒 **类型安全**：在编译时进行类型检查，减少运行时类型错误
+- ♻️ **代码重用**：编写适用于多种类型的通用代码，提高代码复用性
+- ⚡ **性能优化**：避免类型转换的开销，提升运行时性能
+- 🧩 **API设计**：设计灵活且类型安全的API，增强代码健壮性
+- 📝 **自文档化**：泛型参数提供了类型信息，增强代码可读性
 :::
 
 ## 1. 泛型基础概念
@@ -1158,4 +1163,123 @@ mindmap
 
 ---
 
-通过本章的学习，你应该已经掌握了Java泛型的核心概念、语法规则和最佳实践。泛型是Java中非常重要的特性，它不仅能提高代码的类型安全性，还能增强代码的可读性和可维护性。在实际开发中，合理使用泛型可以避免很多运行时错误，让代码更加健壮。 
+通过本章的学习，你应该已经掌握了Java泛型的核心概念、语法规则和最佳实践。泛型是Java中非常重要的特性，它不仅能提高代码的类型安全性，还能增强代码的可读性和可维护性。在实际开发中，合理使用泛型可以避免很多运行时错误，让代码更加健壮。
+
+## 12. 面试题精选
+
+### 12.1 什么是Java泛型？泛型有什么优点？
+
+**答案：** Java泛型是JDK 5引入的特性，允许在定义类、接口和方法时使用类型参数，这些参数在使用时会被具体类型替换。
+
+泛型的主要优点：
+- **类型安全**：在编译时检查类型错误，避免运行时ClassCastException
+- **消除类型转换**：不需要显式转换对象类型，代码更加简洁
+- **实现通用算法**：可以编写适用于多种类型的通用代码
+- **代码复用**：减少因类型不同而导致的重复代码
+- **更好的API设计**：提供了类型约束，使API更加直观
+
+### 12.2 什么是类型擦除？为什么Java泛型使用类型擦除？
+
+**答案：** 类型擦除是Java泛型的基本实现机制，它指的是编译器在编译时会擦除所有泛型类型相关的信息，替换为原始类型（通常是Object或上界类型）。
+
+Java泛型使用类型擦除的原因：
+1. **向后兼容性**：保证泛型代码可以与Java 5之前的代码无缝协作
+2. **避免运行时开销**：不需要在运行时维护额外的类型信息
+3. **JVM限制**：不需要修改Java虚拟机，简化了实现
+
+类型擦除的主要后果：
+- 泛型信息在运行时不可用
+- 无法使用instanceof检查泛型类型
+- 无法创建泛型类型的数组
+- 静态上下文中不能引用类型参数
+
+### 12.3 解释泛型中的通配符，以及PECS原则
+
+**答案：** 通配符是Java泛型中的特殊符号，用于表示未知类型，有三种形式：
+
+1. **无界通配符(?)**: `List<?>`表示可以是任何类型的列表
+2. **上界通配符(? extends T)**: `List<? extends Number>`表示Number或其子类的列表
+3. **下界通配符(? super T)**: `List<? super Integer>`表示Integer或其父类的列表
+
+**PECS原则（Producer-Extends, Consumer-Super）**:
+- 当你的泛型类是生产者（提供数据）时，使用`? extends T`
+- 当你的泛型类是消费者（接收数据）时，使用`? super T`
+
+例如：
+```java
+// 从列表读取数据（生产者），使用extends
+public void readFrom(List<? extends Number> list) {
+    Number n = list.get(0); // 安全，知道是Number或子类
+}
+
+// 向列表写入数据（消费者），使用super
+public void writeTo(List<? super Integer> list) {
+    list.add(42); // 安全，知道list可以接收Integer
+}
+```
+
+### 12.4 泛型类型参数的命名约定是什么？常见的类型参数名称代表什么？
+
+**答案：** Java泛型类型参数通常使用单个大写字母表示。最常见的类型参数命名约定：
+
+- **E**: Element（元素），通常用于集合类
+- **T**: Type（类型），最常用的泛型类型参数
+- **K**: Key（键），常用于Map的键类型
+- **V**: Value（值），常用于Map的值类型
+- **N**: Number（数字），表示数值类型
+- **S, U, V**: 第2、3、4个类型参数，当需要多个泛型类型时使用
+
+例如：
+```java
+// T代表任意类型
+public class Box<T> { }
+
+// K代表键类型，V代表值类型
+public interface Map<K, V> { }
+
+// E代表元素类型
+public interface List<E> { }
+```
+
+### 12.5 如何解决泛型数组创建的问题？
+
+**答案：** 由于类型擦除，在Java中无法直接创建泛型数组（如`new T[10]`）。解决这个问题有以下几种方法：
+
+1. **使用Object数组加类型转换**:
+```java
+public class GenericArray<T> {
+    private T[] array;
+    
+    @SuppressWarnings("unchecked")
+    public GenericArray(int size) {
+        // 创建Object数组，然后强制类型转换
+        array = (T[]) new Object[size];
+    }
+}
+```
+
+2. **使用反射创建数组**:
+```java
+public class GenericArray<T> {
+    private T[] array;
+    
+    @SuppressWarnings("unchecked")
+    public GenericArray(Class<T> type, int size) {
+        // 使用反射API创建特定类型的数组
+        array = (T[]) Array.newInstance(type, size);
+    }
+}
+```
+
+3. **使用ArrayList代替数组**:
+```java
+public class GenericCollection<T> {
+    private List<T> list;
+    
+    public GenericCollection(int size) {
+        list = new ArrayList<>(size);
+    }
+}
+```
+
+每种方法都有其优缺点，选择取决于具体需求和使用场景。 

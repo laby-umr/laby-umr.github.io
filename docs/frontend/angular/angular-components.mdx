@@ -1,0 +1,1928 @@
+---
+sidebar_position: 2
+title: Angular常用组件开发指南
+description: Angular组件库开发与实践，包含常用UI组件与功能组件
+authors: [Laby]
+tags: [Angular, 组件, UI组件, 自定义组件]
+last_update:
+  date: 2025-08-15
+  author: Laby
+---
+
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+import CodeBlock from '@theme/CodeBlock';
+
+# Angular常用组件开发指南
+
+Angular组件是构建Angular应用的基础构建块。通过组件化开发，我们可以创建可复用、可测试和可维护的界面元素。本文将介绍Angular常用组件的开发实践。
+
+:::tip 核心价值
+**Angular组件化开发优势**
+- 🧩 **代码复用**：封装UI和逻辑为可重用组件
+- 🛠️ **关注点分离**：每个组件负责特定功能
+- 📦 **声明式模板**：直观的HTML模板语法
+- 🔄 **单向数据流**：更易于理解的数据流动
+- 🔍 **变更检测**：高效的组件更新机制
+:::
+
+## 1. 组件基础设计模式
+
+### 1.1 展示型组件 vs 容器型组件
+
+Angular应用中常用的组件设计模式是将组件分为展示型组件和容器型组件：
+
+1. **展示型组件(Presentational Components)**：
+   - 专注于UI渲染
+   - 通过Input接收数据，通过Output发送事件
+   - 不依赖外部服务和状态管理
+   - 容易测试和重用
+
+2. **容器型组件(Container Components)**：
+   - 处理数据获取和状态管理
+   - 包含业务逻辑
+   - 注入服务和与后端交互
+   - 将数据传递给展示型组件
+
+```typescript title="展示型组件示例"
+import { Component, Input, Output, EventEmitter } from '@angular/core';
+
+@Component({
+  selector: 'app-user-profile-card',
+  template: `
+    <div class="user-card">
+      <img [src]="user.avatar" alt="{{ user.name }}">
+      <h3>{{ user.name }}</h3>
+      <p>{{ user.email }}</p>
+      <button (click)="onContact()">联系用户</button>
+    </div>
+  `,
+  styleUrls: ['./user-profile-card.component.scss']
+})
+export class UserProfileCardComponent {
+  @Input() user: any;
+  @Output() contact = new EventEmitter<any>();
+  
+  onContact() {
+    this.contact.emit(this.user);
+  }
+}
+```
+
+```typescript title="容器型组件示例"
+import { Component, OnInit } from '@angular/core';
+import { UserService } from '../../services/user.service';
+
+@Component({
+  selector: 'app-user-dashboard',
+  template: `
+    <div *ngIf="loading">加载中...</div>
+    <div *ngIf="error">{{ error }}</div>
+    
+    <div class="user-grid">
+      <app-user-profile-card 
+        *ngFor="let user of users" 
+        [user]="user"
+        (contact)="contactUser($event)">
+      </app-user-profile-card>
+    </div>
+  `,
+  styleUrls: ['./user-dashboard.component.scss']
+})
+export class UserDashboardComponent implements OnInit {
+  users = [];
+  loading = false;
+  error = '';
+  
+  constructor(private userService: UserService) {}
+  
+  ngOnInit() {
+    this.loading = true;
+    this.userService.getUsers()
+      .subscribe({
+        next: (data) => {
+          this.users = data;
+          this.loading = false;
+        },
+        error: (err) => {
+          this.error = '无法加载用户数据';
+          this.loading = false;
+          console.error(err);
+        }
+      });
+  }
+  
+  contactUser(user) {
+    this.userService.initiateContact(user);
+  }
+}
+```
+
+### 1.2 组件通信策略
+
+组件之间的通信是构建Angular应用的关键部分：
+
+1. **父组件 -> 子组件**: 使用`@Input()`装饰器
+2. **子组件 -> 父组件**: 使用`@Output()`和`EventEmitter`
+3. **无直接关系组件**: 使用服务和RxJS Subject/BehaviorSubject
+4. **跨多层级组件**: 依赖注入和提供者层级
+
+```typescript title="使用服务进行跨组件通信"
+// 消息服务
+import { Injectable } from '@angular/core';
+import { BehaviorSubject, Observable } from 'rxjs';
+
+@Injectable({
+  providedIn: 'root'
+})
+export class MessageService {
+  private messageSource = new BehaviorSubject<string>('默认消息');
+  currentMessage = this.messageSource.asObservable();
+  
+  constructor() { }
+  
+  changeMessage(message: string) {
+    this.messageSource.next(message);
+  }
+}
+
+// 发送组件
+@Component({
+  selector: 'app-sender',
+  template: `
+    <input [(ngModel)]="message" placeholder="输入消息">
+    <button (click)="sendMessage()">发送</button>
+  `
+})
+export class SenderComponent {
+  message: string;
+  
+  constructor(private messageService: MessageService) {}
+  
+  sendMessage() {
+    this.messageService.changeMessage(this.message);
+  }
+}
+
+// 接收组件
+@Component({
+  selector: 'app-receiver',
+  template: `<p>当前消息: {{ message }}</p>`
+})
+export class ReceiverComponent implements OnInit {
+  message: string;
+  
+  constructor(private messageService: MessageService) {}
+  
+  ngOnInit() {
+    this.messageService.currentMessage.subscribe(message => {
+      this.message = message;
+    });
+  }
+  
+  ngOnDestroy() {
+    // 重要：取消订阅避免内存泄漏
+    this.subscription.unsubscribe();
+  }
+}
+``` 
+
+## 2. 表单组件
+
+表单组件是任何Web应用的核心部分。Angular提供了强大的表单控制功能，下面介绍几个常用的表单组件实现。
+
+### 2.1 高级输入框组件
+
+一个带有验证、标签和错误提示的增强输入框组件：
+
+```typescript title="advanced-input.component.ts"
+import { Component, forwardRef, Input } from '@angular/core';
+import { ControlValueAccessor, NG_VALUE_ACCESSOR, NG_VALIDATORS, FormControl, Validator } from '@angular/forms';
+
+@Component({
+  selector: 'app-advanced-input',
+  template: `
+    <div class="form-field" [class.has-error]="showError">
+      <label *ngIf="label" [for]="id" class="form-label">
+        {{ label }}
+        <span class="required" *ngIf="required">*</span>
+      </label>
+      
+      <div class="input-container">
+        <input
+          [type]="type"
+          [id]="id"
+          class="form-input"
+          [placeholder]="placeholder"
+          [value]="value"
+          [disabled]="disabled"
+          (input)="onInputChange($event)"
+          (blur)="onTouched()"
+        />
+        
+        <button
+          *ngIf="value && clearable"
+          type="button"
+          class="clear-button"
+          (click)="clearValue()"
+          aria-label="Clear input">
+          ✕
+        </button>
+      </div>
+      
+      <div *ngIf="showError" class="error-message">
+        {{ errorMessage }}
+      </div>
+    </div>
+  `,
+  styles: [`
+    .form-field {
+      margin-bottom: 1rem;
+    }
+    
+    .form-label {
+      display: block;
+      margin-bottom: 0.5rem;
+      font-weight: 500;
+    }
+    
+    .input-container {
+      position: relative;
+      display: flex;
+    }
+    
+    .form-input {
+      width: 100%;
+      padding: 0.75rem 1rem;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      font-size: 1rem;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+    
+    .form-input:focus {
+      outline: none;
+      border-color: #4299e1;
+      box-shadow: 0 0 0 3px rgba(66, 153, 225, 0.2);
+    }
+    
+    .has-error .form-input {
+      border-color: #e53e3e;
+    }
+    
+    .has-error .form-input:focus {
+      box-shadow: 0 0 0 3px rgba(229, 62, 62, 0.2);
+    }
+    
+    .clear-button {
+      position: absolute;
+      right: 0.75rem;
+      top: 50%;
+      transform: translateY(-50%);
+      background: none;
+      border: none;
+      color: #718096;
+      cursor: pointer;
+      padding: 0.25rem;
+      line-height: 1;
+    }
+    
+    .required {
+      color: #e53e3e;
+      margin-left: 0.25rem;
+    }
+    
+    .error-message {
+      color: #e53e3e;
+      font-size: 0.875rem;
+      margin-top: 0.5rem;
+    }
+  `],
+  providers: [
+    {
+      provide: NG_VALUE_ACCESSOR,
+      useExisting: forwardRef(() => AdvancedInputComponent),
+      multi: true
+    },
+    {
+      provide: NG_VALIDATORS,
+      useExisting: forwardRef(() => AdvancedInputComponent),
+      multi: true
+    }
+  ]
+})
+export class AdvancedInputComponent implements ControlValueAccessor, Validator {
+  @Input() label: string;
+  @Input() placeholder: string = '';
+  @Input() type: string = 'text';
+  @Input() id: string = `input-${Math.random().toString(36).substring(2, 11)}`;
+  @Input() required: boolean = false;
+  @Input() clearable: boolean = true;
+  @Input() minLength: number = 0;
+  @Input() maxLength: number;
+  @Input() pattern: string;
+  @Input() customValidator: (value: any) => { valid: boolean, message: string };
+  
+  value: any = '';
+  disabled: boolean = false;
+  touched: boolean = false;
+  errorMessage: string = '';
+  
+  onChange: any = () => {};
+  onTouched: any = () => {};
+  
+  constructor() {}
+  
+  // ControlValueAccessor 接口
+  writeValue(value: any): void {
+    this.value = value;
+  }
+  
+  registerOnChange(fn: any): void {
+    this.onChange = fn;
+  }
+  
+  registerOnTouched(fn: any): void {
+    this.onTouched = fn;
+  }
+  
+  setDisabledState(isDisabled: boolean): void {
+    this.disabled = isDisabled;
+  }
+  
+  // 当输入改变时
+  onInputChange(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    this.value = input.value;
+    this.onChange(this.value);
+    this.validate(null);
+  }
+  
+  // 清除输入值
+  clearValue(): void {
+    this.value = '';
+    this.onChange(this.value);
+    this.onTouched();
+  }
+  
+  // Validator 接口
+  validate(control: FormControl): {[key: string]: any} | null {
+    // 如果组件控制自己的值，使用this.value代替control.value
+    const value = control ? control.value : this.value;
+    
+    // 必填验证
+    if (this.required && !value) {
+      this.errorMessage = '此字段为必填项';
+      return { 'required': true };
+    }
+    
+    // 最小长度验证
+    if (this.minLength && value && value.length < this.minLength) {
+      this.errorMessage = `最少需要 ${this.minLength} 个字符`;
+      return { 'minlength': { requiredLength: this.minLength, actualLength: value.length } };
+    }
+    
+    // 最大长度验证
+    if (this.maxLength && value && value.length > this.maxLength) {
+      this.errorMessage = `最多允许 ${this.maxLength} 个字符`;
+      return { 'maxlength': { requiredLength: this.maxLength, actualLength: value.length } };
+    }
+    
+    // 模式验证
+    if (this.pattern && value) {
+      const regex = new RegExp(this.pattern);
+      if (!regex.test(value)) {
+        this.errorMessage = '输入格式不正确';
+        return { 'pattern': { requiredPattern: this.pattern, actualValue: value } };
+      }
+    }
+    
+    // 自定义验证
+    if (this.customValidator && value) {
+      const result = this.customValidator(value);
+      if (!result.valid) {
+        this.errorMessage = result.message;
+        return { 'custom': true };
+      }
+    }
+    
+    // 验证通过
+    this.errorMessage = '';
+    return null;
+  }
+  
+  // 显示错误的条件
+  get showError(): boolean {
+    return this.errorMessage !== '' && this.touched;
+  }
+}
+```
+
+使用方法示例：
+
+```html
+<form [formGroup]="userForm">
+  <app-advanced-input
+    label="用户名"
+    formControlName="username"
+    required
+    [minLength]="3"
+    [maxLength]="20"
+  ></app-advanced-input>
+  
+  <app-advanced-input
+    label="电子邮箱"
+    type="email"
+    formControlName="email"
+    required
+    [pattern]="emailPattern"
+  ></app-advanced-input>
+  
+  <button type="submit" [disabled]="userForm.invalid">提交</button>
+</form>
+```
+
+### 2.2 下拉选择组件
+
+带有搜索功能的下拉选择组件：
+
+```typescript title="searchable-select.component.ts"
+import { Component, forwardRef, Input, ElementRef, ViewChild, HostListener } from '@angular/core';
+import { ControlValueAccessor, NG_VALUE_ACCESSOR } from '@angular/forms';
+
+interface Option {
+  value: any;
+  label: string;
+}
+
+@Component({
+  selector: 'app-searchable-select',
+  template: `
+    <div class="select-container">
+      <label *ngIf="label" [for]="id" class="select-label">
+        {{ label }}
+        <span class="required" *ngIf="required">*</span>
+      </label>
+      
+      <div
+        class="select-input"
+        [class.open]="isOpen"
+        [class.disabled]="disabled"
+        (click)="toggleDropdown()">
+        <span *ngIf="selectedOption; else placeholderTpl">{{ selectedOption.label }}</span>
+        <ng-template #placeholderTpl>
+          <span class="placeholder">{{ placeholder }}</span>
+        </ng-template>
+        
+        <div class="select-arrow">▼</div>
+      </div>
+      
+      <div class="dropdown" *ngIf="isOpen">
+        <div class="search-container">
+          <input
+            #searchInput
+            type="text"
+            class="search-input"
+            placeholder="搜索..."
+            [value]="searchText"
+            (input)="onSearch($event)"
+            (click)="$event.stopPropagation()">
+        </div>
+        
+        <div class="options-list" *ngIf="filteredOptions.length > 0">
+          <div
+            *ngFor="let option of filteredOptions"
+            class="option-item"
+            [class.selected]="value === option.value"
+            (click)="selectOption(option); $event.stopPropagation()">
+            {{ option.label }}
+          </div>
+        </div>
+        
+        <div class="no-results" *ngIf="filteredOptions.length === 0">
+          无匹配结果
+        </div>
+      </div>
+    </div>
+  `,
+  styles: [`
+    .select-container {
+      position: relative;
+      margin-bottom: 1rem;
+    }
+    
+    .select-label {
+      display: block;
+      margin-bottom: 0.5rem;
+      font-weight: 500;
+    }
+    
+    .select-input {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      width: 100%;
+      padding: 0.75rem 1rem;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      background-color: #fff;
+      cursor: pointer;
+      user-select: none;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+    
+    .select-input:hover {
+      border-color: #a0aec0;
+    }
+    
+    .select-input.open {
+      border-color: #4299e1;
+      box-shadow: 0 0 0 3px rgba(66, 153, 225, 0.2);
+    }
+    
+    .select-input.disabled {
+      background-color: #f7fafc;
+      cursor: not-allowed;
+      color: #a0aec0;
+    }
+    
+    .placeholder {
+      color: #a0aec0;
+    }
+    
+    .select-arrow {
+      font-size: 0.75rem;
+      color: #718096;
+      transition: transform 0.2s;
+    }
+    
+    .open .select-arrow {
+      transform: rotate(180deg);
+    }
+    
+    .dropdown {
+      position: absolute;
+      top: 100%;
+      left: 0;
+      width: 100%;
+      background: #fff;
+      border: 1px solid #e2e8f0;
+      border-radius: 4px;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+      z-index: 10;
+      margin-top: 4px;
+      max-height: 300px;
+      display: flex;
+      flex-direction: column;
+    }
+    
+    .search-container {
+      padding: 0.5rem;
+      border-bottom: 1px solid #e2e8f0;
+    }
+    
+    .search-input {
+      width: 100%;
+      padding: 0.5rem;
+      border: 1px solid #e2e8f0;
+      border-radius: 4px;
+      font-size: 0.875rem;
+    }
+    
+    .options-list {
+      overflow-y: auto;
+      max-height: 240px;
+    }
+    
+    .option-item {
+      padding: 0.75rem 1rem;
+      cursor: pointer;
+      transition: background-color 0.15s;
+    }
+    
+    .option-item:hover {
+      background-color: #f7fafc;
+    }
+    
+    .option-item.selected {
+      background-color: #ebf8ff;
+      color: #3182ce;
+      font-weight: 500;
+    }
+    
+    .no-results {
+      padding: 0.75rem 1rem;
+      text-align: center;
+      color: #a0aec0;
+      font-style: italic;
+    }
+    
+    .required {
+      color: #e53e3e;
+      margin-left: 0.25rem;
+    }
+  `],
+  providers: [
+    {
+      provide: NG_VALUE_ACCESSOR,
+      useExisting: forwardRef(() => SearchableSelectComponent),
+      multi: true
+    }
+  ]
+})
+export class SearchableSelectComponent implements ControlValueAccessor {
+  @Input() options: Option[] = [];
+  @Input() label: string;
+  @Input() placeholder: string = '请选择';
+  @Input() id: string = `select-${Math.random().toString(36).substring(2, 11)}`;
+  @Input() required: boolean = false;
+  
+  @ViewChild('searchInput') searchInput: ElementRef;
+  
+  value: any = null;
+  disabled: boolean = false;
+  isOpen: boolean = false;
+  searchText: string = '';
+  
+  onChange: any = () => {};
+  onTouched: any = () => {};
+  
+  constructor(private elementRef: ElementRef) {}
+  
+  // 关闭下拉框的点击外部元素事件
+  @HostListener('document:click', ['$event'])
+  onClickOutside(event: Event) {
+    if (!this.elementRef.nativeElement.contains(event.target)) {
+      this.isOpen = false;
+    }
+  }
+  
+  // ControlValueAccessor 接口
+  writeValue(value: any): void {
+    this.value = value;
+  }
+  
+  registerOnChange(fn: any): void {
+    this.onChange = fn;
+  }
+  
+  registerOnTouched(fn: any): void {
+    this.onTouched = fn;
+  }
+  
+  setDisabledState(isDisabled: boolean): void {
+    this.disabled = isDisabled;
+  }
+  
+  // 切换下拉框状态
+  toggleDropdown(): void {
+    if (this.disabled) return;
+    
+    this.isOpen = !this.isOpen;
+    this.searchText = '';
+    
+    if (this.isOpen) {
+      setTimeout(() => {
+        this.searchInput?.nativeElement.focus();
+      });
+    }
+  }
+  
+  // 选择选项
+  selectOption(option: Option): void {
+    this.value = option.value;
+    this.onChange(this.value);
+    this.onTouched();
+    this.isOpen = false;
+  }
+  
+  // 搜索
+  onSearch(event: Event): void {
+    this.searchText = (event.target as HTMLInputElement).value;
+  }
+  
+  // 过滤选项
+  get filteredOptions(): Option[] {
+    if (!this.searchText) return this.options;
+    
+    return this.options.filter(option => 
+      option.label.toLowerCase().includes(this.searchText.toLowerCase())
+    );
+  }
+  
+  // 获取选中项
+  get selectedOption(): Option | undefined {
+    return this.options.find(option => option.value === this.value);
+  }
+}
+```
+
+使用方法示例：
+
+```html
+<form [formGroup]="productForm">
+  <app-searchable-select
+    label="分类"
+    [options]="categoryOptions"
+    formControlName="category"
+    required
+  ></app-searchable-select>
+</form>
+
+<script>
+  // 组件代码
+  categoryOptions = [
+    { value: 'electronics', label: '电子产品' },
+    { value: 'clothing', label: '服装' },
+    { value: 'books', label: '图书' },
+    { value: 'food', label: '食品' },
+    // ...更多选项
+  ];
+</script>
+``` 
+
+## 3. 布局组件
+
+布局组件帮助构建页面的整体结构和组织内容。下面介绍几个实用的布局组件。
+
+### 3.1 网格系统组件
+
+一个灵活的响应式网格系统组件：
+
+```typescript title="grid-row.component.ts"
+import { Component, Input, HostBinding } from '@angular/core';
+
+@Component({
+  selector: 'app-grid-row',
+  template: `<ng-content></ng-content>`,
+  styles: [`
+    :host {
+      display: flex;
+      flex-wrap: wrap;
+      box-sizing: border-box;
+    }
+  `]
+})
+export class GridRowComponent {
+  @Input() gutter: number = 0;
+  @Input() justify: 'start' | 'end' | 'center' | 'space-between' | 'space-around' = 'start';
+  @Input() align: 'top' | 'middle' | 'bottom' = 'top';
+  
+  // 映射到flex属性
+  private justifyMap = {
+    'start': 'flex-start',
+    'end': 'flex-end',
+    'center': 'center',
+    'space-between': 'space-between',
+    'space-around': 'space-around'
+  };
+  
+  private alignMap = {
+    'top': 'flex-start',
+    'middle': 'center',
+    'bottom': 'flex-end'
+  };
+  
+  @HostBinding('style.margin-left.px')
+  @HostBinding('style.margin-right.px')
+  get marginOffset() {
+    return this.gutter ? -(this.gutter / 2) : 0;
+  }
+  
+  @HostBinding('style.justify-content')
+  get justifyContent() {
+    return this.justifyMap[this.justify];
+  }
+  
+  @HostBinding('style.align-items')
+  get alignItems() {
+    return this.alignMap[this.align];
+  }
+}
+```
+
+```typescript title="grid-column.component.ts"
+import { Component, Input, HostBinding, OnInit } from '@angular/core';
+
+@Component({
+  selector: 'app-grid-col',
+  template: `<ng-content></ng-content>`,
+  styles: [`
+    :host {
+      box-sizing: border-box;
+    }
+    
+    /* 响应式断点 - 可以根据需求调整 */
+    @media (max-width: 575.98px) {
+      :host.responsive {
+        flex: 0 0 100%;
+        max-width: 100%;
+      }
+    }
+  `]
+})
+export class GridColumnComponent implements OnInit {
+  @Input() span: number = 24;
+  @Input() offset: number = 0;
+  @Input() xs: number | object;
+  @Input() sm: number | object;
+  @Input() md: number | object;
+  @Input() lg: number | object;
+  @Input() xl: number | object;
+  @Input() gutter: number = 0;
+  
+  @HostBinding('style.padding-left.px')
+  @HostBinding('style.padding-right.px')
+  get padding() {
+    return this.gutter ? this.gutter / 2 : 0;
+  }
+  
+  @HostBinding('style.flex')
+  @HostBinding('style.max-width')
+  get flexStyle() {
+    return `0 0 ${(this.span / 24 * 100).toFixed(8)}%`;
+  }
+  
+  @HostBinding('style.margin-left')
+  get offsetStyle() {
+    return this.offset ? `${(this.offset / 24 * 100).toFixed(8)}%` : null;
+  }
+  
+  @HostBinding('class.responsive')
+  get isResponsive() {
+    return !!(this.xs || this.sm || this.md || this.lg || this.xl);
+  }
+  
+  constructor() {}
+  
+  ngOnInit() {
+    this.setResponsiveStyles();
+  }
+  
+  private setResponsiveStyles() {
+    // 这里可以添加更复杂的响应式样式处理逻辑
+    // 例如创建媒体查询样式并添加到document.head
+  }
+}
+```
+
+使用方法示例：
+
+```html
+<app-grid-row [gutter]="16" justify="space-between" align="middle">
+  <app-grid-col [span]="8">
+    <div class="column-content">列 1</div>
+  </app-grid-col>
+  <app-grid-col [span]="8">
+    <div class="column-content">列 2</div>
+  </app-grid-col>
+  <app-grid-col [span]="8">
+    <div class="column-content">列 3</div>
+  </app-grid-col>
+</app-grid-row>
+
+<app-grid-row [gutter]="24">
+  <app-grid-col [span]="6" [xs]="24" [sm]="12" [md]="8" [lg]="6">
+    <div class="column-content">响应式列</div>
+  </app-grid-col>
+  <app-grid-col [span]="6" [xs]="24" [sm]="12" [md]="8" [lg]="6">
+    <div class="column-content">响应式列</div>
+  </app-grid-col>
+  <app-grid-col [span]="6" [xs]="24" [sm]="12" [md]="8" [lg]="6">
+    <div class="column-content">响应式列</div>
+  </app-grid-col>
+  <app-grid-col [span]="6" [xs]="24" [sm]="12" [md]="8" [lg]="6">
+    <div class="column-content">响应式列</div>
+  </app-grid-col>
+</app-grid-row>
+```
+
+### 3.2 卡片组件
+
+一个多功能的卡片组件，用于展示内容：
+
+```typescript title="card.component.ts"
+import { Component, Input } from '@angular/core';
+
+@Component({
+  selector: 'app-card',
+  template: `
+    <div class="card" [ngClass]="cardClasses">
+      <!-- 卡片头部 -->
+      <div class="card-header" *ngIf="title || subtitle || headerTemplate">
+        <ng-container *ngIf="!headerTemplate">
+          <h3 class="card-title" *ngIf="title">{{ title }}</h3>
+          <div class="card-subtitle" *ngIf="subtitle">{{ subtitle }}</div>
+        </ng-container>
+        <ng-container *ngTemplateOutlet="headerTemplate"></ng-container>
+      </div>
+      
+      <!-- 卡片封面 -->
+      <div class="card-cover" *ngIf="coverImage">
+        <img [src]="coverImage" [alt]="title || 'Card image'">
+      </div>
+      
+      <!-- 卡片内容 -->
+      <div class="card-body">
+        <ng-content></ng-content>
+      </div>
+      
+      <!-- 卡片操作区 -->
+      <div class="card-actions" *ngIf="actionsTemplate">
+        <ng-container *ngTemplateOutlet="actionsTemplate"></ng-container>
+      </div>
+    </div>
+  `,
+  styles: [`
+    .card {
+      background-color: #fff;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+      overflow: hidden;
+      transition: box-shadow 0.3s, transform 0.3s;
+      margin-bottom: 1.5rem;
+      display: flex;
+      flex-direction: column;
+    }
+    
+    .card.hoverable:hover {
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+      transform: translateY(-4px);
+    }
+    
+    .card.bordered {
+      box-shadow: none;
+      border: 1px solid #eee;
+    }
+    
+    .card-header {
+      padding: 1rem 1.5rem;
+      border-bottom: 1px solid #f0f0f0;
+      display: flex;
+      flex-direction: column;
+    }
+    
+    .card-title {
+      margin: 0;
+      font-size: 1.25rem;
+      font-weight: 500;
+      color: rgba(0, 0, 0, 0.85);
+      line-height: 1.4;
+    }
+    
+    .card-subtitle {
+      margin-top: 0.25rem;
+      color: rgba(0, 0, 0, 0.45);
+      font-size: 0.875rem;
+    }
+    
+    .card-cover img {
+      width: 100%;
+      display: block;
+    }
+    
+    .card-body {
+      padding: 1.5rem;
+      flex: 1;
+    }
+    
+    .card-actions {
+      padding: 0.75rem 1.5rem;
+      border-top: 1px solid #f0f0f0;
+      background: #fafafa;
+    }
+    
+    /* 尺寸变体 */
+    .card.small {
+      font-size: 0.875rem;
+    }
+    
+    .card.small .card-header {
+      padding: 0.75rem 1rem;
+    }
+    
+    .card.small .card-body {
+      padding: 1rem;
+    }
+    
+    .card.small .card-title {
+      font-size: 1rem;
+    }
+    
+    .card.large .card-header {
+      padding: 1.5rem 2rem;
+    }
+    
+    .card.large .card-body {
+      padding: 2rem;
+    }
+    
+    .card.large .card-title {
+      font-size: 1.5rem;
+    }
+  `]
+})
+export class CardComponent {
+  @Input() title: string;
+  @Input() subtitle: string;
+  @Input() coverImage: string;
+  @Input() bordered: boolean = false;
+  @Input() hoverable: boolean = false;
+  @Input() size: 'small' | 'default' | 'large' = 'default';
+  @Input() headerTemplate: any; // ng-template引用
+  @Input() actionsTemplate: any; // ng-template引用
+  
+  get cardClasses(): {[key: string]: boolean} {
+    return {
+      'bordered': this.bordered,
+      'hoverable': this.hoverable,
+      'small': this.size === 'small',
+      'large': this.size === 'large'
+    };
+  }
+}
+```
+
+使用方法示例：
+
+```html
+<!-- 基本用法 -->
+<app-card 
+  title="卡片标题" 
+  subtitle="卡片副标题" 
+  [hoverable]="true"
+  coverImage="assets/images/card-image.jpg">
+  <p>这是卡片内容区域，可以放置任何内容。</p>
+</app-card>
+
+<!-- 使用模板自定义头部和操作区 -->
+<app-card [headerTemplate]="customHeader" [actionsTemplate]="customActions">
+  <p>卡片内容区域</p>
+</app-card>
+
+<ng-template #customHeader>
+  <div class="custom-header">
+    <img src="assets/icons/user.svg" alt="User icon">
+    <div>
+      <h3>自定义标题</h3>
+      <span>创建于：{{ createdDate | date }}</span>
+    </div>
+  </div>
+</ng-template>
+
+<ng-template #customActions>
+  <div class="action-buttons">
+    <button (click)="onEdit()">编辑</button>
+    <button (click)="onDelete()">删除</button>
+  </div>
+</ng-template>
+```
+
+### 3.3 分隔面板组件
+
+一个可折叠的面板组件，适合展示分组内容：
+
+```typescript title="collapse.component.ts"
+import { Component, Input } from '@angular/core';
+
+@Component({
+  selector: 'app-collapse',
+  template: `
+    <div class="collapse-container">
+      <ng-content></ng-content>
+    </div>
+  `,
+  styles: [`
+    .collapse-container {
+      border: 1px solid #eee;
+      border-radius: 4px;
+    }
+  `]
+})
+export class CollapseComponent {
+  @Input() accordion: boolean = false;
+  
+  activeKeys: string[] = [];
+  
+  togglePanel(key: string): void {
+    if (this.accordion) {
+      this.activeKeys = this.activeKeys.includes(key) ? [] : [key];
+    } else {
+      const index = this.activeKeys.indexOf(key);
+      if (index > -1) {
+        this.activeKeys.splice(index, 1);
+      } else {
+        this.activeKeys.push(key);
+      }
+    }
+  }
+}
+```
+
+```typescript title="collapse-panel.component.ts"
+import { Component, Input, Host, Optional } from '@angular/core';
+import { CollapseComponent } from './collapse.component';
+
+@Component({
+  selector: 'app-collapse-panel',
+  template: `
+    <div class="collapse-panel" [class.active]="isActive">
+      <div class="panel-header" (click)="toggle()">
+        <div class="header-content">{{ header }}</div>
+        <div class="expand-icon">
+          <i class="arrow" [class.down]="!isActive" [class.up]="isActive"></i>
+        </div>
+      </div>
+      
+      <div class="panel-content" [style.height]="isActive ? contentHeight : '0'">
+        <div class="content-inner" #contentWrapper>
+          <ng-content></ng-content>
+        </div>
+      </div>
+    </div>
+  `,
+  styles: [`
+    .collapse-panel {
+      border-bottom: 1px solid #eee;
+    }
+    
+    .collapse-panel:last-child {
+      border-bottom: none;
+    }
+    
+    .panel-header {
+      padding: 1rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      cursor: pointer;
+      user-select: none;
+      color: rgba(0, 0, 0, 0.85);
+      font-weight: 500;
+    }
+    
+    .panel-header:hover {
+      background-color: #fafafa;
+    }
+    
+    .collapse-panel.active .panel-header {
+      border-bottom: 1px solid #eee;
+    }
+    
+    .arrow {
+      border: solid #999;
+      border-width: 0 2px 2px 0;
+      display: inline-block;
+      padding: 3px;
+      transition: transform 0.3s;
+    }
+    
+    .arrow.down {
+      transform: rotate(45deg);
+    }
+    
+    .arrow.up {
+      transform: rotate(-135deg);
+    }
+    
+    .panel-content {
+      overflow: hidden;
+      transition: height 0.3s ease-out;
+    }
+    
+    .content-inner {
+      padding: 1rem;
+      color: rgba(0, 0, 0, 0.65);
+    }
+  `]
+})
+export class CollapsePanelComponent {
+  @Input() header: string;
+  @Input() key: string = Math.random().toString(36).substring(2, 9);
+  @Input() disabled: boolean = false;
+  
+  private _contentHeight = 'auto';
+  
+  get isActive(): boolean {
+    return this.collapseComponent?.activeKeys.includes(this.key) ?? false;
+  }
+  
+  get contentHeight(): string {
+    return this.isActive ? this._contentHeight : '0';
+  }
+  
+  constructor(@Optional() @Host() private collapseComponent: CollapseComponent) {}
+  
+  toggle(): void {
+    if (this.disabled) return;
+    
+    this.collapseComponent?.togglePanel(this.key);
+  }
+}
+```
+
+使用方法示例：
+
+```html
+<!-- 基本折叠面板 -->
+<app-collapse>
+  <app-collapse-panel header="折叠面板 1" key="panel1">
+    <p>这里是面板1的内容区域。</p>
+  </app-collapse-panel>
+  
+  <app-collapse-panel header="折叠面板 2" key="panel2">
+    <p>这里是面板2的内容区域。</p>
+    <p>可以包含任意内容，比如文本、表单或其他组件。</p>
+  </app-collapse-panel>
+  
+  <app-collapse-panel header="折叠面板 3" key="panel3" [disabled]="true">
+    <p>这个面板被禁用了，无法点击展开。</p>
+  </app-collapse-panel>
+</app-collapse>
+
+<!-- 手风琴模式 -->
+<app-collapse [accordion]="true">
+  <app-collapse-panel header="部分 1" key="section1">
+    <p>手风琴模式下一次只能展开一个面板。</p>
+  </app-collapse-panel>
+  
+  <app-collapse-panel header="部分 2" key="section2">
+    <p>点击这个面板会自动关闭其他面板。</p>
+  </app-collapse-panel>
+</app-collapse>
+``` 
+
+## 4. 功能组件
+
+功能组件提供特定的交互功能，如模态对话框、通知提醒等。
+
+### 4.1 模态对话框组件
+
+一个可复用的模态对话框组件：
+
+```typescript title="modal.component.ts"
+import { Component, Input, Output, EventEmitter, TemplateRef } from '@angular/core';
+import { trigger, state, style, transition, animate } from '@angular/animations';
+
+@Component({
+  selector: 'app-modal',
+  template: `
+    <div class="modal-backdrop" *ngIf="visible" (click)="onBackdropClick()" [@backdropAnimation]="'show'">
+      <div class="modal-dialog" [class]="modalSizeClass" (click)="$event.stopPropagation()" [@dialogAnimation]="'show'">
+        <!-- 模态框头部 -->
+        <div class="modal-header">
+          <ng-container *ngIf="!customHeader">
+            <h4 class="modal-title">{{ title }}</h4>
+          </ng-container>
+          <ng-container *ngTemplateOutlet="customHeader"></ng-container>
+          
+          <button *ngIf="showClose" type="button" class="close-button" aria-label="Close" (click)="close()">
+            &times;
+          </button>
+        </div>
+        
+        <!-- 模态框内容 -->
+        <div class="modal-body">
+          <ng-content></ng-content>
+          <ng-container *ngTemplateOutlet="contentTemplate"></ng-container>
+        </div>
+        
+        <!-- 模态框底部 -->
+        <div class="modal-footer" *ngIf="showFooter">
+          <ng-container *ngIf="!customFooter">
+            <button type="button" class="btn btn-secondary" (click)="close()">{{ cancelText }}</button>
+            <button type="button" class="btn btn-primary" (click)="confirm()">{{ confirmText }}</button>
+          </ng-container>
+          <ng-container *ngTemplateOutlet="customFooter"></ng-container>
+        </div>
+      </div>
+    </div>
+  `,
+  styles: [`
+    .modal-backdrop {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background-color: rgba(0, 0, 0, 0.5);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 1050;
+    }
+    
+    .modal-dialog {
+      background-color: #fff;
+      border-radius: 4px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+      max-width: 90%;
+      max-height: 90vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    
+    .modal-size-small {
+      width: 400px;
+    }
+    
+    .modal-size-medium {
+      width: 600px;
+    }
+    
+    .modal-size-large {
+      width: 800px;
+    }
+    
+    .modal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 1rem 1.5rem;
+      border-bottom: 1px solid #eee;
+    }
+    
+    .modal-title {
+      margin: 0;
+      font-weight: 500;
+      color: rgba(0, 0, 0, 0.85);
+    }
+    
+    .close-button {
+      background: transparent;
+      border: none;
+      font-size: 1.5rem;
+      font-weight: 700;
+      line-height: 1;
+      color: #999;
+      cursor: pointer;
+      padding: 0;
+    }
+    
+    .close-button:hover {
+      color: #333;
+    }
+    
+    .modal-body {
+      padding: 1.5rem;
+      overflow-y: auto;
+      flex: 1;
+    }
+    
+    .modal-footer {
+      padding: 1rem 1.5rem;
+      border-top: 1px solid #eee;
+      display: flex;
+      justify-content: flex-end;
+      gap: 0.5rem;
+    }
+    
+    .btn {
+      padding: 0.5rem 1rem;
+      border-radius: 4px;
+      font-weight: 400;
+      border: 1px solid transparent;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    
+    .btn-primary {
+      background-color: #1890ff;
+      border-color: #1890ff;
+      color: white;
+    }
+    
+    .btn-primary:hover {
+      background-color: #40a9ff;
+      border-color: #40a9ff;
+    }
+    
+    .btn-secondary {
+      background-color: white;
+      border-color: #d9d9d9;
+      color: rgba(0, 0, 0, 0.65);
+    }
+    
+    .btn-secondary:hover {
+      background-color: #f5f5f5;
+      border-color: #d9d9d9;
+    }
+  `],
+  animations: [
+    trigger('backdropAnimation', [
+      state('void', style({
+        opacity: 0
+      })),
+      state('show', style({
+        opacity: 1
+      })),
+      transition('void => show', animate('200ms')),
+      transition('show => void', animate('200ms'))
+    ]),
+    trigger('dialogAnimation', [
+      state('void', style({
+        transform: 'scale(0.7)',
+        opacity: 0
+      })),
+      state('show', style({
+        transform: 'scale(1)',
+        opacity: 1
+      })),
+      transition('void => show', animate('200ms cubic-bezier(0.35, 0, 0.25, 1)')),
+      transition('show => void', animate('200ms cubic-bezier(0.35, 0, 0.25, 1)'))
+    ])
+  ]
+})
+export class ModalComponent {
+  @Input() visible: boolean = false;
+  @Input() title: string = '对话框';
+  @Input() size: 'small' | 'medium' | 'large' = 'medium';
+  @Input() showClose: boolean = true;
+  @Input() showFooter: boolean = true;
+  @Input() closeOnBackdrop: boolean = true;
+  @Input() customHeader: TemplateRef<any>;
+  @Input() customFooter: TemplateRef<any>;
+  @Input() contentTemplate: TemplateRef<any>;
+  @Input() confirmText: string = '确定';
+  @Input() cancelText: string = '取消';
+  
+  @Output() visibleChange = new EventEmitter<boolean>();
+  @Output() confirmed = new EventEmitter<void>();
+  @Output() cancelled = new EventEmitter<void>();
+  
+  get modalSizeClass(): string {
+    return `modal-size-${this.size}`;
+  }
+  
+  close(): void {
+    this.visibleChange.emit(false);
+    this.cancelled.emit();
+  }
+  
+  confirm(): void {
+    this.confirmed.emit();
+    this.visibleChange.emit(false);
+  }
+  
+  onBackdropClick(): void {
+    if (this.closeOnBackdrop) {
+      this.close();
+    }
+  }
+}
+```
+
+使用方法示例：
+
+```html
+<!-- 基本用法 -->
+<button (click)="openModal()">打开模态框</button>
+
+<app-modal 
+  [(visible)]="isModalVisible"
+  title="用户信息"
+  (confirmed)="handleConfirm()"
+  (cancelled)="handleCancel()">
+  <p>这是模态框的内容区域。</p>
+  <form>
+    <div class="form-group">
+      <label for="name">姓名</label>
+      <input id="name" type="text">
+    </div>
+    <div class="form-group">
+      <label for="email">电子邮箱</label>
+      <input id="email" type="email">
+    </div>
+  </form>
+</app-modal>
+
+<!-- 使用自定义模板 -->
+<app-modal 
+  [(visible)]="isCustomModalVisible"
+  [customHeader]="customModalHeader"
+  [customFooter]="customModalFooter">
+  <p>带有自定义头部和底部的模态框。</p>
+</app-modal>
+
+<ng-template #customModalHeader>
+  <div class="custom-header">
+    <i class="icon-warning"></i>
+    <span>警告提示</span>
+  </div>
+</ng-template>
+
+<ng-template #customModalFooter>
+  <button (click)="cancelAction()">不，我再想想</button>
+  <button class="danger-button" (click)="confirmAction()">是的，我确定</button>
+</ng-template>
+```
+
+### 4.2 通知提示组件
+
+一个用于显示全局通知的组件，包含服务和组件：
+
+```typescript title="notification.service.ts"
+import { Injectable } from '@angular/core';
+import { Subject } from 'rxjs';
+
+export type NotificationType = 'success' | 'info' | 'warning' | 'error';
+
+export interface NotificationConfig {
+  id?: string;
+  title?: string;
+  message: string;
+  type?: NotificationType;
+  duration?: number;  // 显示时长，单位毫秒，0表示不自动关闭
+}
+
+export interface NotificationInstance extends NotificationConfig {
+  id: string;
+  timestamp: number;
+}
+
+@Injectable({
+  providedIn: 'root'
+})
+export class NotificationService {
+  private notifications$ = new Subject<NotificationInstance | { id: string, remove: true }>();
+  
+  // 可观察的通知流
+  notifications = this.notifications$.asObservable();
+  
+  constructor() {}
+  
+  // 显示通知
+  show(config: NotificationConfig): string {
+    const id = config.id || `notification-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+    
+    const notification: NotificationInstance = {
+      ...config,
+      id,
+      type: config.type || 'info',
+      duration: config.duration === undefined ? 4500 : config.duration,
+      timestamp: Date.now()
+    };
+    
+    this.notifications$.next(notification);
+    
+    return id;
+  }
+  
+  // 关闭通知
+  close(id: string): void {
+    this.notifications$.next({ id, remove: true });
+  }
+  
+  // 快捷方法
+  success(message: string, title?: string, duration?: number): string {
+    return this.show({ message, title, type: 'success', duration });
+  }
+  
+  info(message: string, title?: string, duration?: number): string {
+    return this.show({ message, title, type: 'info', duration });
+  }
+  
+  warning(message: string, title?: string, duration?: number): string {
+    return this.show({ message, title, type: 'warning', duration });
+  }
+  
+  error(message: string, title?: string, duration?: number): string {
+    return this.show({ message, title, type: 'error', duration });
+  }
+}
+```
+
+```typescript title="notification.component.ts"
+import { Component, OnInit, OnDestroy } from '@angular/core';
+import { trigger, state, style, transition, animate } from '@angular/animations';
+import { NotificationService, NotificationInstance } from './notification.service';
+import { Subscription } from 'rxjs';
+
+@Component({
+  selector: 'app-notification-container',
+  template: `
+    <div class="notification-container">
+      <div 
+        *ngFor="let notification of notifications" 
+        class="notification"
+        [ngClass]="'notification-' + notification.type"
+        [@notificationAnimation]="'visible'"
+        (@notificationAnimation.done)="onAnimationDone($event, notification)"
+      >
+        <div class="notification-icon">
+          <i class="icon" [ngClass]="getIconClass(notification.type)"></i>
+        </div>
+        <div class="notification-content">
+          <div class="notification-title" *ngIf="notification.title">{{ notification.title }}</div>
+          <div class="notification-message">{{ notification.message }}</div>
+        </div>
+        <button class="notification-close" (click)="close(notification.id)">&times;</button>
+      </div>
+    </div>
+  `,
+  styles: [`
+    .notification-container {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      z-index: 1060;
+      max-width: 350px;
+    }
+    
+    .notification {
+      background: white;
+      border-radius: 4px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+      margin-bottom: 16px;
+      padding: 16px;
+      position: relative;
+      display: flex;
+      align-items: flex-start;
+      overflow: hidden;
+    }
+    
+    .notification-icon {
+      margin-right: 12px;
+      font-size: 20px;
+      line-height: 24px;
+    }
+    
+    .notification-content {
+      flex: 1;
+    }
+    
+    .notification-title {
+      font-weight: 500;
+      font-size: 16px;
+      margin-bottom: 4px;
+      color: rgba(0, 0, 0, 0.85);
+    }
+    
+    .notification-message {
+      font-size: 14px;
+      color: rgba(0, 0, 0, 0.65);
+    }
+    
+    .notification-close {
+      position: absolute;
+      right: 16px;
+      top: 12px;
+      background: transparent;
+      border: none;
+      cursor: pointer;
+      font-size: 16px;
+      color: rgba(0, 0, 0, 0.45);
+    }
+    
+    .notification-success {
+      border-left: 4px solid #52c41a;
+    }
+    
+    .notification-success .icon {
+      color: #52c41a;
+    }
+    
+    .notification-info {
+      border-left: 4px solid #1890ff;
+    }
+    
+    .notification-info .icon {
+      color: #1890ff;
+    }
+    
+    .notification-warning {
+      border-left: 4px solid #faad14;
+    }
+    
+    .notification-warning .icon {
+      color: #faad14;
+    }
+    
+    .notification-error {
+      border-left: 4px solid #f5222d;
+    }
+    
+    .notification-error .icon {
+      color: #f5222d;
+    }
+  `],
+  animations: [
+    trigger('notificationAnimation', [
+      state('void', style({
+        opacity: 0,
+        transform: 'translateX(100%)'
+      })),
+      state('visible', style({
+        opacity: 1,
+        transform: 'translateX(0)'
+      })),
+      transition('void => visible', animate('200ms cubic-bezier(0, 0, 0.2, 1)')),
+      transition('visible => void', animate('200ms cubic-bezier(0.4, 0, 1, 1)'))
+    ])
+  ]
+})
+export class NotificationContainerComponent implements OnInit, OnDestroy {
+  notifications: NotificationInstance[] = [];
+  private subscription: Subscription;
+  private timers = new Map<string, any>();
+  
+  constructor(private notificationService: NotificationService) {}
+  
+  ngOnInit(): void {
+    this.subscription = this.notificationService.notifications.subscribe(notification => {
+      if ('remove' in notification) {
+        this.removeNotification(notification.id);
+      } else {
+        this.addNotification(notification);
+      }
+    });
+  }
+  
+  ngOnDestroy(): void {
+    this.subscription.unsubscribe();
+    // 清除所有计时器
+    this.timers.forEach(timerId => clearTimeout(timerId));
+    this.timers.clear();
+  }
+  
+  private addNotification(notification: NotificationInstance): void {
+    this.notifications = [...this.notifications, notification];
+    
+    // 设置自动关闭计时器
+    if (notification.duration > 0) {
+      const timerId = setTimeout(() => {
+        this.close(notification.id);
+      }, notification.duration);
+      
+      this.timers.set(notification.id, timerId);
+    }
+  }
+  
+  private removeNotification(id: string): void {
+    const index = this.notifications.findIndex(n => n.id === id);
+    if (index > -1) {
+      const notification = this.notifications[index];
+      notification['removing'] = true;
+      this.notifications = [...this.notifications];
+      
+      // 清除该通知的计时器
+      if (this.timers.has(id)) {
+        clearTimeout(this.timers.get(id));
+        this.timers.delete(id);
+      }
+    }
+  }
+  
+  close(id: string): void {
+    this.notificationService.close(id);
+  }
+  
+  onAnimationDone(event: any, notification: NotificationInstance): void {
+    if (event.toState === 'void') {
+      this.notifications = this.notifications.filter(n => n.id !== notification.id);
+    }
+  }
+  
+  getIconClass(type: string): string {
+    switch (type) {
+      case 'success': return 'icon-check-circle';
+      case 'info': return 'icon-info-circle';
+      case 'warning': return 'icon-exclamation-circle';
+      case 'error': return 'icon-close-circle';
+      default: return 'icon-info-circle';
+    }
+  }
+}
+```
+
+使用方法示例：
+
+```typescript
+import { Component } from '@angular/core';
+import { NotificationService } from './notification.service';
+
+@Component({
+  selector: 'app-demo',
+  template: `
+    <button (click)="showSuccessNotification()">显示成功通知</button>
+    <button (click)="showInfoNotification()">显示信息通知</button>
+    <button (click)="showWarningNotification()">显示警告通知</button>
+    <button (click)="showErrorNotification()">显示错误通知</button>
+  `
+})
+export class DemoComponent {
+  constructor(private notificationService: NotificationService) {}
+  
+  showSuccessNotification(): void {
+    this.notificationService.success('操作成功完成', '成功', 3000);
+  }
+  
+  showInfoNotification(): void {
+    this.notificationService.info('这是一条信息通知', '提示');
+  }
+  
+  showWarningNotification(): void {
+    this.notificationService.warning('请注意可能的问题', '警告');
+  }
+  
+  showErrorNotification(): void {
+    this.notificationService.error('操作失败，请重试', '错误', 0); // 0表示不自动关闭
+  }
+}
+```
+
+## 5. Angular组件最佳实践
+
+### 5.1 组件设计原则
+
+开发Angular组件时应遵循以下设计原则：
+
+1. **单一职责原则**：每个组件应专注于做一件事，并做好它。
+2. **可复用性**：组件应设计为可重用，避免特定业务逻辑硬编码。
+3. **可测试性**：组件应便于单元测试，依赖注入而非直接依赖实现。
+4. **可组合性**：组件应设计为可组合，支持内容投影和模板定制。
+5. **封装性**：组件应封装其内部实现细节，只暴露必要的API。
+
+### 5.2 组件设计模式
+
+1. **展示型组件与容器型组件分离**：
+   - 展示型组件：处理UI展示，通过输入接收数据，通过输出发送事件
+   - 容器型组件：处理数据和状态管理，注入服务，协调子组件
+
+2. **组件组合模式**：
+   - 使用内容投影(`ng-content`)组合组件
+   - 使用模板引用定制组件外观
+   - 使用组件API进行配置
+
+3. **智能默认值与渐进式接口**：
+   - 提供合理默认值，减少必要配置
+   - 允许通过可选输入进行定制
+   - 保持简单接口，同时支持高级功能
+
+### 5.3 组件性能优化
+
+1. **使用OnPush变更检测策略**：
+
+```typescript
+@Component({
+  selector: 'app-performance',
+  template: `...`,
+  changeDetection: ChangeDetectionStrategy.OnPush
+})
+export class PerformanceComponent {}
+```
+
+2. **避免过度使用`ngDoCheck`**：
+   - 该钩子运行频率高，实现应保持轻量
+   - 考虑使用防抖或节流减少执行次数
+
+3. **跟踪ngFor**：
+
+```html
+<div *ngFor="let item of items; trackBy: trackByFn">{{ item.name }}</div>
+```
+
+```typescript
+trackByFn(index: number, item: any): number {
+  return item.id;
+}
+```
+
+4. **延迟加载**：
+   - 使用`*ngIf`条件渲染复杂组件
+   - 考虑使用虚拟滚动处理大列表
+   - 使用`defer`块（Angular 17+）延迟加载组件
+
+5. **纯管道替代方法**：
+   - 使用纯管道处理模板中的数据转换，而非组件方法
+
+### 5.4 组件库开发建议
+
+如果要开发自己的组件库，请遵循以下建议：
+
+1. **一致的API设计**：
+   - 保持输入/输出命名一致性
+   - 使用类似的交互模式
+   - 保持相似的错误处理策略
+
+2. **可访问性**：
+   - 支持键盘导航
+   - 添加适当的ARIA属性
+   - 确保足够的颜色对比度
+   - 支持屏幕阅读器
+
+3. **主题化支持**：
+   - 使用CSS变量实现主题切换
+   - 避免硬编码样式值
+   - 提供暗色模式支持
+
+4. **文档与示例**：
+   - 为每个组件提供清晰文档
+   - 包含基本和高级使用示例
+   - 记录公共API和事件
+
+5. **版本控制与迁移**：
+   - 遵循语义版本控制
+   - 提供清晰的变更日志
+   - 包含版本间迁移指南 

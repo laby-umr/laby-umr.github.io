@@ -8,19 +8,62 @@ last_update:
   author: Laby
 ---
 
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+import TOCInline from '@theme/TOCInline';
+
 # Java 并发工具类详解
 
 Java并发包（java.util.concurrent）提供了丰富的并发工具类，用于简化多线程编程。这些工具类提供了比传统synchronized更灵活和高效的并发控制机制。本文将详细介绍各种并发工具类的使用方法和最佳实践。
 
+:::info 本文内容概览
+<TOCInline toc={toc} />
+:::
+
+:::tip 核心价值
+**并发工具类 = 灵活同步 + 性能优化 + 易用性 + 丰富功能**
+- 🔄 **灵活控制**：提供比synchronized更灵活的同步机制
+- 🚀 **高性能**：采用更高效的算法和实现，优化竞争处理
+- 🧩 **功能丰富**：针对不同场景提供专用工具
+- 🛡️ **健壮性**：内置超时、中断、异常处理等机制
+- 📊 **可伸缩性**：适应各种复杂并发场景
+:::
+
 ## 1. 并发工具类概述
 
 ### 1.1 什么是并发工具类？
+
+```mermaid
+graph TD
+    A[Java并发工具类] -->|基于| B[AbstractQueuedSynchronizer<br>AQS框架]
+    B -->|提供| C[高效同步机制]
+    A -->|包含| D[同步工具类]
+    A -->|包含| E[执行服务]
+    A -->|包含| F[并发集合]
+    A -->|包含| G[原子变量]
+    
+    D -->|包括| D1[CountDownLatch]
+    D -->|包括| D2[CyclicBarrier]
+    D -->|包括| D3[Semaphore]
+    D -->|包括| D4[Phaser]
+    D -->|包括| D5[Exchanger]
+    
+    style A fill:#f9f,stroke:#333,stroke-width:2px
+    style B fill:#bbf,stroke:#333,stroke-width:2px
+    style D,E,F,G fill:#cff,stroke:#333
+```
 
 :::tip 核心概念
 并发工具类是Java并发包中提供的一组高级同步工具，它们基于AQS（AbstractQueuedSynchronizer）实现，提供了比传统synchronized更灵活、更高效的并发控制机制。
 :::
 
 ### 1.2 并发工具类的优势
+
+<div className="card">
+<div className="card__header">
+<h4>并发工具类与传统同步机制对比</h4>
+</div>
+<div className="card__body">
 
 | 优势 | 具体体现 | 业务价值 |
 |------|----------|----------|
@@ -30,276 +73,401 @@ Java并发包（java.util.concurrent）提供了丰富的并发工具类，用�
 | **可扩展性** | 支持自定义同步器 | 满足特殊需求 |
 | **可读性** | 语义清晰，代码易理解 | 提高代码质量 |
 
+</div>
+</div>
+
 ### 1.3 并发工具类分类
 
-```java title="并发工具类分类示例"
-public class ConcurrentToolsCategories {
-    
-    /**
-     * 并发工具类的分类
-     */
-    public static void explainCategories() {
-        System.out.println("=== 并发工具类分类 ===");
-        
-        // 1. 同步工具类
-        System.out.println("1. 同步工具类:");
-        System.out.println("   - CountDownLatch: 倒计时门闩");
-        System.out.println("   - CyclicBarrier: 循环屏障");
-        System.out.println("   - Semaphore: 信号量");
-        System.out.println("   - Phaser: 阶段器");
-        
-        // 2. 交换工具类
-        System.out.println("2. 交换工具类:");
-        System.out.println("   - Exchanger: 数据交换器");
-        
-        // 3. 同步工具类
-        System.out.println("3. 同步工具类:");
-        System.out.println("   - FutureTask: 可取消的异步任务");
-        System.out.println("   - CompletableFuture: 可组合的异步任务");
-        
-        // 4. 原子工具类
-        System.out.println("4. 原子工具类:");
-        System.out.println("   - AtomicInteger: 原子整型");
-        System.out.println("   - AtomicReference: 原子引用");
-        System.out.println("   - LongAdder: 长整型累加器");
+```mermaid
+classDiagram
+    class ConcurrentTools {
+        <<interface>>
     }
-}
+    
+    class SynchronizationTools {
+        CountDownLatch
+        CyclicBarrier
+        Semaphore
+        Phaser
+    }
+    
+    class ExchangeTools {
+        Exchanger
+    }
+    
+    class AsyncTools {
+        FutureTask
+        CompletableFuture
+    }
+    
+    class AtomicTools {
+        AtomicInteger
+        AtomicLong
+        AtomicReference
+        LongAdder
+    }
+    
+    ConcurrentTools <|-- SynchronizationTools
+    ConcurrentTools <|-- ExchangeTools
+    ConcurrentTools <|-- AsyncTools
+    ConcurrentTools <|-- AtomicTools
 ```
+
+<Tabs>
+  <TabItem value="sync_tools" label="同步工具类" default>
+  <div className="card">
+  <div className="card__body">
+  
+  **同步工具类主要用于协调多个线程的执行顺序和状态：**
+  
+  | 工具类 | 主要功能 | 特点 | 适用场景 |
+  |-------|---------|------|----------|
+  | **CountDownLatch** | 让一个或多个线程等待一组操作完成 | 一次性使用，计数器为0后无法重置 | 启动信号、资源初始化等待 |
+  | **CyclicBarrier** | 让一组线程在某个点相互等待 | 可重复使用，自动重置计数 | 分阶段计算、并行迭代算法 |
+  | **Semaphore** | 控制同时访问某个资源的线程数量 | 支持公平/非公平模式，可动态调整许可 | 连接池管理、资源限制 |
+  | **Phaser** | 允许多阶段同步，动态调整参与方数量 | 功能最强大、最复杂 | 复杂多阶段并行任务 |
+  
+  </div>
+  </div>
+  </TabItem>
+  
+  <TabItem value="exchange_tools" label="交换工具类">
+  <div className="card">
+  <div className="card__body">
+  
+  **交换工具类用于线程间数据交换：**
+  
+  | 工具类 | 主要功能 | 特点 | 适用场景 |
+  |-------|---------|------|----------|
+  | **Exchanger** | 两个线程之间交换数据 | 双向交换，支持超时 | 生产者/消费者模式、双向数据流 |
+  
+  </div>
+  </div>
+  </TabItem>
+  
+  <TabItem value="async_tools" label="异步工具类">
+  <div className="card">
+  <div className="card__body">
+  
+  **异步工具类用于处理异步计算结果：**
+  
+  | 工具类 | 主要功能 | 特点 | 适用场景 |
+  |-------|---------|------|----------|
+  | **FutureTask** | 表示一个可取消的异步计算 | 可获取结果、检查状态、取消任务 | 单个异步任务处理 |
+  | **CompletableFuture** | 支持组合式异步编程 | 支持任务链式处理、异常处理 | 复杂异步工作流 |
+  
+  </div>
+  </div>
+  </TabItem>
+  
+  <TabItem value="atomic_tools" label="原子工具类">
+  <div className="card">
+  <div className="card__body">
+  
+  **原子工具类用于原子操作：**
+  
+  | 工具类 | 主要功能 | 特点 | 适用场景 |
+  |-------|---------|------|----------|
+  | **AtomicInteger** | 原子更新整型值 | CAS操作，无锁 | 计数器、序列号生成 |
+  | **AtomicReference** | 原子更新引用类型 | 支持引用的原子更新 | 原子更新对象 |
+  | **LongAdder** | 高并发计数器 | 分段计数，减少竞争 | 高并发统计场景 |
+  
+  </div>
+  </div>
+  </TabItem>
+</Tabs>
 
 ## 2. CountDownLatch（倒计时门闩）
 
 ### 2.1 CountDownLatch 基本概念
 
-CountDownLatch是一个同步工具类，允许一个或多个线程等待其他线程完成操作。
-
-```java title="CountDownLatch基本用法示例"
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
-
-public class CountDownLatchExamples {
-    
-    /**
-     * CountDownLatch基本用法
-     */
-    public static class BasicUsage {
-    public static void main(String[] args) throws InterruptedException {
-        int threadCount = 3;
-        CountDownLatch latch = new CountDownLatch(threadCount);
-        ExecutorService executor = Executors.newFixedThreadPool(threadCount);
-        
-            System.out.println("=== CountDownLatch基本用法 ===");
-            
-            // 启动多个工作线程
-        for (int i = 0; i < threadCount; i++) {
-            final int taskId = i;
-            executor.submit(() -> {
-                try {
-                    System.out.println("任务 " + taskId + " 开始执行");
-                        Thread.sleep(1000 + taskId * 500); // 模拟工作
-                    System.out.println("任务 " + taskId + " 执行完成");
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
-                } finally {
-                    latch.countDown(); // 计数器减1
-                        System.out.println("任务 " + taskId + " 计数器减1，剩余: " + latch.getCount());
-                }
-            });
-        }
-        
-            System.out.println("主线程等待所有任务完成...");
-        latch.await(); // 等待所有任务完成
-        System.out.println("所有任务已完成！");
-            
-        executor.shutdown();
-    }
-}
-    
-    /**
-     * CountDownLatch超时等待
-     */
-    public static class TimeoutUsage {
-        public static void main(String[] args) throws InterruptedException {
-            CountDownLatch latch = new CountDownLatch(3);
-            
-            // 启动工作线程
-            for (int i = 0; i < 3; i++) {
-                final int taskId = i;
-                new Thread(() -> {
-                    try {
-                        Thread.sleep(2000 + taskId * 1000); // 模拟长时间工作
-                        System.out.println("任务 " + taskId + " 完成");
-                    } catch (InterruptedException e) {
-                        Thread.currentThread().interrupt();
-                    } finally {
-                        latch.countDown();
-                    }
-                }).start();
-            }
-            
-            // 等待最多5秒
-            boolean completed = latch.await(5, TimeUnit.SECONDS);
-            if (completed) {
-                System.out.println("所有任务在超时时间内完成");
-            } else {
-                System.out.println("等待超时，还有 " + latch.getCount() + " 个任务未完成");
-            }
-        }
-    }
-    
-    /**
-     * CountDownLatch实际应用场景
-     */
-    public static class PracticalApplications {
-        
-        /**
-         * 数据加载场景
-         */
-        public static class DataLoader {
-            public void loadData() throws InterruptedException {
-        CountDownLatch latch = new CountDownLatch(3);
-        
-                // 并行加载不同类型的数据
-        new Thread(() -> {
-                    try {
-            loadUserData();
-                        System.out.println("用户数据加载完成");
-                    } finally {
-            latch.countDown();
-                    }
-        }).start();
-        
-        new Thread(() -> {
-                    try {
-            loadProductData();
-                        System.out.println("产品数据加载完成");
-                    } finally {
-            latch.countDown();
-                    }
-        }).start();
-        
-        new Thread(() -> {
-                    try {
-            loadOrderData();
-                        System.out.println("订单数据加载完成");
-                    } finally {
-            latch.countDown();
-                    }
-        }).start();
-        
-        // 等待所有数据加载完成
-        latch.await();
-                System.out.println("所有数据加载完成，开始处理业务逻辑");
-        processAllData();
-    }
-    
-    private void loadUserData() {
-                try {
-                    Thread.sleep(1000);
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
-                }
-    }
-    
-    private void loadProductData() {
-                try {
-                    Thread.sleep(1500);
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
-                }
-    }
-    
-    private void loadOrderData() {
-                try {
-                    Thread.sleep(800);
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
-                }
-    }
-    
-    private void processAllData() {
-                System.out.println("处理所有数据...");
-            }
-        }
-        
-        /**
-         * 服务启动场景
-         */
-        public static class ServiceStarter {
-            public void startServices() throws InterruptedException {
-                CountDownLatch latch = new CountDownLatch(4);
-                
-                // 启动各种服务
-                startDatabaseService(latch);
-                startCacheService(latch);
-                startMessageService(latch);
-                startWebService(latch);
-                
-                // 等待所有服务启动完成
-                latch.await();
-                System.out.println("所有服务启动完成，系统就绪");
-            }
-            
-            private void startDatabaseService(CountDownLatch latch) {
-                new Thread(() -> {
-                    try {
-                        System.out.println("启动数据库服务...");
-                        Thread.sleep(2000);
-                        System.out.println("数据库服务启动完成");
-                    } catch (InterruptedException e) {
-                        Thread.currentThread().interrupt();
-                    } finally {
-                        latch.countDown();
-                    }
-                }).start();
-            }
-            
-            private void startCacheService(CountDownLatch latch) {
-                new Thread(() -> {
-                    try {
-                        System.out.println("启动缓存服务...");
-                        Thread.sleep(1500);
-                        System.out.println("缓存服务启动完成");
-                    } catch (InterruptedException e) {
-                        Thread.currentThread().interrupt();
-                    } finally {
-                        latch.countDown();
-                    }
-                }).start();
-            }
-            
-            private void startMessageService(CountDownLatch latch) {
-                new Thread(() -> {
-                    try {
-                        System.out.println("启动消息服务...");
-                        Thread.sleep(1000);
-                        System.out.println("消息服务启动完成");
-                    } catch (InterruptedException e) {
-                        Thread.currentThread().interrupt();
-                    } finally {
-                        latch.countDown();
-                    }
-                }).start();
-            }
-            
-            private void startWebService(CountDownLatch latch) {
-                new Thread(() -> {
-                    try {
-                        System.out.println("启动Web服务...");
-                        Thread.sleep(1200);
-                        System.out.println("Web服务启动完成");
-                    } catch (InterruptedException e) {
-                        Thread.currentThread().interrupt();
-                    } finally {
-                        latch.countDown();
-                    }
-                }).start();
-            }
-        }
-    }
-}
+```mermaid
+stateDiagram-v2
+    [*] --> 创建: new CountDownLatch(n)
+    创建 --> 等待: await()
+    创建 --> 计数减一: countDown()
+    计数减一 --> 检查计数
+    检查计数 --> 计数减一: 计数>0
+    检查计数 --> 通知等待线程: 计数=0
+    通知等待线程 --> [*]
+    等待 --> 被阻塞: 计数>0
+    等待 --> 继续执行: 计数=0
+    被阻塞 --> 继续执行: 收到通知
+    继续执行 --> [*]
 ```
+
+<div className="card">
+<div className="card__header">
+<h4>CountDownLatch核心特性</h4>
+</div>
+<div className="card__body">
+
+**CountDownLatch**是一个同步工具类，允许一个或多个线程等待其他线程完成操作。
+
+**关键特性：**
+- 初始化时指定计数值
+- 调用`countDown()`方法使计数值减1
+- 调用`await()`方法等待计数值变为0
+- **一次性使用**：计数值为0后无法重置
+- 支持超时等待：`await(long timeout, TimeUnit unit)`
+
+**主要应用场景：**
+- 启动信号：等待所有服务就绪后再开始
+- 任务分解：将大任务分解为多个小任务并行处理
+- 资源初始化：等待多个资源初始化完成
+
+</div>
+</div>
+
+<Tabs>
+  <TabItem value="basic_usage" label="基本用法" default>
+  ```java
+  import java.util.concurrent.CountDownLatch;
+  import java.util.concurrent.ExecutorService;
+  import java.util.concurrent.Executors;
+  
+  /**
+   * CountDownLatch基本用法
+   */
+  public static class BasicUsage {
+      public static void main(String[] args) throws InterruptedException {
+          int threadCount = 3;
+          // 创建一个初始计数为3的CountDownLatch
+          CountDownLatch latch = new CountDownLatch(threadCount);
+          ExecutorService executor = Executors.newFixedThreadPool(threadCount);
+          
+          // 启动多个工作线程
+          for (int i = 0; i < threadCount; i++) {
+              final int taskId = i;
+              executor.submit(() -> {
+                  try {
+                      System.out.println("任务 " + taskId + " 开始执行");
+                      Thread.sleep(1000 + taskId * 500); // 模拟工作
+                      System.out.println("任务 " + taskId + " 执行完成");
+                  } catch (InterruptedException e) {
+                      Thread.currentThread().interrupt();
+                  } finally {
+                      latch.countDown(); // 计数器减1
+                      System.out.println("任务 " + taskId + " 计数器减1，剩余: " + latch.getCount());
+                  }
+              });
+          }
+          
+          System.out.println("主线程等待所有任务完成...");
+          latch.await(); // 等待所有任务完成
+          System.out.println("所有任务已完成！");
+              
+          executor.shutdown();
+      }
+  }
+  ```
+  
+  **工作原理：**
+  1. 创建`CountDownLatch`并设置初始计数值
+  2. 启动多个线程执行任务
+  3. 每个任务完成后调用`countDown()`使计数值减1
+  4. 主线程调用`await()`等待计数值变为0
+  5. 当所有任务完成后，主线程继续执行
+  
+  </TabItem>
+  <TabItem value="timeout_usage" label="超时等待">
+  ```java
+  import java.util.concurrent.CountDownLatch;
+  import java.util.concurrent.TimeUnit;
+  
+  /**
+   * CountDownLatch超时等待
+   */
+  public static class TimeoutUsage {
+      public static void main(String[] args) throws InterruptedException {
+          CountDownLatch latch = new CountDownLatch(3);
+          
+          // 启动工作线程
+          for (int i = 0; i < 3; i++) {
+              final int taskId = i;
+              new Thread(() -> {
+                  try {
+                      // 每个任务执行时间不同
+                      Thread.sleep(2000 + taskId * 1000); // 模拟长时间工作
+                      System.out.println("任务 " + taskId + " 完成");
+                      latch.countDown();
+                  } catch (InterruptedException e) {
+                      Thread.currentThread().interrupt();
+                  }
+              }).start();
+          }
+          
+          // 最多等待5秒
+          boolean completed = latch.await(5, TimeUnit.SECONDS);
+          if (completed) {
+              System.out.println("所有任务在超时时间内完成");
+          } else {
+              System.out.println("等待超时，还有 " + latch.getCount() + " 个任务未完成");
+          }
+      }
+  }
+  ```
+  
+  **超时处理的优势：**
+  - 避免无限期等待
+  - 提供失败快速路径
+  - 增强系统鲁棒性
+  - 支持优雅降级策略
+  
+  </TabItem>
+  <TabItem value="practical_usage" label="实际应用">
+  ```java
+  import java.util.concurrent.CountDownLatch;
+  
+  /**
+   * 数据加载场景
+   */
+  public static class DataLoader {
+      public void loadData() throws InterruptedException {
+          // 创建用于等待三类数据加载完成的CountDownLatch
+          CountDownLatch latch = new CountDownLatch(3);
+          
+          // 并行加载不同类型的数据
+          new Thread(() -> {
+              try {
+                  loadUserData();
+                  System.out.println("用户数据加载完成");
+              } finally {
+                  latch.countDown();
+              }
+          }).start();
+          
+          new Thread(() -> {
+              try {
+                  loadProductData();
+                  System.out.println("产品数据加载完成");
+              } finally {
+                  latch.countDown();
+              }
+          }).start();
+          
+          new Thread(() -> {
+              try {
+                  loadOrderData();
+                  System.out.println("订单数据加载完成");
+              } finally {
+                  latch.countDown();
+              }
+          }).start();
+          
+          // 等待所有数据加载完成
+          latch.await();
+          System.out.println("所有数据加载完成，开始处理业务逻辑");
+          processAllData();
+      }
+      
+      // 数据加载和处理方法
+      private void loadUserData() { /* 实现省略 */ }
+      private void loadProductData() { /* 实现省略 */ }
+      private void loadOrderData() { /* 实现省略 */ }
+      private void processAllData() { /* 实现省略 */ }
+  }
+  ```
+  
+  **应用场景示例：**
+  - **微服务启动**：等待多个依赖服务就绪
+  - **并行数据处理**：分片处理大型数据集
+  - **测试多线程**：确保多个线程同时开始执行
+  - **资源初始化**：等待多个资源准备完毕
+  
+  </TabItem>
+</Tabs>
+
+### 2.2 CountDownLatch vs CyclicBarrier
+
+```mermaid
+graph TB
+    subgraph CountDownLatch
+        A1[一次性使用] --> B1[一个/多个线程等待其他线程]
+        C1[计数器为0后无法重置] --> D1[只能减计数]
+    end
+    
+    subgraph CyclicBarrier
+        A2[可重复使用] --> B2[一组线程相互等待]
+        C2[自动重置] --> D2[支持屏障动作]
+    end
+    
+    style CountDownLatch fill:#f9d,stroke:#333
+    style CyclicBarrier fill:#9df,stroke:#333
+```
+
+<div className="card">
+<div className="card__header">
+<h4>CountDownLatch与CyclicBarrier对比</h4>
+</div>
+<div className="card__body">
+
+| 特性 | CountDownLatch | CyclicBarrier |
+|------|--------------|--------------|
+| **等待方向** | 一个或多个线程等待其他线程 | 一组线程相互等待 |
+| **重用性** | 一次性使用，不可重置 | 可重复使用，自动重置 |
+| **计数操作** | `countDown()`减少计数 | 调用`await()`增加计数 |
+| **回调动作** | 不支持 | 支持屏障动作（barrier action） |
+| **超时支持** | 支持超时等待 | 支持超时等待 |
+| **创建方式** | 指定计数值 | 指定参与线程数和可选的屏障动作 |
+| **使用场景** | 启动信号、任务分解 | 分阶段计算、并行迭代 |
+
+</div>
+</div>
+
+### 2.3 CountDownLatch 实现原理
+
+```mermaid
+classDiagram
+    class AbstractQueuedSynchronizer {
+        #int state
+        #tryAcquireShared()
+        #tryReleaseShared()
+    }
+    
+    class CountDownLatch {
+        -Sync sync
+        +await()
+        +countDown()
+        +getCount()
+    }
+    
+    class Sync {
+        -int startCount
+        #tryAcquireShared()
+        #tryReleaseShared()
+    }
+    
+    AbstractQueuedSynchronizer <|-- Sync
+    CountDownLatch *-- Sync
+```
+
+<details>
+<summary><strong>CountDownLatch内部实现细节</strong></summary>
+
+CountDownLatch基于AQS（AbstractQueuedSynchronizer）实现，它使用AQS的共享模式：
+
+1. **状态管理**：
+   - AQS的state变量用作计数器
+   - 初始化时设置为指定的计数值
+   - 每次countDown()时将state减1
+   - 当state变为0时，所有等待的线程被释放
+
+2. **关键方法实现**：
+   - `countDown()`：调用AQS的`releaseShared()`方法，减少计数
+   - `await()`：调用AQS的`acquireShared()`方法，如果计数不为0则阻塞
+   - `await(timeout, unit)`：调用AQS的`tryAcquireSharedNanos()`方法，支持超时
+
+3. **线程排队机制**：
+   - 使用AQS内部的FIFO队列来管理等待的线程
+   - 当计数器变为0时，AQS会释放所有等待的线程
+
+4. **为什么不可重用**：
+   - CountDownLatch的计数器只能减不能增
+   - 一旦计数器达到0，就无法恢复到初始状态
+   - 这是设计决策，而非技术限制
+
+</details>
 
 ## 3. CyclicBarrier（循环屏障）
 

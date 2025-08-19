@@ -8,19 +8,54 @@ last_update:
   author: Laby
 ---
 
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+import TOCInline from '@theme/TOCInline';
+
 # Java ThreadLocal 详解
 
 ThreadLocal是Java中用于创建线程局部变量的类，每个线程都有自己独立的变量副本，线程间不会相互影响。本文将详细介绍ThreadLocal的原理、使用方法和最佳实践。
 
+:::info 本文内容概览
+<TOCInline toc={toc} />
+:::
+
+:::tip 核心价值
+**ThreadLocal = 线程隔离 + 上下文传递 + 无锁并发 + 资源管理**
+- 🧵 **线程隔离**：为每个线程提供独立的变量副本，避免共享冲突
+- 🔄 **上下文传递**：在同一线程的不同方法之间传递数据
+- 🚀 **无锁并发**：无需同步即可实现线程安全
+- 📊 **资源管理**：管理线程级别的资源（如数据库连接、用户会话）
+:::
+
 ## 1. ThreadLocal概述
 
 ### 1.1 什么是ThreadLocal？
+
+```mermaid
+graph LR
+    ThreadA[Thread A] --> TLA[ThreadLocal<br>变量副本 A]
+    ThreadB[Thread B] --> TLB[ThreadLocal<br>变量副本 B]
+    ThreadC[Thread C] --> TLC[ThreadLocal<br>变量副本 C]
+    
+    class ThreadA,ThreadB,ThreadC thread;
+    class TLA,TLB,TLC local;
+    
+    classDef thread fill:#6495ED,stroke:#333,stroke-width:2px
+    classDef local fill:#90EE90,stroke:#333,stroke-width:1px
+```
 
 :::tip 核心概念
 ThreadLocal是Java中用于创建线程局部变量的类，它提供了线程隔离的存储机制，每个线程都有自己独立的变量副本，线程间不会相互影响。
 :::
 
 ### 1.2 ThreadLocal的特点
+
+<div className="card">
+<div className="card__header">
+<h4>ThreadLocal的关键特性</h4>
+</div>
+<div className="card__body">
 
 | 特点 | 具体体现 | 业务价值 |
 |------|----------|----------|
@@ -30,351 +65,952 @@ ThreadLocal是Java中用于创建线程局部变量的类，它提供了线程�
 | **适用场景** | 线程上下文传递、数据库连接等 | 解决特定业务问题 |
 | **性能影响** | 访问速度快，内存开销小 | 适合高频访问场景 |
 
+</div>
+</div>
+
+```mermaid
+graph TD
+    A[ThreadLocal特性] --> B[线程隔离]
+    A --> C[无锁线程安全]
+    A --> D[方法间共享]
+    A --> E[状态管理]
+    
+    B --> B1[独立变量副本]
+    C --> C1[无需同步操作]
+    D --> D1[上下文传递]
+    E --> E1[请求范围存储]
+    
+    style A fill:#f9f,stroke:#333,stroke-width:2px
+    style B,C,D,E fill:#bbf,stroke:#333
+```
+
 ### 1.3 ThreadLocal基本使用
 
-```java title="ThreadLocal基本使用示例"
-public class ThreadLocalExamples {
-    
-    /**
-     * ThreadLocal基本使用
-     */
-    public static class BasicUsage {
-        // 创建ThreadLocal变量
-        private static ThreadLocal<String> threadLocal = new ThreadLocal<>();
-        
-        public static void main(String[] args) {
-            System.out.println("=== ThreadLocal基本使用 ===");
-            
-            // 线程1
-            Thread thread1 = new Thread(() -> {
-                threadLocal.set("Thread1-Value");
-                System.out.println("Thread1: " + threadLocal.get());
-                
-                // 清理ThreadLocal
-                threadLocal.remove();
-            });
-            
-            // 线程2
-            Thread thread2 = new Thread(() -> {
-                threadLocal.set("Thread2-Value");
-                System.out.println("Thread2: " + threadLocal.get());
-                
-                // 清理ThreadLocal
-                threadLocal.remove();
-            });
-            
-            thread1.start();
-            thread2.start();
-            
-            try {
-                thread1.join();
-                thread2.join();
-            } catch (InterruptedException e) {
-                e.printStackTrace();
-            }
-        }
-    }
-    
-    /**
-     * ThreadLocal初始值
-     */
-    public static class InitialValueUsage {
-        // 使用withInitial提供初始值
-        private static ThreadLocal<Integer> counter = ThreadLocal.withInitial(() -> 0);
-        
-        public static void main(String[] args) {
-            System.out.println("=== ThreadLocal初始值 ===");
-            
-            // 多个线程访问ThreadLocal
-            for (int i = 0; i < 3; i++) {
-                final int threadId = i;
-                new Thread(() -> {
-                    System.out.println("线程" + threadId + "初始值: " + counter.get());
-                    counter.set(counter.get() + 1);
-                    System.out.println("线程" + threadId + "修改后: " + counter.get());
-                    counter.remove();
-                }).start();
-            }
-        }
-    }
-}
-```
+<Tabs>
+  <TabItem value="basic" label="基本使用" default>
+  ```java
+  /**
+   * ThreadLocal基本使用示例
+   */
+  public static class BasicUsage {
+      // 创建ThreadLocal变量
+      private static final ThreadLocal<String> threadLocal = new ThreadLocal<>();
+      
+      public static void main(String[] args) {
+          // 线程1
+          Thread thread1 = new Thread(() -> {
+              // 设置值 - 只影响当前线程
+              threadLocal.set("Thread1-Value");
+              // 获取值 - 只能获取当前线程设置的值
+              System.out.println("Thread1: " + threadLocal.get());
+              
+              // 清理ThreadLocal - 防止内存泄漏
+              threadLocal.remove();
+          });
+          
+          // 线程2
+          Thread thread2 = new Thread(() -> {
+              // 线程2设置的值与线程1互不干扰
+              threadLocal.set("Thread2-Value");
+              System.out.println("Thread2: " + threadLocal.get());
+              
+              // 清理ThreadLocal
+              threadLocal.remove();
+          });
+          
+          // 启动线程
+          thread1.start();
+          thread2.start();
+          
+          try {
+              thread1.join();
+              thread2.join();
+          } catch (InterruptedException e) {
+              e.printStackTrace();
+          }
+      }
+  }
+  ```
+  </TabItem>
+  <TabItem value="initial_value" label="初始值">
+  ```java
+  /**
+   * ThreadLocal初始值示例
+   */
+  public static class InitialValueUsage {
+      // 使用withInitial方法提供初始值
+      private static final ThreadLocal<Integer> counter = 
+          ThreadLocal.withInitial(() -> 0);
+      
+      // 使用匿名内部类方式提供初始值
+      private static final ThreadLocal<List<String>> itemList = 
+          new ThreadLocal<List<String>>() {
+              @Override
+              protected List<String> initialValue() {
+                  return new ArrayList<>();
+              }
+          };
+      
+      public static void main(String[] args) {
+          // 多个线程访问ThreadLocal
+          for (int i = 0; i < 3; i++) {
+              final int threadId = i;
+              new Thread(() -> {
+                  // 获取初始值 - 无需检查null
+                  System.out.println("线程" + threadId + "初始计数: " + counter.get()); // 0
+                  
+                  // 修改值
+                  counter.set(counter.get() + 1);
+                  System.out.println("线程" + threadId + "修改后计数: " + counter.get()); // 1
+                  
+                  // 使用itemList添加元素
+                  itemList.get().add("Item-" + threadId);
+                  System.out.println("线程" + threadId + "项目列表: " + itemList.get());
+                  
+                  // 清理ThreadLocal
+                  counter.remove();
+                  itemList.remove();
+              }).start();
+          }
+      }
+  }
+  ```
+  </TabItem>
+  <TabItem value="using_helper" label="辅助类">
+  ```java
+  /**
+   * ThreadLocal辅助类示例
+   */
+  public static class ThreadLocalHelper {
+      // 定义一个静态工具类来管理ThreadLocal
+      public static class UserContextHolder {
+          private static final ThreadLocal<UserContext> CONTEXT = new ThreadLocal<>();
+          
+          public static void set(UserContext context) {
+              CONTEXT.set(context);
+          }
+          
+          public static UserContext get() {
+              return CONTEXT.get();
+          }
+          
+          public static void clear() {
+              CONTEXT.remove();
+          }
+          
+          // 使用try-with-resources模式自动清理
+          public static class Context implements AutoCloseable {
+              public Context(UserContext userContext) {
+                  CONTEXT.set(userContext);
+              }
+              
+              @Override
+              public void close() {
+                  CONTEXT.remove();
+              }
+          }
+      }
+      
+      // 用户上下文类
+      public static class UserContext {
+          private final String userId;
+          private final String username;
+          
+          public UserContext(String userId, String username) {
+              this.userId = userId;
+              this.username = username;
+          }
+          
+          public String getUserId() {
+              return userId;
+          }
+          
+          public String getUsername() {
+              return username;
+          }
+      }
+      
+      // 示例用法
+      public static void main(String[] args) {
+          // 使用try-with-resources自动清理
+          try (UserContextHolder.Context ignored = 
+                   new UserContextHolder.Context(new UserContext("123", "Alice"))) {
+              
+              // 在当前线程的任意位置访问用户上下文
+              UserContext ctx = UserContextHolder.get();
+              System.out.println("当前用户: " + ctx.getUsername());
+              
+              // 调用其他方法，无需传递参数
+              processRequest();
+          }
+          
+          // 此时ThreadLocal已自动清理
+      }
+      
+      private static void processRequest() {
+          // 获取当前用户上下文，无需通过参数传递
+          UserContext ctx = UserContextHolder.get();
+          if (ctx != null) {
+              System.out.println("处理用户请求: " + ctx.getUserId());
+          }
+      }
+  }
+  ```
+  </TabItem>
+</Tabs>
 
 ## 2. ThreadLocal原理
 
 ### 2.1 ThreadLocal源码分析
 
-```java title="ThreadLocal源码分析示例"
-public class ThreadLocalSourceCodeAnalysis {
-    
-    /**
-     * ThreadLocal核心方法分析
-     */
-    public static class CoreMethods {
-        
-        /**
-         * get方法分析
-         */
-        public static void analyzeGetMethod() {
-            System.out.println("=== ThreadLocal.get()方法分析 ===");
-            System.out.println("1. 获取当前线程");
-            System.out.println("2. 获取线程的ThreadLocalMap");
-            System.out.println("3. 如果map存在，根据ThreadLocal的hashCode查找Entry");
-            System.out.println("4. 如果找到Entry，返回value");
-            System.out.println("5. 如果没找到，调用setInitialValue()");
-        }
-        
-        /**
-         * set方法分析
-         */
-        public static void analyzeSetMethod() {
-            System.out.println("=== ThreadLocal.set()方法分析 ===");
-            System.out.println("1. 获取当前线程");
-            System.out.println("2. 获取线程的ThreadLocalMap");
-            System.out.println("3. 如果map存在，设置key-value");
-            System.out.println("4. 如果map不存在，创建新的ThreadLocalMap");
-        }
-        
-        /**
-         * remove方法分析
-         */
-        public static void analyzeRemoveMethod() {
-            System.out.println("=== ThreadLocal.remove()方法分析 ===");
-            System.out.println("1. 获取当前线程的ThreadLocalMap");
-            System.out.println("2. 如果map存在，删除对应的Entry");
-            System.out.println("3. 清理过期的Entry（key为null的Entry）");
-        }
+```mermaid
+classDiagram
+    class Thread {
+        ThreadLocalMap threadLocals
+        ThreadLocalMap inheritableThreadLocals
     }
     
-    /**
-     * ThreadLocalMap结构分析
-     */
-    public static class ThreadLocalMapStructure {
-        
-        /**
-         * Entry类分析
-         */
-        public static void analyzeEntryClass() {
-            System.out.println("=== ThreadLocalMap.Entry分析 ===");
-            System.out.println("1. Entry继承自WeakReference<ThreadLocal<?>>");
-            System.out.println("2. key是ThreadLocal的弱引用");
-            System.out.println("3. value是强引用");
-            System.out.println("4. 当ThreadLocal被回收时，key变为null");
-        }
-        
-        /**
-         * 哈希算法分析
-         */
-        public static void analyzeHashAlgorithm() {
-            System.out.println("=== ThreadLocal哈希算法分析 ===");
-            System.out.println("1. 使用黄金分割数0x61c88647");
-            System.out.println("2. 每次递增HASH_INCREMENT");
-            System.out.println("3. 减少哈希冲突");
-            System.out.println("4. 提高查找效率");
-        }
+    class ThreadLocal {
+        <<generic T>>
+        -int threadLocalHashCode
+        +T get()
+        +void set(T value)
+        +void remove()
+        #T initialValue()
+        +static ThreadLocal withInitial()
     }
-}
+    
+    class ThreadLocalMap {
+        -Entry[] table
+        -int size
+        -int threshold
+        -void set(ThreadLocal key, Object value)
+        -Entry getEntry(ThreadLocal key)
+        -void remove(ThreadLocal key)
+        -void resize()
+        -void cleanSomeSlots()
+    }
+    
+    class Entry {
+        <<WeakReference>>
+        +ThreadLocal key
+        +Object value
+    }
+    
+    Thread "1" --> "0..*" ThreadLocalMap
+    ThreadLocalMap "1" --> "0..*" Entry
+    Entry ..> ThreadLocal
 ```
+
+<div className="card">
+<div className="card__header">
+<h4>ThreadLocal核心方法</h4>
+</div>
+<div className="card__body">
+
+| 方法 | 描述 | 关键实现 |
+|------|------|----------|
+| **get()** | 获取当前线程对应的值 | 获取当前线程ThreadLocalMap，然后根据ThreadLocal查找对应的Entry |
+| **set(T)** | 设置当前线程对应的值 | 获取当前线程ThreadLocalMap，如果不存在则创建，然后添加或更新Entry |
+| **remove()** | 移除当前线程对应的值 | 获取当前线程ThreadLocalMap，如果存在则移除对应的Entry |
+| **initialValue()** | 返回初始值 | 默认返回null，子类可覆盖提供初始值 |
+| **withInitial()** | 创建带初始值的ThreadLocal | 返回带有指定Supplier的ThreadLocal实现 |
+
+</div>
+</div>
+
+<Tabs>
+  <TabItem value="get_method" label="get()方法" default>
+  ```java
+  /**
+   * 获取当前线程对应的值
+   */
+  public T get() {
+      // 获取当前线程
+      Thread t = Thread.currentThread();
+      // 获取当前线程的ThreadLocalMap
+      ThreadLocalMap map = getMap(t);
+      if (map != null) {
+          // 如果map存在，则查找当前ThreadLocal对应的Entry
+          ThreadLocalMap.Entry e = map.getEntry(this);
+          if (e != null) {
+              @SuppressWarnings("unchecked")
+              T result = (T)e.value;
+              return result;
+          }
+      }
+      // 如果没有找到值，则初始化
+      return setInitialValue();
+  }
+  
+  // 初始化值
+  private T setInitialValue() {
+      // 获取初始值（默认为null，子类可以重写）
+      T value = initialValue();
+      Thread t = Thread.currentThread();
+      ThreadLocalMap map = getMap(t);
+      if (map != null) {
+          // 如果map存在，设置初始值
+          map.set(this, value);
+      } else {
+          // 否则创建ThreadLocalMap
+          createMap(t, value);
+      }
+      return value;
+  }
+  ```
+  
+  **工作流程：**
+  1. 获取当前线程
+  2. 获取线程中的ThreadLocalMap
+  3. 如果map存在且找到Entry，返回对应的值
+  4. 否则初始化一个值并返回
+  
+  </TabItem>
+  <TabItem value="set_method" label="set()方法">
+  ```java
+  /**
+   * 设置当前线程对应的值
+   */
+  public void set(T value) {
+      // 获取当前线程
+      Thread t = Thread.currentThread();
+      // 获取当前线程的ThreadLocalMap
+      ThreadLocalMap map = getMap(t);
+      if (map != null) {
+          // 如果map存在，更新值
+          map.set(this, value);
+      } else {
+          // 否则创建ThreadLocalMap
+          createMap(t, value);
+      }
+  }
+  
+  // 创建ThreadLocalMap
+  void createMap(Thread t, T firstValue) {
+      // 创建ThreadLocalMap，并将当前ThreadLocal和值作为第一个Entry
+      t.threadLocals = new ThreadLocalMap(this, firstValue);
+  }
+  ```
+  
+  **工作流程：**
+  1. 获取当前线程
+  2. 获取线程中的ThreadLocalMap
+  3. 如果map存在，设置或更新Entry
+  4. 否则创建新的ThreadLocalMap
+  
+  </TabItem>
+  <TabItem value="remove_method" label="remove()方法">
+  ```java
+  /**
+   * 移除当前线程对应的值
+   */
+  public void remove() {
+      // 获取当前线程的ThreadLocalMap
+      ThreadLocalMap m = getMap(Thread.currentThread());
+      if (m != null) {
+          // 从map中移除当前ThreadLocal对应的Entry
+          m.remove(this);
+      }
+  }
+  ```
+  
+  **工作流程：**
+  1. 获取当前线程的ThreadLocalMap
+  2. 如果map存在，移除对应的Entry
+  3. 这一步很重要，能够避免内存泄漏
+  
+  </TabItem>
+</Tabs>
 
 ### 2.2 ThreadLocalMap结构
 
-```java title="ThreadLocalMap结构示例"
-public class ThreadLocalMapStructure {
+```mermaid
+graph TD
+    A[ThreadLocalMap] --> B[Entry数组]
+    B --> C[Entry]
+    C --> D[key: WeakReference<ThreadLocal>]
+    C --> E[value: Object]
+    A --> F[线性探测法解决哈希冲突]
+    A --> G[懒惰清理策略]
     
-    /**
-     * ThreadLocalMap核心结构
-     */
-    public static class CoreStructure {
-        
-        /**
-         * Entry数组结构
-         */
-        public static void explainEntryArray() {
-            System.out.println("=== ThreadLocalMap.Entry数组 ===");
-            System.out.println("1. 使用Entry数组存储数据");
-            System.out.println("2. 数组大小必须是2的幂");
-            System.out.println("3. 初始容量为16");
-            System.out.println("4. 负载因子为2/3");
-            System.out.println("5. 超过阈值时进行扩容");
-        }
-        
-        /**
-         * 哈希冲突处理
-         */
-        public static void explainHashCollision() {
-            System.out.println("=== 哈希冲突处理 ===");
-            System.out.println("1. 使用线性探测法");
-            System.out.println("2. 遇到冲突时向后查找");
-            System.out.println("3. 到达数组末尾时从头开始");
-            System.out.println("4. 清理过期的Entry");
-        }
-        
-        /**
-         * 过期Entry清理
-         */
-        public static void explainExpiredEntryCleanup() {
-            System.out.println("=== 过期Entry清理 ===");
-            System.out.println("1. 在set、get、remove时触发清理");
-            System.out.println("2. 清理key为null的Entry");
-            System.out.println("3. 重新整理数组");
-            System.out.println("4. 减少内存泄漏");
-        }
-    }
-}
+    style A fill:#f9f,stroke:#333,stroke-width:2px
+    style C fill:#bbf,stroke:#333
+    style D fill:#fbf,stroke:#333
+    style G fill:#ff9,stroke:#333
 ```
+
+<Tabs>
+  <TabItem value="entry_structure" label="Entry结构" default>
+  ```java
+  /**
+   * ThreadLocalMap的Entry继承自WeakReference
+   */
+  static class Entry extends WeakReference<ThreadLocal<?>> {
+      /** 与这个ThreadLocal关联的值 */
+      Object value;
+  
+      Entry(ThreadLocal<?> k, Object v) {
+          super(k);  // key作为弱引用传给父类
+          value = v; // value是强引用
+      }
+  }
+  ```
+  
+  **关键特性：**
+  - Entry继承自WeakReference，key是ThreadLocal的弱引用
+  - 当ThreadLocal对象没有强引用时，key会被垃圾收集器回收
+  - 但value仍然是强引用，可能导致内存泄漏
+  - 这就是为什么必须调用remove()的原因
+  
+  </TabItem>
+  <TabItem value="hash_algorithm" label="哈希算法">
+  ```java
+  /**
+   * ThreadLocal中的哈希码生成
+   */
+  private final int threadLocalHashCode = nextHashCode();
+  
+  // 原子更新下一个哈希码
+  private static AtomicInteger nextHashCode = new AtomicInteger();
+  
+  // 魔数 - 黄金分割数 * 2^32
+  private static final int HASH_INCREMENT = 0x61c88647;
+  
+  // 生成下一个哈希码
+  private static int nextHashCode() {
+      return nextHashCode.getAndAdd(HASH_INCREMENT);
+  }
+  
+  /**
+   * ThreadLocalMap中的哈希计算
+   */
+  int i = key.threadLocalHashCode & (table.length - 1);
+  ```
+  
+  **特点：**
+  1. 使用斐波那契散列（黄金分割数）
+  2. 通过AtomicInteger生成递增哈希码
+  3. 每个ThreadLocal实例获取唯一哈希码
+  4. 哈希码均匀分布，减少冲突
+  5. 哈希表大小必须是2的幂，通过位与操作计算索引
+  
+  </TabItem>
+  <TabItem value="hash_collision" label="哈希冲突">
+  ```java
+  /**
+   * ThreadLocalMap处理哈希冲突的方法
+   */
+  private void set(ThreadLocal<?> key, Object value) {
+      Entry[] tab = table;
+      int len = tab.length;
+      // 计算初始索引
+      int i = key.threadLocalHashCode & (len-1);
+  
+      // 线性探测查找可用位置
+      for (Entry e = tab[i]; e != null; e = tab[i = nextIndex(i, len)]) {
+          ThreadLocal<?> k = e.get();
+          
+          // 找到对应的Entry，更新值
+          if (k == key) {
+              e.value = value;
+              return;
+          }
+          
+          // 清理已被GC回收的key
+          if (k == null) {
+              replaceStaleEntry(key, value, i);
+              return;
+          }
+      }
+      
+      // 创建新Entry
+      tab[i] = new Entry(key, value);
+      // 增加size并检查是否需要扩容
+      // ...
+  }
+  
+  // 计算下一个索引（线性探测）
+  private static int nextIndex(int i, int len) {
+      return ((i + 1 < len) ? i + 1 : 0);
+  }
+  ```
+  
+  **线性探测策略:**
+  1. 发生冲突时，查找下一个位置
+  2. 遇到表尾则从头开始
+  3. 同时处理过期Entry
+  4. 按需扩容数组
+  
+  </TabItem>
+  <TabItem value="entry_cleanup" label="Entry清理">
+  ```java
+  /**
+   * ThreadLocalMap清理过期Entry的方法
+   */
+  private boolean cleanSomeSlots(int i, int n) {
+      boolean removed = false;
+      Entry[] tab = table;
+      int len = tab.length;
+      do {
+          i = nextIndex(i, len);
+          Entry e = tab[i];
+          // 如果找到key为null的Entry
+          if (e != null && e.get() == null) {
+              // 进行更彻底的清理
+              n = len;
+              removed = true;
+              i = expungeStaleEntry(i);
+          }
+      } while ((n >>>= 1) != 0);
+      return removed;
+  }
+  
+  // 彻底清理过期的Entry
+  private int expungeStaleEntry(int staleSlot) {
+      Entry[] tab = table;
+      int len = tab.length;
+      
+      // 移除指定位置的Entry
+      tab[staleSlot].value = null;
+      tab[staleSlot] = null;
+      size--;
+      
+      // 重新哈希后面的Entry
+      // ...
+      
+      return i;
+  }
+  ```
+  
+  **清理策略:**
+  1. 在set、get、remove操作时触发清理
+  2. 清理key为null的Entry
+  3. 同时进行重哈希，保持表的紧凑
+  4. 减少内存泄漏风险
+  
+  </TabItem>
+</Tabs>
 
 ## 3. ThreadLocal使用场景
 
+```mermaid
+mindmap
+  root((ThreadLocal<br>使用场景))
+    线程上下文传递
+      用户信息
+      权限控制
+      请求ID
+      MDC日志标识
+    资源管理
+      数据库连接
+      Hibernate Session
+      事务控制
+    性能优化
+      缓存
+      线程级缓冲区
+    并发控制
+      简化参数传递
+      避免同步
+```
+
 ### 3.1 线程上下文传递
 
-```java title="线程上下文传递示例"
-public class ThreadContextExamples {
-    
-    /**
-     * 用户上下文传递
-     */
-    public static class UserContextExample {
-        
-        // 用户上下文
-        public static class UserContext {
-            private String userId;
-            private String userName;
-            private String sessionId;
-            
-            public UserContext(String userId, String userName, String sessionId) {
-                this.userId = userId;
-                this.userName = userName;
-                this.sessionId = sessionId;
-            }
-            
-            // getter和setter方法
-            public String getUserId() { return userId; }
-            public String getUserName() { return userName; }
-            public String getSessionId() { return sessionId; }
-            
-            @Override
-            public String toString() {
-                return "UserContext{userId='" + userId + "', userName='" + userName + "', sessionId='" + sessionId + "'}";
-            }
-        }
-        
-        // ThreadLocal存储用户上下文
-        private static ThreadLocal<UserContext> userContextHolder = new ThreadLocal<>();
-        
-        // 设置用户上下文
-        public static void setUserContext(UserContext userContext) {
-            userContextHolder.set(userContext);
-        }
-        
-        // 获取用户上下文
-        public static UserContext getUserContext() {
-            return userContextHolder.get();
-        }
-        
-        // 清除用户上下文
-        public static void clearUserContext() {
-            userContextHolder.remove();
-        }
-        
-        // 业务方法
-        public static void businessMethod() {
-            UserContext context = getUserContext();
-            if (context != null) {
-                System.out.println("当前用户: " + context.getUserName() + " (ID: " + context.getUserId() + ")");
-            }
-        }
-        
-        public static void main(String[] args) {
-            System.out.println("=== 用户上下文传递 ===");
-            
-            // 模拟多线程环境
-            for (int i = 1; i <= 3; i++) {
-                final int userId = i;
-                Thread thread = new Thread(() -> {
-                    // 设置用户上下文
-                    setUserContext(new UserContext("user" + userId, "User" + userId, "session" + userId));
-                    
-                    // 执行业务方法
-                    businessMethod();
-                    
-                    // 清理上下文
-                    clearUserContext();
-                });
-                thread.start();
-            }
-        }
-    }
-    
-    /**
-     * 请求追踪
-     */
-    public static class RequestTraceExample {
-        
-        // ThreadLocal存储请求ID
-        private static ThreadLocal<String> requestIdHolder = new ThreadLocal<>();
-        
-        // ThreadLocal存储请求开始时间
-        private static ThreadLocal<Long> startTimeHolder = new ThreadLocal<>();
-        
-        // 设置请求信息
-        public static void setRequestInfo(String requestId) {
-            requestIdHolder.set(requestId);
-            startTimeHolder.set(System.currentTimeMillis());
-        }
-        
-        // 获取请求ID
-        public static String getRequestId() {
-            return requestIdHolder.get();
-        }
-        
-        // 获取请求耗时
-        public static long getRequestDuration() {
-            Long startTime = startTimeHolder.get();
-            if (startTime != null) {
-                return System.currentTimeMillis() - startTime;
-            }
-            return 0;
-        }
-        
-        // 清理请求信息
-        public static void clearRequestInfo() {
-            requestIdHolder.remove();
-            startTimeHolder.remove();
-        }
-        
-        // 日志记录
-        public static void log(String message) {
-            String requestId = getRequestId();
-            long duration = getRequestDuration();
-            System.out.println(String.format("[%s] [%dms] %s", requestId, duration, message));
-        }
-        
-        public static void main(String[] args) {
-            System.out.println("=== 请求追踪 ===");
-            
-            // 模拟请求处理
-            for (int i = 1; i <= 3; i++) {
-                final int requestId = i;
-                Thread thread = new Thread(() -> {
-                    try {
-                        setRequestInfo("REQ-" + requestId);
-                        log("开始处理请求");
-                        
-                        Thread.sleep(1000); // 模拟处理时间
-                        log("请求处理完成");
-                        
-                    } catch (InterruptedException e) {
-                        e.printStackTrace();
-                    } finally {
-                        clearRequestInfo();
-                    }
-                });
-                thread.start();
-            }
-        }
-    }
-}
-```
+<div className="card">
+<div className="card__header">
+<h4>线程上下文传递的价值</h4>
+</div>
+<div className="card__body">
+
+**线程上下文传递**是ThreadLocal最常见的应用场景之一。它允许我们在同一线程内的不同方法之间传递数据，而无需通过方法参数显式传递。
+
+**主要优势：**
+- **简化API设计**：避免方法参数膨胀和层层传递
+- **代码解耦**：各层可以独立访问上下文信息
+- **方便跨方法访问**：任何方法都可以访问当前线程的上下文
+- **无需同步**：每个线程有自己的副本，避免同步开销
+
+**常见上下文信息：**
+- 用户身份和权限信息
+- 请求追踪ID
+- 事务上下文
+- 本地化设置（如语言、时区）
+- 安全上下文
+
+</div>
+</div>
+
+<Tabs>
+  <TabItem value="user_context" label="用户上下文" default>
+  ```java
+  /**
+   * 用户上下文传递
+   */
+  public class UserContextExample {
+      // 用户上下文类
+      public static class UserContext {
+          private final String userId;
+          private final String userName;
+          private final Set<String> roles;
+          private final String locale;
+          
+          public UserContext(String userId, String userName, Set<String> roles, String locale) {
+              this.userId = userId;
+              this.userName = userName;
+              this.roles = Collections.unmodifiableSet(new HashSet<>(roles));
+              this.locale = locale;
+          }
+          
+          public String getUserId() { return userId; }
+          public String getUserName() { return userName; }
+          public Set<String> getRoles() { return roles; }
+          public String getLocale() { return locale; }
+          public boolean hasRole(String role) { return roles.contains(role); }
+          
+          @Override
+          public String toString() {
+              return String.format("UserContext{userId='%s', userName='%s', roles=%s, locale='%s'}",
+                                 userId, userName, roles, locale);
+          }
+      }
+      
+      // ThreadLocal存储用户上下文
+      private static final ThreadLocal<UserContext> userContextHolder = new ThreadLocal<>();
+      
+      // 创建可自动清理的上下文辅助类
+      public static class UserContextScope implements AutoCloseable {
+          public UserContextScope(UserContext context) {
+              userContextHolder.set(context);
+          }
+          
+          @Override
+          public void close() {
+              userContextHolder.remove();
+          }
+      }
+      
+      // 设置用户上下文
+      public static void setUserContext(UserContext userContext) {
+          userContextHolder.set(userContext);
+      }
+      
+      // 获取用户上下文
+      public static UserContext getUserContext() {
+          return userContextHolder.get();
+      }
+      
+      // 清除用户上下文
+      public static void clearUserContext() {
+          userContextHolder.remove();
+      }
+      
+      // 业务服务层方法
+      public static class UserService {
+          public void processRequest(String action) {
+              UserContext ctx = getUserContext();
+              System.out.println("处理请求: " + action);
+              System.out.println("当前用户: " + ctx.getUserName());
+              
+              if ("admin".equals(action) && !ctx.hasRole("ADMIN")) {
+                  throw new SecurityException("需要管理员权限");
+              }
+              
+              // 调用其他方法，无需传递用户上下文
+              auditLog("执行操作: " + action);
+          }
+          
+          private void auditLog(String message) {
+              UserContext ctx = getUserContext();
+              System.out.println("审计日志: [用户=" + ctx.getUserId() + "] " + message);
+          }
+      }
+      
+      // 示例用法
+      public static void main(String[] args) {
+          UserService userService = new UserService();
+          
+          // 模拟普通用户请求
+          Set<String> userRoles = new HashSet<>(Arrays.asList("USER"));
+          UserContext userCtx = new UserContext("user123", "Alice", userRoles, "en_US");
+          
+          // 使用try-with-resources自动清理ThreadLocal
+          try (UserContextScope ignored = new UserContextScope(userCtx)) {
+              userService.processRequest("view");
+              // 尝试执行需要管理员权限的操作
+              try {
+                  userService.processRequest("admin");
+              } catch (SecurityException e) {
+                  System.out.println("错误: " + e.getMessage());
+              }
+          }
+          
+          // 模拟管理员请求
+          Set<String> adminRoles = new HashSet<>(Arrays.asList("USER", "ADMIN"));
+          UserContext adminCtx = new UserContext("admin456", "Bob", adminRoles, "en_US");
+          
+          try (UserContextScope ignored = new UserContextScope(adminCtx)) {
+              userService.processRequest("admin");
+          }
+      }
+  }
+  ```
+  </TabItem>
+  <TabItem value="request_trace" label="请求追踪">
+  ```java
+  /**
+   * 请求追踪上下文
+   */
+  public class RequestTraceExample {
+      // 请求追踪上下文
+      public static class TraceContext {
+          private final String requestId;
+          private final long startTime;
+          private final Map<String, String> attributes;
+          
+          public TraceContext(String requestId) {
+              this.requestId = requestId;
+              this.startTime = System.currentTimeMillis();
+              this.attributes = new ConcurrentHashMap<>();
+          }
+          
+          public String getRequestId() {
+              return requestId;
+          }
+          
+          public long getStartTime() {
+              return startTime;
+          }
+          
+          public long getElapsedTime() {
+              return System.currentTimeMillis() - startTime;
+          }
+          
+          public void setAttribute(String key, String value) {
+              attributes.put(key, value);
+          }
+          
+          public String getAttribute(String key) {
+              return attributes.get(key);
+          }
+      }
+      
+      // ThreadLocal存储请求追踪上下文
+      private static final ThreadLocal<TraceContext> traceContextHolder = new ThreadLocal<>();
+      
+      // 初始化请求上下文
+      public static void initTrace(String requestId) {
+          traceContextHolder.set(new TraceContext(requestId));
+      }
+      
+      // 获取追踪上下文
+      public static TraceContext getTraceContext() {
+          return traceContextHolder.get();
+      }
+      
+      // 清除追踪上下文
+      public static void clearTraceContext() {
+          traceContextHolder.remove();
+      }
+      
+      // 日志工具类
+      public static class Logger {
+          public static void info(String message) {
+              TraceContext ctx = getTraceContext();
+              if (ctx != null) {
+                  System.out.println(String.format("[%s] [%dms] %s",
+                                                 ctx.getRequestId(),
+                                                 ctx.getElapsedTime(),
+                                                 message));
+              } else {
+                  System.out.println(message);
+              }
+          }
+      }
+      
+      // 服务类
+      public static class OrderService {
+          public void createOrder(String productId) {
+              Logger.info("开始创建订单: " + productId);
+              
+              // 设置追踪属性
+              TraceContext ctx = getTraceContext();
+              ctx.setAttribute("productId", productId);
+              
+              // 调用其他服务
+              validateInventory(productId);
+              processPayment();
+              
+              Logger.info("订单创建完成");
+          }
+          
+          private void validateInventory(String productId) {
+              Logger.info("验证库存: " + productId);
+              try {
+                  Thread.sleep(50); // 模拟处理时间
+              } catch (InterruptedException e) {
+                  Thread.currentThread().interrupt();
+              }
+          }
+          
+          private void processPayment() {
+              Logger.info("处理支付");
+              TraceContext ctx = getTraceContext();
+              Logger.info("处理商品: " + ctx.getAttribute("productId"));
+              
+              try {
+                  Thread.sleep(100); // 模拟处理时间
+              } catch (InterruptedException e) {
+                  Thread.currentThread().interrupt();
+              }
+          }
+      }
+      
+      // 示例用法
+      public static void main(String[] args) {
+          for (int i = 1; i <= 3; i++) {
+              final String requestId = "REQ-" + i;
+              final String productId = "PROD-" + (100 + i);
+              
+              new Thread(() -> {
+                  try {
+                      initTrace(requestId);
+                      Logger.info("接收请求");
+                      
+                      OrderService orderService = new OrderService();
+                      orderService.createOrder(productId);
+                      
+                      Logger.info("请求处理完成");
+                  } finally {
+                      clearTraceContext();
+                  }
+              }).start();
+          }
+      }
+  }
+  ```
+  </TabItem>
+  <TabItem value="mdc_logging" label="日志上下文">
+  ```java
+  /**
+   * MDC日志上下文示例
+   * MDC: Mapped Diagnostic Context
+   */
+  public class MdcLoggingExample {
+      // 简化版MDC实现
+      public static class MDC {
+          private static final ThreadLocal<Map<String, String>> contextMap = 
+              ThreadLocal.withInitial(HashMap::new);
+          
+          public static void put(String key, String value) {
+              contextMap.get().put(key, value);
+          }
+          
+          public static String get(String key) {
+              return contextMap.get().get(key);
+          }
+          
+          public static void remove(String key) {
+              contextMap.get().remove(key);
+          }
+          
+          public static void clear() {
+              contextMap.remove();
+          }
+          
+          public static Map<String, String> getCopyOfContextMap() {
+              return new HashMap<>(contextMap.get());
+          }
+      }
+      
+      // 日志工具类
+      public static class Logger {
+          private final String name;
+          
+          public Logger(String name) {
+              this.name = name;
+          }
+          
+          public void info(String message) {
+              // 格式: [时间戳] [线程名] [类名] [traceId] [userId] - 消息
+              String threadName = Thread.currentThread().getName();
+              String traceId = MDC.get("traceId");
+              String userId = MDC.get("userId");
+              
+              System.out.println(String.format("[%tT] [%s] [%s] [%s] [%s] - %s",
+                  new Date(), threadName, name, traceId, userId, message));
+          }
+      }
+      
+      // Web请求过滤器示例
+      public static class RequestFilter {
+          public static void doFilter(String userId, String requestUri, Runnable next) {
+              String traceId = "TRACE-" + System.nanoTime();
+              
+              try {
+                  // 设置MDC上下文
+                  MDC.put("traceId", traceId);
+                  MDC.put("userId", userId);
+                  
+                  Logger logger = new Logger("RequestFilter");
+                  logger.info("开始处理请求: " + requestUri);
+                  
+                  // 执行请求
+                  next.run();
+                  
+                  logger.info("请求处理完成: " + requestUri);
+              } finally {
+                  // 清理MDC上下文
+                  MDC.clear();
+              }
+          }
+      }
+      
+      // 服务类
+      public static class UserService {
+          private static final Logger logger = new Logger("UserService");
+          
+          public void findUserById(String id) {
+              logger.info("查找用户: " + id);
+              // 模拟数据库操作
+              try {
+                  Thread.sleep(100);
+              } catch (InterruptedException e) {
+                  Thread.currentThread().interrupt();
+              }
+              
+              // 调用其他服务
+              AuditService.logAccess("USER", id);
+          }
+      }
+      
+      // 审计服务
+      public static class AuditService {
+          private static final Logger logger = new Logger("AuditService");
+          
+          public static void logAccess(String entityType, String entityId) {
+              // 日志中自动包含当前用户和追踪ID
+              logger.info("记录访问: " + entityType + ":" + entityId);
+          }
+      }
+      
+      // 示例用法
+      public static void main(String[] args) {
+          for (int i = 1; i <= 3; i++) {
+              final String userId = "user" + i;
+              Thread thread = new Thread(() -> {
+                  RequestFilter.doFilter(userId, "/api/users/" + userId, () -> {
+                      UserService userService = new UserService();
+                      userService.findUserById(userId);
+                  });
+              }, "Thread-" + i);
+              
+              thread.start();
+          }
+      }
+  }
+  ```
+  </TabItem>
+</Tabs>
 
 ### 3.2 数据库连接管理
 

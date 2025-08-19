@@ -1,0 +1,829 @@
+---
+sidebar_position: 3
+title: Vue Router路由管理
+description: Vue Router使用指南与高级功能，包含路由配置、导航守卫与最佳实践
+authors: [Laby]
+tags: [Vue.js, Vue Router, 前端路由, 导航守卫, 路由鉴权]
+last_update:
+  date: 2025-08-15
+  author: Laby
+---
+
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+import CodeBlock from '@theme/CodeBlock';
+
+# Vue Router路由管理
+
+Vue Router是Vue.js的官方路由管理器，用于构建单页应用(SPA)。它与Vue.js深度集成，提供了声明式的路由配置、动态路由匹配、嵌套路由、导航守卫等强大功能。
+
+:::tip 核心价值
+**Vue Router优势**
+- 🧭 **声明式路由**：通过配置定义应用路由结构
+- 🔄 **动态路由**：支持参数化路由和通配符
+- 🧩 **组件化路由**：每个路由对应一个组件
+- 🛡️ **路由守卫**：控制路由的访问权限
+- 📱 **响应式路由**：与Vue响应式系统完美结合
+:::
+
+## 1. Vue Router基础配置
+
+### 1.1 安装与基本设置
+
+```bash
+# 安装Vue Router
+npm install vue-router@4 # 适用于Vue 3
+```
+
+在Vue 3项目中创建路由配置：
+
+```js title="src/router/index.js"
+import { createRouter, createWebHistory } from 'vue-router'
+import HomeView from '../views/HomeView.vue'
+import AboutView from '../views/AboutView.vue'
+import NotFound from '../views/NotFound.vue'
+
+const routes = [
+  {
+    path: '/',
+    name: 'home',
+    component: HomeView,
+    meta: {
+      title: '首页',
+      requiresAuth: false
+    }
+  },
+  {
+    path: '/about',
+    name: 'about',
+    component: AboutView,
+    meta: {
+      title: '关于我们',
+      requiresAuth: false
+    }
+  },
+  {
+    path: '/user/:id',
+    name: 'user',
+    component: () => import('../views/UserView.vue'), // 懒加载路由
+    meta: {
+      title: '用户详情',
+      requiresAuth: true
+    }
+  },
+  {
+    path: '/:pathMatch(.*)*',
+    name: 'not-found',
+    component: NotFound,
+    meta: {
+      title: '页面未找到'
+    }
+  }
+]
+
+const router = createRouter({
+  history: createWebHistory(), // HTML5 History模式
+  routes,
+  scrollBehavior(to, from, savedPosition) {
+    // 页面切换时滚动行为
+    if (savedPosition) {
+      return savedPosition // 如果是前进/后退按钮，恢复之前的位置
+    } else {
+      return { top: 0 } // 否则滚动到顶部
+    }
+  }
+})
+
+export default router
+```
+
+在主应用中注册路由：
+
+```js title="src/main.js"
+import { createApp } from 'vue'
+import App from './App.vue'
+import router from './router'
+
+const app = createApp(App)
+app.use(router)
+app.mount('#app')
+```
+
+### 1.2 路由视图与链接
+
+在应用中使用路由导航和视图：
+
+```vue title="App.vue"
+<template>
+  <header>
+    <nav>
+      <RouterLink to="/">首页</RouterLink>
+      <RouterLink to="/about">关于</RouterLink>
+      <RouterLink :to="{ name: 'user', params: { id: userId } }">用户资料</RouterLink>
+    </nav>
+  </header>
+  
+  <!-- 路由视图，路由匹配的组件会渲染在这里 -->
+  <RouterView v-slot="{ Component }">
+    <Transition name="fade" mode="out-in">
+      <component :is="Component" />
+    </Transition>
+  </RouterView>
+</template>
+
+<script setup>
+import { RouterLink, RouterView } from 'vue-router'
+import { ref } from 'vue'
+
+const userId = ref('12345')
+</script>
+
+<style scoped>
+nav {
+  padding: 1rem 0;
+}
+
+nav a {
+  margin-right: 1rem;
+}
+
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.3s;
+}
+
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
+}
+</style>
+```
+
+## 2. 高级路由功能
+
+### 2.1 嵌套路由
+
+嵌套路由允许在父路由组件内部定义子路由，实现更复杂的UI结构。
+
+```js title="嵌套路由配置示例"
+const routes = [
+  {
+    path: '/dashboard',
+    component: DashboardLayout,
+    children: [
+      {
+        path: '', // 默认子路由，访问/dashboard时显示
+        name: 'dashboard-overview',
+        component: DashboardOverview
+      },
+      {
+        path: 'profile',
+        name: 'dashboard-profile',
+        component: UserProfile
+      },
+      {
+        path: 'settings',
+        name: 'dashboard-settings',
+        component: UserSettings
+      }
+    ]
+  }
+]
+```
+
+使用嵌套路由的父组件需要包含`<RouterView>`来显示子路由组件：
+
+```vue title="DashboardLayout.vue"
+<template>
+  <div class="dashboard-layout">
+    <aside class="sidebar">
+      <nav>
+        <RouterLink :to="{ name: 'dashboard-overview' }">概览</RouterLink>
+        <RouterLink :to="{ name: 'dashboard-profile' }">个人资料</RouterLink>
+        <RouterLink :to="{ name: 'dashboard-settings' }">设置</RouterLink>
+      </nav>
+    </aside>
+    
+    <main class="content">
+      <!-- 子路由组件将在这里渲染 -->
+      <RouterView />
+    </main>
+  </div>
+</template>
+```
+
+### 2.2 动态路由匹配
+
+动态路由支持在URL中包含参数，并在组件中访问这些参数：
+
+```vue title="UserView.vue"
+<template>
+  <div class="user-view">
+    <h1>用户详情</h1>
+    <div v-if="user">
+      <img :src="user.avatar" alt="User Avatar" />
+      <h2>{{ user.name }}</h2>
+      <p>ID: {{ $route.params.id }}</p>
+      <p>邮箱: {{ user.email }}</p>
+    </div>
+    <p v-else>加载用户数据中...</p>
+  </div>
+</template>
+
+<script setup>
+import { ref, onMounted, watch } from 'vue'
+import { useRoute } from 'vue-router'
+
+const route = useRoute()
+const user = ref(null)
+
+// 根据路由参数加载用户数据
+const fetchUserData = async (userId) => {
+  try {
+    // 模拟API调用
+    const response = await fetch(`/api/users/${userId}`)
+    if (!response.ok) throw new Error('用户数据获取失败')
+    user.value = await response.json()
+  } catch (error) {
+    console.error(error)
+  }
+}
+
+// 组件挂载时获取数据
+onMounted(() => {
+  fetchUserData(route.params.id)
+})
+
+// 当路由参数变化时重新获取数据
+watch(() => route.params.id, (newId) => {
+  fetchUserData(newId)
+})
+</script>
+```
+
+### 2.3 路由懒加载
+
+路由懒加载可以提高应用性能，只有当路由被访问时才加载对应的组件：
+
+```js
+const routes = [
+  {
+    path: '/analytics',
+    name: 'analytics',
+    // 使用import动态导入实现懒加载
+    component: () => import('../views/AnalyticsView.vue'),
+    // 可以自定义加载中和错误状态的组件
+    meta: {
+      title: '数据分析'
+    }
+  },
+  {
+    path: '/reports',
+    name: 'reports',
+    component: () => import(/* webpackChunkName: "reports" */ '../views/ReportsView.vue')
+    // webpackChunkName可以指定打包后的文件名
+  }
+]
+```
+
+### 2.4 命名视图
+
+命名视图允许在同一个路由下显示多个组件，适用于复杂的布局：
+
+```js
+const routes = [
+  {
+    path: '/workspace',
+    components: {
+      default: WorkspaceMain,
+      sidebar: WorkspaceSidebar,
+      toolbar: WorkspaceToolbar
+    }
+  }
+]
+```
+
+在模板中使用命名视图：
+
+```vue
+<template>
+  <div class="layout">
+    <RouterView name="toolbar" class="toolbar" />
+    <RouterView name="sidebar" class="sidebar" />
+    <RouterView class="main-content" /> <!-- default视图 -->
+  </div>
+</template>
+```
+
+## 3. 导航守卫
+
+### 3.1 全局导航守卫
+
+全局导航守卫可以用于权限验证、页面标题设置等功能：
+
+```js title="src/router/index.js"
+// 全局前置守卫
+router.beforeEach((to, from, next) => {
+  // 设置文档标题
+  document.title = to.meta.title || '默认标题'
+  
+  // 权限检查
+  if (to.meta.requiresAuth) {
+    const authService = useAuthService()
+    if (!authService.isLoggedIn()) {
+      // 未登录时重定向到登录页
+      next({
+        path: '/login',
+        query: { redirect: to.fullPath } // 保存原目标路径
+      })
+      return
+    }
+  }
+  
+  // 继续导航
+  next()
+})
+
+// 全局解析守卫
+router.beforeResolve(async (to, from, next) => {
+  try {
+    // 在导航被确认前，加载与视图相关的数据
+    for (const component of to.matched) {
+      if (component.meta.fetchData) {
+        await component.meta.fetchData()
+      }
+    }
+    next()
+  } catch (error) {
+    console.error('数据加载失败', error)
+    next(false) // 中止导航
+  }
+})
+
+// 全局后置钩子
+router.afterEach((to, from) => {
+  // 导航完成后的逻辑
+  const analyticsService = useAnalyticsService()
+  analyticsService.trackPageView(to.fullPath)
+})
+```
+
+### 3.2 路由独享守卫
+
+可以为特定路由配置守卫：
+
+```js
+const routes = [
+  {
+    path: '/admin',
+    component: AdminPanel,
+    beforeEnter: (to, from, next) => {
+      const authService = useAuthService()
+      if (!authService.hasAdminRights()) {
+        next('/forbidden')
+      } else {
+        next()
+      }
+    }
+  }
+]
+```
+
+### 3.3 组件内守卫
+
+可以在组件内部定义路由守卫：
+
+```vue
+<script setup>
+import { onBeforeRouteLeave, onBeforeRouteUpdate } from 'vue-router'
+import { ref } from 'vue'
+
+const hasUnsavedChanges = ref(false)
+
+// 离开路由前确认
+onBeforeRouteLeave((to, from, next) => {
+  if (hasUnsavedChanges.value) {
+    if (confirm('有未保存的更改，确定要离开吗？')) {
+      next()
+    } else {
+      next(false)
+    }
+  } else {
+    next()
+  }
+})
+
+// 路由参数更新时的处理
+onBeforeRouteUpdate(async (to, from, next) => {
+  if (to.params.id !== from.params.id) {
+    try {
+      // 加载新的数据
+      await loadData(to.params.id)
+      next()
+    } catch (error) {
+      console.error('数据加载失败', error)
+      next(false)
+    }
+  } else {
+    next()
+  }
+})
+</script>
+```
+
+## 4. 路由模式与历史记录
+
+Vue Router支持多种路由模式：
+
+```js
+// HTML5 History模式
+const router = createRouter({
+  history: createWebHistory(),
+  routes
+})
+
+// Hash模式
+const router = createRouter({
+  history: createWebHashHistory(),
+  routes
+})
+
+// 内存模式(用于SSR等场景)
+const router = createRouter({
+  history: createMemoryHistory(),
+  routes
+})
+```
+
+### 4.1 History模式配置
+
+History模式需要服务器端配置支持，以防止刷新页面时出现404错误：
+
+<Tabs>
+<TabItem value="nginx" label="Nginx配置">
+
+```nginx
+server {
+  listen 80;
+  server_name example.com;
+  root /var/www/html;
+  index index.html;
+
+  location / {
+    try_files $uri $uri/ /index.html;
+  }
+}
+```
+
+</TabItem>
+<TabItem value="apache" label="Apache配置">
+
+```apache
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteBase /
+  RewriteRule ^index\.html$ - [L]
+  RewriteCond %{REQUEST_FILENAME} !-f
+  RewriteCond %{REQUEST_FILENAME} !-d
+  RewriteRule . /index.html [L]
+</IfModule>
+```
+
+</TabItem>
+<TabItem value="express" label="Express.js配置">
+
+```js
+const express = require('express')
+const app = express()
+
+// 静态资源
+app.use(express.static('dist'))
+
+// 所有路由指向index.html
+app.get('*', (req, res) => {
+  res.sendFile('dist/index.html', { root: __dirname })
+})
+
+app.listen(3000)
+```
+
+</TabItem>
+</Tabs>
+
+## 5. 路由最佳实践
+
+### 5.1 模块化路由配置
+
+对于大型应用，可以将路由配置模块化：
+
+```js title="src/router/modules/user.js"
+export default [
+  {
+    path: '/users',
+    component: () => import('@/views/users/UserList.vue'),
+    meta: { title: '用户列表' }
+  },
+  {
+    path: '/users/:id',
+    component: () => import('@/views/users/UserDetail.vue'),
+    meta: { title: '用户详情' }
+  },
+  // 其他用户相关路由...
+]
+```
+
+```js title="src/router/index.js"
+import { createRouter, createWebHistory } from 'vue-router'
+import userRoutes from './modules/user'
+import productRoutes from './modules/product'
+import orderRoutes from './modules/order'
+
+const routes = [
+  {
+    path: '/',
+    component: () => import('@/views/Home.vue'),
+    meta: { title: '首页' }
+  },
+  // 导入各模块路由
+  ...userRoutes,
+  ...productRoutes,
+  ...orderRoutes,
+  {
+    path: '/:pathMatch(.*)*',
+    component: () => import('@/views/NotFound.vue'),
+    meta: { title: '页面未找到' }
+  }
+]
+
+const router = createRouter({
+  history: createWebHistory(),
+  routes
+})
+
+export default router
+```
+
+### 5.2 路由元信息的高级用法
+
+路由元信息可以存储与路由相关的自定义数据：
+
+```js
+const routes = [
+  {
+    path: '/dashboard',
+    component: Dashboard,
+    meta: {
+      title: '仪表盘',
+      icon: 'dashboard',
+      requiresAuth: true,
+      permissions: ['view-dashboard'],
+      layout: 'admin',
+      transition: 'fade',
+      breadcrumb: [{ name: '首页', path: '/' }, { name: '仪表盘' }],
+      cacheable: true
+    }
+  }
+]
+```
+
+使用路由元信息构建导航菜单：
+
+```vue title="SideMenu.vue"
+<template>
+  <nav class="side-menu">
+    <ul>
+      <li v-for="route in navigationRoutes" :key="route.path">
+        <RouterLink :to="route.path">
+          <i :class="route.meta.icon"></i>
+          {{ route.meta.title }}
+        </RouterLink>
+      </li>
+    </ul>
+  </nav>
+</template>
+
+<script setup>
+import { computed } from 'vue'
+import { useRouter } from 'vue-router'
+
+const router = useRouter()
+
+// 过滤出需要在导航中显示的路由
+const navigationRoutes = computed(() => {
+  return router.options.routes.filter(route => {
+    return route.meta?.showInNav && hasPermission(route.meta.permissions)
+  })
+})
+
+const hasPermission = (requiredPermissions) => {
+  // 权限检查逻辑
+  const userPermissions = getCurrentUserPermissions()
+  if (!requiredPermissions) return true
+  return requiredPermissions.some(perm => userPermissions.includes(perm))
+}
+</script>
+```
+
+### 5.3 路由权限管理
+
+实现基于角色的路由权限控制：
+
+```js title="src/permission.js"
+import router from './router'
+import store from './store'
+
+// 白名单路由（无需登录）
+const whiteList = ['/login', '/register', '/forgot-password']
+
+router.beforeEach(async (to, from, next) => {
+  // 获取用户令牌
+  const hasToken = localStorage.getItem('token')
+
+  if (hasToken) {
+    if (to.path === '/login') {
+      // 已登录则重定向到首页
+      next({ path: '/' })
+    } else {
+      // 判断用户是否已获取角色信息
+      const hasRoles = store.getters.roles && store.getters.roles.length > 0
+      if (hasRoles) {
+        next()
+      } else {
+        try {
+          // 获取用户信息（包括角色）
+          const { roles } = await store.dispatch('user/getUserInfo')
+          
+          // 根据角色生成可访问路由
+          const accessibleRoutes = await store.dispatch('permission/generateRoutes', roles)
+          
+          // 动态添加路由
+          accessibleRoutes.forEach(route => {
+            router.addRoute(route)
+          })
+          
+          // 确保addRoute完成
+          next({ ...to, replace: true })
+        } catch (error) {
+          // 出错则重置令牌并重定向到登录页
+          await store.dispatch('user/resetToken')
+          next(`/login?redirect=${to.path}`)
+        }
+      }
+    }
+  } else {
+    // 未登录
+    if (whiteList.includes(to.path)) {
+      // 在白名单中，直接访问
+      next()
+    } else {
+      // 否则重定向到登录页
+      next(`/login?redirect=${to.path}`)
+    }
+  }
+})
+```
+
+## 6. 与状态管理结合
+
+Vue Router与Pinia结合使用示例：
+
+```js title="src/stores/routerStore.js"
+import { defineStore } from 'pinia'
+import { useRouter, useRoute } from 'vue-router'
+
+export const useRouterStore = defineStore('router', () => {
+  const router = useRouter()
+  const route = useRoute()
+  
+  // 导航历史
+  const navigationHistory = ref([])
+  
+  // 添加历史记录
+  function addToHistory(route) {
+    // 避免重复
+    if (!navigationHistory.value.find(item => item.path === route.path)) {
+      navigationHistory.value.push({
+        path: route.path,
+        name: route.name,
+        title: route.meta.title,
+        timestamp: Date.now()
+      })
+      
+      // 限制历史记录数量
+      if (navigationHistory.value.length > 10) {
+        navigationHistory.value.shift()
+      }
+    }
+  }
+  
+  // 导航到上一个页面
+  function goBack() {
+    if (navigationHistory.value.length > 1) {
+      // 移除当前页面
+      navigationHistory.value.pop()
+      // 获取上一个页面
+      const prevPage = navigationHistory.value[navigationHistory.value.length - 1]
+      router.push(prevPage.path)
+    } else {
+      router.push('/')
+    }
+  }
+  
+  // 快捷导航方法
+  function navigateTo(routeName, params = {}, query = {}) {
+    router.push({ name: routeName, params, query })
+  }
+  
+  // 跟踪当前路由
+  const currentRouteMeta = computed(() => route.meta)
+  const currentPath = computed(() => route.path)
+  const isActiveRoute = (path) => route.path === path
+  
+  return { 
+    navigationHistory,
+    addToHistory,
+    goBack,
+    navigateTo,
+    currentRouteMeta,
+    currentPath,
+    isActiveRoute
+  }
+})
+```
+
+在组件中使用：
+
+```vue
+<template>
+  <div>
+    <button @click="routerStore.goBack()">返回上一页</button>
+    <button @click="routerStore.navigateTo('dashboard')">前往仪表盘</button>
+    
+    <div v-if="routerStore.navigationHistory.length > 0">
+      <h3>浏览历史</h3>
+      <ul>
+        <li v-for="(item, index) in routerStore.navigationHistory" :key="index">
+          {{ item.title || item.name }} - {{ new Date(item.timestamp).toLocaleTimeString() }}
+        </li>
+      </ul>
+    </div>
+  </div>
+</template>
+
+<script setup>
+import { useRouterStore } from '../stores/routerStore'
+
+const routerStore = useRouterStore()
+</script>
+```
+
+## 7. Vue Router与SSR
+
+Vue Router在服务器端渲染(SSR)环境中的使用：
+
+```js title="server.js (基于Express和Vue SSR)"
+const express = require('express')
+const { renderToString } = require('vue/server-renderer')
+const { createSSRApp } = require('vue')
+const { createRouter, createMemoryHistory } = require('vue-router')
+const fs = require('fs')
+const path = require('path')
+
+const server = express()
+
+server.get('*', async (req, res) => {
+  try {
+    // 1. 为每个请求创建新的Vue应用实例
+    const app = createSSRApp(/* ... */)
+    
+    // 2. 使用内存历史模式创建router
+    const router = createRouter({
+      history: createMemoryHistory(),
+      routes: [/* 路由配置 */]
+    })
+    
+    app.use(router)
+    
+    // 3. 将请求的URL设置为路由位置
+    await router.push(req.url)
+    await router.isReady()
+    
+    // 4. 渲染应用为HTML
+    const appContent = await renderToString(app)
+    
+    // 5. 注入渲染的HTML到模板中
+    const html = fs.readFileSync(
+      path.join(__dirname, 'index.html'),
+      'utf-8'
+    ).replace('<!--app-html-->', appContent)
+    
+    // 6. 返回页面
+    res.status(200).set({ 'Content-Type': 'text/html' }).end(html)
+  } catch (error) {
+    console.error(error)
+    res.status(500).end('Internal Server Error')
+  }
+})
+
+server.listen(3000)
+``` 

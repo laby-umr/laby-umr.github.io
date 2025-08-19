@@ -1,0 +1,1043 @@
+---
+sidebar_position: 3
+title: Angular路由与导航
+description: Angular路由系统详解，包括路由配置、懒加载、守卫与最佳实践
+authors: [Laby]
+tags: [Angular, 路由, 导航, 懒加载, 路由守卫]
+last_update:
+  date: 2025-08-15
+  author: Laby
+---
+
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+import CodeBlock from '@theme/CodeBlock';
+
+# Angular路由与导航
+
+Angular路由系统允许在用户导航应用程序的不同视图之间进行切换，它支持路由参数、嵌套路由、路由守卫和延迟加载等高级功能。
+
+:::tip 核心价值
+**Angular路由优势**
+- 🧭 **单页面应用**：无需重新加载整个页面即可切换视图
+- 🔗 **URL管理**：提供清晰可共享的URL，支持书签和历史
+- 🧩 **模块化路由**：支持特性模块的路由分离
+- 🔄 **延迟加载**：按需加载模块，提升初始加载性能
+- 🛡️ **路由守卫**：保护路由，实现权限控制
+:::
+
+## 1. 路由基础
+
+### 1.1 配置路由
+
+在Angular应用中配置路由需要以下步骤：
+
+1. 创建路由模块：
+
+```typescript title="app-routing.module.ts"
+import { NgModule } from '@angular/core';
+import { RouterModule, Routes } from '@angular/router';
+
+import { HomeComponent } from './home/home.component';
+import { AboutComponent } from './about/about.component';
+import { ContactComponent } from './contact/contact.component';
+import { NotFoundComponent } from './not-found/not-found.component';
+
+const routes: Routes = [
+  { path: '', component: HomeComponent },
+  { path: 'home', redirectTo: '', pathMatch: 'full' },
+  { path: 'about', component: AboutComponent },
+  { path: 'contact', component: ContactComponent },
+  { path: '**', component: NotFoundComponent }  // 通配符路由必须放在最后
+];
+
+@NgModule({
+  imports: [RouterModule.forRoot(routes)],
+  exports: [RouterModule]
+})
+export class AppRoutingModule { }
+```
+
+2. 在主模块中导入路由模块：
+
+```typescript title="app.module.ts"
+import { NgModule } from '@angular/core';
+import { BrowserModule } from '@angular/platform-browser';
+import { AppRoutingModule } from './app-routing.module';
+import { AppComponent } from './app.component';
+// 导入组件
+import { HomeComponent } from './home/home.component';
+import { AboutComponent } from './about/about.component';
+import { ContactComponent } from './contact/contact.component';
+import { NotFoundComponent } from './not-found/not-found.component';
+
+@NgModule({
+  declarations: [
+    AppComponent,
+    HomeComponent,
+    AboutComponent,
+    ContactComponent,
+    NotFoundComponent
+  ],
+  imports: [
+    BrowserModule,
+    AppRoutingModule
+  ],
+  providers: [],
+  bootstrap: [AppComponent]
+})
+export class AppModule { }
+```
+
+3. 添加路由出口和导航链接：
+
+```html title="app.component.html"
+<header>
+  <nav>
+    <ul>
+      <li><a routerLink="/" routerLinkActive="active" [routerLinkActiveOptions]="{exact: true}">首页</a></li>
+      <li><a routerLink="/about" routerLinkActive="active">关于我们</a></li>
+      <li><a routerLink="/contact" routerLinkActive="active">联系我们</a></li>
+    </ul>
+  </nav>
+</header>
+
+<main>
+  <!-- 路由出口 - 匹配的组件将显示在这里 -->
+  <router-outlet></router-outlet>
+</main>
+
+<footer>
+  <p>© 2025 Angular路由示例</p>
+</footer>
+```
+
+### 1.2 路由配置选项
+
+Angular路由支持多种配置选项：
+
+```typescript
+const routes: Routes = [
+  { 
+    path: 'products', 
+    component: ProductListComponent,
+    children: [                              // 嵌套路由
+      { 
+        path: ':id', 
+        component: ProductDetailComponent 
+      }
+    ],
+    canActivate: [AuthGuard],                // 路由守卫
+    data: { title: '产品列表', permissions: ['view-products'] },  // 路由数据
+    resolve: {                               // 预先解析数据
+      products: ProductsResolver
+    }
+  },
+  { 
+    path: 'admin', 
+    loadChildren: () => import('./admin/admin.module')
+      .then(m => m.AdminModule)              // 懒加载模块
+  }
+];
+```
+
+### 1.3 Router相关指令
+
+Angular路由系统提供了几个重要的指令：
+
+1. **RouterOutlet**: `<router-outlet></router-outlet>` - 显示匹配的组件
+2. **RouterLink**: `<a routerLink="/path">` - 声明式导航链接
+3. **RouterLinkActive**: `<a routerLinkActive="active">` - 当链接激活时应用的CSS类
+4. **RouterLinkActiveOptions**: `[routerLinkActiveOptions]="{exact: true}"` - 配置激活行为
+
+### 1.4 程序式导航
+
+除了使用指令进行导航外，还可以通过Router服务进行程序式导航：
+
+```typescript
+import { Component } from '@angular/core';
+import { Router, ActivatedRoute } from '@angular/router';
+
+@Component({
+  selector: 'app-navigation-demo',
+  template: `
+    <button (click)="goToProducts()">查看产品</button>
+    <button (click)="goToProductDetail(123)">查看产品详情</button>
+    <button (click)="goBack()">返回</button>
+  `
+})
+export class NavigationDemoComponent {
+  constructor(
+    private router: Router,
+    private route: ActivatedRoute
+  ) {}
+  
+  goToProducts() {
+    this.router.navigate(['/products']);
+  }
+  
+  goToProductDetail(id: number) {
+    // 相对于当前路由的导航
+    this.router.navigate([id], { relativeTo: this.route });
+    
+    // 或使用绝对路径
+    // this.router.navigate(['/products', id]);
+  }
+  
+  goToProductWithQueryParams(category: string) {
+    this.router.navigate(['/products'], { 
+      queryParams: { category: category },
+      queryParamsHandling: 'merge' // 合并现有查询参数
+    });
+  }
+  
+  goBack() {
+    window.history.back();
+  }
+}
+```
+
+## 2. 路由参数与数据传递
+
+### 2.1 路由参数
+
+Angular路由支持三种参数传递方式：
+
+1. **路径参数**：作为URL路径的一部分
+2. **查询参数**：作为URL查询字符串的一部分
+3. **路由数据**：在路由配置中定义的静态数据
+
+#### 路径参数示例
+
+```typescript title="app-routing.module.ts"
+const routes: Routes = [
+  { 
+    path: 'products/:id', 
+    component: ProductDetailComponent 
+  }
+];
+```
+
+```typescript title="product-detail.component.ts"
+import { Component, OnInit } from '@angular/core';
+import { ActivatedRoute, ParamMap } from '@angular/router';
+import { switchMap } from 'rxjs/operators';
+import { ProductService } from '../services/product.service';
+import { Observable } from 'rxjs';
+import { Product } from '../models/product.model';
+
+@Component({
+  selector: 'app-product-detail',
+  template: `
+    <div *ngIf="product$ | async as product; else loading">
+      <h2>{{ product.name }}</h2>
+      <p>{{ product.description }}</p>
+      <p>价格: {{ product.price | currency:'CNY' }}</p>
+    </div>
+    <ng-template #loading>加载中...</ng-template>
+  `
+})
+export class ProductDetailComponent implements OnInit {
+  product$: Observable<Product>;
+  
+  constructor(
+    private route: ActivatedRoute,
+    private productService: ProductService
+  ) {}
+  
+  ngOnInit() {
+    // 方式1：使用快照（仅适用于组件不会重用的情况）
+    // const id = this.route.snapshot.paramMap.get('id');
+    // this.product$ = this.productService.getProduct(id);
+    
+    // 方式2：使用可观察对象（适用于组件重用的情况）
+    this.product$ = this.route.paramMap.pipe(
+      switchMap((params: ParamMap) => {
+        const id = params.get('id');
+        return this.productService.getProduct(id);
+      })
+    );
+  }
+}
+```
+
+#### 查询参数示例
+
+```typescript title="product-list.component.ts"
+import { Component, OnInit } from '@angular/core';
+import { ActivatedRoute, Router } from '@angular/router';
+import { ProductService } from '../services/product.service';
+import { Product } from '../models/product.model';
+
+@Component({
+  selector: 'app-product-list',
+  template: `
+    <div class="filters">
+      <button (click)="filterByCategory('electronics')">电子产品</button>
+      <button (click)="filterByCategory('clothing')">服装</button>
+      <button (click)="filterByCategory('books')">图书</button>
+      <button (click)="clearFilters()">清除筛选</button>
+    </div>
+    
+    <div class="product-list">
+      <div *ngFor="let product of products" class="product-item">
+        <h3>{{ product.name }}</h3>
+        <p>{{ product.description }}</p>
+        <p>{{ product.price | currency:'CNY' }}</p>
+        <button (click)="viewDetails(product.id)">查看详情</button>
+      </div>
+    </div>
+  `
+})
+export class ProductListComponent implements OnInit {
+  products: Product[] = [];
+  
+  constructor(
+    private route: ActivatedRoute,
+    private router: Router,
+    private productService: ProductService
+  ) {}
+  
+  ngOnInit() {
+    this.route.queryParams.subscribe(params => {
+      const category = params['category'];
+      if (category) {
+        this.loadProductsByCategory(category);
+      } else {
+        this.loadAllProducts();
+      }
+    });
+  }
+  
+  filterByCategory(category: string) {
+    this.router.navigate([], {
+      relativeTo: this.route,
+      queryParams: { category: category },
+      queryParamsHandling: 'merge'
+    });
+  }
+  
+  clearFilters() {
+    this.router.navigate([], {
+      relativeTo: this.route,
+      queryParams: {}
+    });
+  }
+  
+  viewDetails(id: string) {
+    this.router.navigate(['/products', id]);
+  }
+  
+  private loadAllProducts() {
+    this.productService.getProducts().subscribe(products => {
+      this.products = products;
+    });
+  }
+  
+  private loadProductsByCategory(category: string) {
+    this.productService.getProductsByCategory(category).subscribe(products => {
+      this.products = products;
+    });
+  }
+}
+```
+
+#### 路由数据示例
+
+```typescript title="app-routing.module.ts"
+const routes: Routes = [
+  { 
+    path: 'products', 
+    component: ProductListComponent,
+    data: { 
+      title: '产品列表', 
+      breadcrumb: '产品',
+      permissions: ['view-products']
+    }
+  }
+];
+```
+
+```typescript title="product-list.component.ts"
+ngOnInit() {
+  // 访问静态路由数据
+  this.route.data.subscribe(data => {
+    this.pageTitle = data['title'];
+    document.title = this.pageTitle; // 更新页面标题
+    
+    // 检查权限
+    const permissions = data['permissions'];
+    this.canEdit = this.authService.hasPermissions(permissions);
+  });
+}
+```
+
+### 2.2 路由解析器(Resolver)
+
+路由解析器允许在激活路由之前获取数据，避免在组件加载后显示空白状态或加载指示器：
+
+```typescript title="product-resolver.service.ts"
+import { Injectable } from '@angular/core';
+import { Resolve, ActivatedRouteSnapshot, RouterStateSnapshot } from '@angular/router';
+import { Observable, of } from 'rxjs';
+import { catchError } from 'rxjs/operators';
+import { ProductService } from './product.service';
+import { Product } from '../models/product.model';
+
+@Injectable({
+  providedIn: 'root'
+})
+export class ProductResolver implements Resolve<Product> {
+  constructor(private productService: ProductService) {}
+  
+  resolve(
+    route: ActivatedRouteSnapshot,
+    state: RouterStateSnapshot
+  ): Observable<Product> {
+    const id = route.paramMap.get('id');
+    return this.productService.getProduct(id).pipe(
+      catchError(error => {
+        console.error('产品数据获取失败', error);
+        // 返回默认产品或空对象
+        return of({ id: null, name: '未找到产品', description: '', price: 0 });
+      })
+    );
+  }
+}
+```
+
+```typescript title="app-routing.module.ts"
+const routes: Routes = [
+  { 
+    path: 'products/:id', 
+    component: ProductDetailComponent,
+    resolve: {
+      product: ProductResolver
+    }
+  }
+];
+```
+
+```typescript title="product-detail.component.ts"
+ngOnInit() {
+  // 使用解析器提供的数据，无需等待
+  this.route.data.subscribe(data => {
+    this.product = data['product'];
+  });
+}
+```
+
+## 3. 嵌套路由与子路由
+
+### 3.1 嵌套路由配置
+
+嵌套路由允许创建更复杂的应用程序结构，其中子路由与父路由相关：
+
+```typescript title="app-routing.module.ts"
+const routes: Routes = [
+  { 
+    path: 'admin', 
+    component: AdminComponent,
+    children: [
+      { path: '', redirectTo: 'dashboard', pathMatch: 'full' },
+      { path: 'dashboard', component: AdminDashboardComponent },
+      { path: 'users', component: UserManagementComponent },
+      { path: 'products', component: ProductManagementComponent }
+    ]
+  }
+];
+```
+
+```html title="admin.component.html"
+<div class="admin-layout">
+  <aside class="sidebar">
+    <nav>
+      <ul>
+        <li><a routerLink="/admin/dashboard" routerLinkActive="active">仪表盘</a></li>
+        <li><a routerLink="/admin/users" routerLinkActive="active">用户管理</a></li>
+        <li><a routerLink="/admin/products" routerLinkActive="active">产品管理</a></li>
+      </ul>
+    </nav>
+  </aside>
+  
+  <main class="content">
+    <!-- 子路由将在这里渲染 -->
+    <router-outlet></router-outlet>
+  </main>
+</div>
+```
+
+### 3.2 命名路由出口
+
+Angular支持多个命名的路由出口，允许在同一视图中同时显示多个路由组件：
+
+```typescript title="app-routing.module.ts"
+const routes: Routes = [
+  {
+    path: 'workspace',
+    component: WorkspaceComponent,
+    children: [
+      { 
+        path: ':id',
+        component: WorkspaceContentComponent,
+        children: [
+          { path: '', component: WorkspaceDetailComponent, outlet: 'detail' },
+          { path: '', component: WorkspacePropertiesComponent, outlet: 'properties' }
+        ]
+      }
+    ]
+  }
+];
+```
+
+```html title="workspace.component.html"
+<div class="workspace-layout">
+  <aside class="sidebar">
+    <app-workspace-list></app-workspace-list>
+  </aside>
+  
+  <main class="main-content">
+    <!-- 主路由出口 -->
+    <router-outlet></router-outlet>
+  </main>
+</div>
+```
+
+```html title="workspace-content.component.html"
+<div class="content-container">
+  <div class="detail-panel">
+    <!-- 命名为"detail"的路由出口 -->
+    <router-outlet name="detail"></router-outlet>
+  </div>
+  
+  <div class="properties-panel">
+    <!-- 命名为"properties"的路由出口 -->
+    <router-outlet name="properties"></router-outlet>
+  </div>
+</div>
+```
+
+### 3.3 相对导航
+
+在嵌套路由结构中，相对导航非常有用：
+
+```typescript
+// 导航到当前路由的子路由
+this.router.navigate(['child'], { relativeTo: this.route });
+
+// 导航到父路由
+this.router.navigate(['../'], { relativeTo: this.route });
+
+// 导航到兄弟路由
+this.router.navigate(['../sibling'], { relativeTo: this.route });
+```
+
+## 4. 路由守卫
+
+路由守卫是拦截导航过程并决定是否允许导航继续的服务。Angular提供了多种类型的守卫：
+
+### 4.1 CanActivate守卫
+
+控制是否可以访问路由：
+
+```typescript title="auth.guard.ts"
+import { Injectable } from '@angular/core';
+import { CanActivate, ActivatedRouteSnapshot, RouterStateSnapshot, UrlTree, Router } from '@angular/router';
+import { Observable } from 'rxjs';
+import { AuthService } from './auth.service';
+
+@Injectable({
+  providedIn: 'root'
+})
+export class AuthGuard implements CanActivate {
+  constructor(private authService: AuthService, private router: Router) {}
+  
+  canActivate(
+    route: ActivatedRouteSnapshot,
+    state: RouterStateSnapshot
+  ): Observable<boolean | UrlTree> | Promise<boolean | UrlTree> | boolean | UrlTree {
+    if (this.authService.isLoggedIn()) {
+      // 检查特定权限
+      const requiredPermissions = route.data['permissions'] as string[];
+      if (requiredPermissions && !this.authService.hasPermissions(requiredPermissions)) {
+        // 重定向到权限不足页面
+        return this.router.createUrlTree(['/forbidden']);
+      }
+      
+      return true;
+    }
+    
+    // 保存原始URL，登录后重定向回来
+    return this.router.createUrlTree(['/login'], { 
+      queryParams: { returnUrl: state.url } 
+    });
+  }
+}
+```
+
+### 4.2 CanActivateChild守卫
+
+控制是否可以访问子路由：
+
+```typescript title="admin.guard.ts"
+import { Injectable } from '@angular/core';
+import { CanActivateChild, ActivatedRouteSnapshot, RouterStateSnapshot, UrlTree, Router } from '@angular/router';
+import { Observable } from 'rxjs';
+import { AuthService } from './auth.service';
+
+@Injectable({
+  providedIn: 'root'
+})
+export class AdminGuard implements CanActivateChild {
+  constructor(private authService: AuthService, private router: Router) {}
+  
+  canActivateChild(
+    childRoute: ActivatedRouteSnapshot,
+    state: RouterStateSnapshot
+  ): Observable<boolean | UrlTree> | Promise<boolean | UrlTree> | boolean | UrlTree {
+    if (this.authService.isAdmin()) {
+      return true;
+    }
+    
+    return this.router.createUrlTree(['/forbidden']);
+  }
+}
+```
+
+### 4.3 CanDeactivate守卫
+
+控制是否可以离开当前路由，通常用于防止用户意外丢失未保存的更改：
+
+```typescript title="can-deactivate.guard.ts"
+import { Injectable } from '@angular/core';
+import { CanDeactivate, ActivatedRouteSnapshot, RouterStateSnapshot, UrlTree } from '@angular/router';
+import { Observable } from 'rxjs';
+
+export interface CanComponentDeactivate {
+  canDeactivate: () => Observable<boolean | UrlTree> | Promise<boolean | UrlTree> | boolean | UrlTree;
+}
+
+@Injectable({
+  providedIn: 'root'
+})
+export class CanDeactivateGuard implements CanDeactivate<CanComponentDeactivate> {
+  canDeactivate(
+    component: CanComponentDeactivate,
+    currentRoute: ActivatedRouteSnapshot,
+    currentState: RouterStateSnapshot,
+    nextState?: RouterStateSnapshot
+  ): Observable<boolean | UrlTree> | Promise<boolean | UrlTree> | boolean | UrlTree {
+    return component.canDeactivate ? component.canDeactivate() : true;
+  }
+}
+```
+
+```typescript title="product-edit.component.ts"
+import { Component, OnInit } from '@angular/core';
+import { FormBuilder, FormGroup, Validators } from '@angular/forms';
+import { CanComponentDeactivate } from '../can-deactivate.guard';
+import { Observable } from 'rxjs';
+
+@Component({
+  selector: 'app-product-edit',
+  templateUrl: './product-edit.component.html'
+})
+export class ProductEditComponent implements OnInit, CanComponentDeactivate {
+  productForm: FormGroup;
+  originalProduct: any;
+  hasUnsavedChanges = false;
+  
+  constructor(private fb: FormBuilder) {}
+  
+  ngOnInit() {
+    this.productForm = this.fb.group({
+      name: ['', Validators.required],
+      price: [0, [Validators.required, Validators.min(0)]],
+      description: ['']
+    });
+    
+    // 监听表单更改
+    this.productForm.valueChanges.subscribe(() => {
+      this.hasUnsavedChanges = this.productForm.dirty;
+    });
+    
+    // 获取原始产品数据...
+  }
+  
+  // 实现CanComponentDeactivate接口
+  canDeactivate(): Observable<boolean> | Promise<boolean> | boolean {
+    if (!this.hasUnsavedChanges) {
+      return true;
+    }
+    
+    // 弹出确认对话框
+    return window.confirm('您有未保存的更改，确定要离开吗？');
+  }
+  
+  saveChanges() {
+    // 保存表单数据...
+    this.hasUnsavedChanges = false;
+  }
+}
+```
+
+### 4.4 CanLoad守卫
+
+控制是否可以加载延迟加载模块：
+
+```typescript title="auth.guard.ts"
+import { Injectable } from '@angular/core';
+import { CanLoad, Route, UrlSegment, Router } from '@angular/router';
+import { Observable } from 'rxjs';
+import { AuthService } from './auth.service';
+
+@Injectable({
+  providedIn: 'root'
+})
+export class AuthGuard implements CanLoad {
+  constructor(private authService: AuthService, private router: Router) {}
+  
+  canLoad(
+    route: Route,
+    segments: UrlSegment[]
+  ): Observable<boolean> | Promise<boolean> | boolean {
+    if (this.authService.isLoggedIn()) {
+      return true;
+    }
+    
+    // 未登录，导航到登录页面
+    this.router.navigate(['/login']);
+    return false;
+  }
+}
+```
+
+### 4.5 Resolve守卫
+
+前面已经介绍过，用于在路由激活前预先获取数据。
+
+## 5. 延迟加载
+
+延迟加载是Angular路由系统的一个强大特性，它允许将应用程序拆分成多个模块，并在需要时按需加载，这可以显著提高初始加载性能。
+
+### 5.1 配置延迟加载模块
+
+```typescript title="app-routing.module.ts"
+const routes: Routes = [
+  { path: '', component: HomeComponent },
+  { 
+    path: 'products', 
+    loadChildren: () => import('./products/products.module').then(m => m.ProductsModule),
+    canLoad: [AuthGuard]
+  },
+  { 
+    path: 'admin', 
+    loadChildren: () => import('./admin/admin.module').then(m => m.AdminModule),
+    canLoad: [AdminGuard]
+  }
+];
+```
+
+### 5.2 延迟加载模块配置
+
+每个延迟加载的模块必须有自己的路由配置：
+
+```typescript title="products/products-routing.module.ts"
+import { NgModule } from '@angular/core';
+import { RouterModule, Routes } from '@angular/router';
+
+import { ProductListComponent } from './product-list.component';
+import { ProductDetailComponent } from './product-detail.component';
+import { ProductEditComponent } from './product-edit.component';
+import { ProductResolver } from './product.resolver';
+import { CanDeactivateGuard } from '../can-deactivate.guard';
+
+const routes: Routes = [
+  { path: '', component: ProductListComponent },
+  { 
+    path: ':id', 
+    component: ProductDetailComponent,
+    resolve: { product: ProductResolver }
+  },
+  { 
+    path: ':id/edit', 
+    component: ProductEditComponent,
+    canDeactivate: [CanDeactivateGuard]
+  }
+];
+
+@NgModule({
+  imports: [RouterModule.forChild(routes)],
+  exports: [RouterModule]
+})
+export class ProductsRoutingModule { }
+```
+
+```typescript title="products/products.module.ts"
+import { NgModule } from '@angular/core';
+import { CommonModule } from '@angular/common';
+import { ReactiveFormsModule } from '@angular/forms';
+
+import { ProductsRoutingModule } from './products-routing.module';
+import { ProductListComponent } from './product-list.component';
+import { ProductDetailComponent } from './product-detail.component';
+import { ProductEditComponent } from './product-edit.component';
+
+@NgModule({
+  declarations: [
+    ProductListComponent,
+    ProductDetailComponent,
+    ProductEditComponent
+  ],
+  imports: [
+    CommonModule,
+    ReactiveFormsModule,
+    ProductsRoutingModule
+  ]
+})
+export class ProductsModule { }
+```
+
+### 5.3 预加载策略
+
+Angular路由系统支持多种预加载策略：
+
+```typescript title="app-routing.module.ts"
+import { PreloadAllModules, NoPreloading } from '@angular/router';
+
+@NgModule({
+  imports: [
+    RouterModule.forRoot(routes, {
+      preloadingStrategy: PreloadAllModules,  // 预加载所有延迟加载模块
+      // 或者不预加载
+      // preloadingStrategy: NoPreloading
+    })
+  ],
+  exports: [RouterModule]
+})
+export class AppRoutingModule { }
+```
+
+也可以创建自定义的预加载策略：
+
+```typescript title="selective-preloading-strategy.service.ts"
+import { Injectable } from '@angular/core';
+import { PreloadingStrategy, Route } from '@angular/router';
+import { Observable, of } from 'rxjs';
+
+@Injectable({
+  providedIn: 'root'
+})
+export class SelectivePreloadingStrategy implements PreloadingStrategy {
+  preload(route: Route, load: () => Observable<any>): Observable<any> {
+    if (route.data && route.data['preload']) {
+      return load();
+    }
+    return of(null);
+  }
+}
+```
+
+```typescript title="app-routing.module.ts"
+const routes: Routes = [
+  { 
+    path: 'products', 
+    loadChildren: () => import('./products/products.module').then(m => m.ProductsModule),
+    data: { preload: true }  // 标记此模块进行预加载
+  },
+  { 
+    path: 'admin', 
+    loadChildren: () => import('./admin/admin.module').then(m => m.AdminModule)
+    // 不预加载
+  }
+];
+
+@NgModule({
+  imports: [
+    RouterModule.forRoot(routes, {
+      preloadingStrategy: SelectivePreloadingStrategy
+    })
+  ],
+  exports: [RouterModule]
+})
+export class AppRoutingModule { }
+```
+
+## 6. 路由事件与生命周期
+
+Angular路由系统触发一系列的事件，可用于跟踪路由过程并实现加载指示器或分析跟踪：
+
+```typescript title="app.component.ts"
+import { Component, OnInit } from '@angular/core';
+import { Router, NavigationStart, NavigationEnd, NavigationCancel, NavigationError, Event } from '@angular/router';
+import { filter } from 'rxjs/operators';
+
+@Component({
+  selector: 'app-root',
+  template: `
+    <div class="loading-indicator" *ngIf="loading">加载中...</div>
+    <router-outlet></router-outlet>
+  `
+})
+export class AppComponent implements OnInit {
+  loading = false;
+  
+  constructor(private router: Router) {}
+  
+  ngOnInit() {
+    this.router.events.subscribe((event: Event) => {
+      switch (true) {
+        case event instanceof NavigationStart:
+          this.loading = true;
+          break;
+          
+        case event instanceof NavigationEnd:
+        case event instanceof NavigationCancel:
+        case event instanceof NavigationError:
+          this.loading = false;
+          break;
+      }
+    });
+    
+    // 页面标题更新
+    this.router.events.pipe(
+      filter(event => event instanceof NavigationEnd)
+    ).subscribe(() => {
+      const rt = this.getChild(this.router.routerState.root);
+      rt.data.subscribe(data => {
+        // 更新页面标题
+        if (data.title) {
+          document.title = `${data.title} - My App`;
+        }
+      });
+    });
+  }
+  
+  // 递归获取活动路由
+  private getChild(activatedRoute: ActivatedRoute): ActivatedRoute {
+    if (activatedRoute.firstChild) {
+      return this.getChild(activatedRoute.firstChild);
+    } else {
+      return activatedRoute;
+    }
+  }
+}
+```
+
+## 7. 路由最佳实践
+
+### 7.1 路由组织模式
+
+对于大型应用，建议采用以下路由组织模式：
+
+1. **模块化路由**：每个功能模块有自己的路由配置
+2. **基于特性的组织**：按特性或业务领域组织路由
+3. **懒加载与预加载**：合理使用懒加载和预加载策略
+
+### 7.2 路由命名约定
+
+使用一致的路由命名约定有助于提高可维护性：
+
+1. **使用kebab-case**：例如`/user-profile`而不是`/userProfile`
+2. **资源标识**：对于RESTful风格的路由，使用`/resources/:id/action`格式
+3. **避免动词**：使用名词命名路由，例如`/products`而不是`/get-products`
+
+### 7.3 路由安全
+
+实施多层路由安全策略：
+
+1. **认证守卫**：验证用户是否已登录
+2. **授权守卫**：验证用户是否有权访问特定资源
+3. **数据验证**：在服务器端和客户端验证路由参数
+4. **CSRF保护**：防止跨站请求伪造攻击
+
+### 7.4 路由状态管理
+
+有效管理路由状态：
+
+1. **使用查询参数**：存储过滤、排序、分页等UI状态
+2. **路由参数序列化**：对复杂的查询参数进行序列化
+3. **保持URL清晰**：URL应该是可读的，可分享的，可书签的
+
+### 7.5 路由性能优化
+
+提高路由性能：
+
+1. **延迟加载**：按需加载模块
+2. **路由预加载**：在空闲时预加载常用模块
+3. **数据缓存**：缓存路由解析器获取的数据
+4. **Route Reuse策略**：实现自定义路由复用策略，避免不必要的组件重建
+
+```typescript title="custom-route-reuse-strategy.ts"
+import { ActivatedRouteSnapshot, DetachedRouteHandle, RouteReuseStrategy } from '@angular/router';
+
+export class CustomRouteReuseStrategy implements RouteReuseStrategy {
+  private storedRoutes = new Map<string, DetachedRouteHandle>();
+  
+  // 确定是否复用路由
+  shouldDetach(route: ActivatedRouteSnapshot): boolean {
+    // 只存储标记为可复用的路由
+    return route.data && route.data['reuseRoute'];
+  }
+  
+  // 存储分离的路由
+  store(route: ActivatedRouteSnapshot, handle: DetachedRouteHandle): void {
+    const id = this.getRouteId(route);
+    this.storedRoutes.set(id, handle);
+  }
+  
+  // 确定是否有存储的路由
+  shouldAttach(route: ActivatedRouteSnapshot): boolean {
+    const id = this.getRouteId(route);
+    return this.storedRoutes.has(id);
+  }
+  
+  // 恢复存储的路由
+  retrieve(route: ActivatedRouteSnapshot): DetachedRouteHandle | null {
+    const id = this.getRouteId(route);
+    if (!this.storedRoutes.has(id)) return null;
+    return this.storedRoutes.get(id);
+  }
+  
+  // 确定是否应该复用路由
+  shouldReuseRoute(future: ActivatedRouteSnapshot, curr: ActivatedRouteSnapshot): boolean {
+    // 默认的复用策略
+    return future.routeConfig === curr.routeConfig;
+  }
+  
+  // 获取路由ID
+  private getRouteId(route: ActivatedRouteSnapshot): string {
+    // 创建一个唯一的路由标识符，考虑路径和参数
+    const path = route.routeConfig ? route.routeConfig.path : '';
+    const id = path || '';
+    
+    // 如果有路由参数，将其添加到ID中
+    if (route.params) {
+      Object.keys(route.params).forEach(key => {
+        id += `|${key}=${route.params[key]}`;
+      });
+    }
+    
+    return id;
+  }
+}
+```
+
+```typescript title="app.module.ts"
+import { BrowserModule } from '@angular/platform-browser';
+import { NgModule } from '@angular/core';
+import { RouteReuseStrategy } from '@angular/router';
+import { AppRoutingModule } from './app-routing.module';
+import { AppComponent } from './app.component';
+import { CustomRouteReuseStrategy } from './custom-route-reuse-strategy';
+
+@NgModule({
+  declarations: [AppComponent],
+  imports: [BrowserModule, AppRoutingModule],
+  providers: [
+    { provide: RouteReuseStrategy, useClass: CustomRouteReuseStrategy }
+  ],
+  bootstrap: [AppComponent]
+})
+export class AppModule { }
+``` 

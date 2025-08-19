@@ -1,4 +1,4 @@
----
+﻿---
 sidebar_position: 1
 title: 服务注册与发现详解
 description: 深入理解微服务服务注册与发现机制、实现方案与最佳实践
@@ -6,7 +6,12 @@ authors: [Laby]
 last_update:
   date: 2025-08-07
   author: Laby
+tags: [微服务, 服务发现, Eureka, Consul, Nacos, 负载均衡]
 ---
+
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+import CodeBlock from '@theme/CodeBlock';
 
 # 服务注册与发现详解
 
@@ -15,6 +20,57 @@ last_update:
 :::tip 核心价值
 服务发现 = 动态注册 + 自动发现 + 负载均衡 + 健康检查 + 故障转移
 :::
+
+## 服务发现架构
+
+```mermaid
+graph TB
+    subgraph "服务消费者"
+        Consumer1[订单服务]
+        Consumer2[支付服务]
+        Consumer3[通知服务]
+    end
+    
+    subgraph "服务注册中心"
+        Registry1[注册中心-1]
+        Registry2[注册中心-2]
+        Registry3[注册中心-3]
+    end
+    
+    subgraph "服务提供者"
+        Provider1[用户服务-1]
+        Provider2[用户服务-2]
+        Provider3[用户服务-3]
+        Provider4[库存服务-1]
+        Provider5[库存服务-2]
+    end
+    
+    subgraph "负载均衡器"
+        LB[负载均衡器]
+    end
+    
+    Provider1 -->|注册| Registry1
+    Provider2 -->|注册| Registry2
+    Provider3 -->|注册| Registry3
+    Provider4 -->|注册| Registry1
+    Provider5 -->|注册| Registry2
+    
+    Registry1 <--> Registry2
+    Registry2 <--> Registry3
+    Registry3 <--> Registry1
+    
+    Consumer1 -->|发现| Registry1
+    Consumer2 -->|发现| Registry2
+    Consumer3 -->|发现| Registry3
+    
+    Consumer1 --> LB
+    Consumer2 --> LB
+    Consumer3 --> LB
+    
+    LB --> Provider1
+    LB --> Provider2
+    LB --> Provider3
+```
 
 ## 1. 服务发现基础概念
 
@@ -957,10 +1013,827 @@ spring:
         ip-delete-timeout: 30000
 ```
 
+## 负载均衡策略对比
+
+<Tabs>
+<TabItem value="round-robin" label="轮询算法">
+
+```java
+public class RoundRobinLoadBalancer implements LoadBalancer {
+    private final AtomicInteger counter = new AtomicInteger(0);
+    
+    @Override
+    public ServiceInstance choose(String serviceId, List<ServiceInstance> instances) {
+        if (instances.isEmpty()) {
+            return null;
+        }
+        int index = counter.incrementAndGet() % instances.size();
+        return instances.get(index);
+    }
+}
+```
+
+**特点**：
+- ✅ 实现简单
+- ✅ 请求分布均匀
+- ❌ 不考虑服务器性能差异
+
+</TabItem>
+<TabItem value="weighted" label="权重算法">
+
+```java
+public class WeightedLoadBalancer implements LoadBalancer {
+    @Override
+    public ServiceInstance choose(String serviceId, List<ServiceInstance> instances) {
+        int totalWeight = instances.stream()
+            .mapToInt(this::getWeight)
+            .sum();
+        
+        int randomWeight = new Random().nextInt(totalWeight);
+        int currentWeight = 0;
+        
+        for (ServiceInstance instance : instances) {
+            currentWeight += getWeight(instance);
+            if (randomWeight < currentWeight) {
+                return instance;
+            }
+        }
+        return instances.get(0);
+    }
+    
+    private int getWeight(ServiceInstance instance) {
+        String weightStr = instance.getMetadata().get("weight");
+        return weightStr != null ? Integer.parseInt(weightStr) : 1;
+    }
+}
+```
+
+**特点**：
+- ✅ 考虑服务器性能差异
+- ✅ 灵活配置权重
+- ❌ 配置相对复杂
+
+</TabItem>
+<TabItem value="least-conn" label="最少连接">
+
+```java
+public class LeastConnectionLoadBalancer implements LoadBalancer {
+    private final Map<String, AtomicInteger> connectionCounts = new ConcurrentHashMap<>();
+    
+    @Override
+    public ServiceInstance choose(String serviceId, List<ServiceInstance> instances) {
+        return instances.stream()
+            .min(Comparator.comparingInt(instance -> 
+                connectionCounts.getOrDefault(instance.getInstanceId(), 
+                    new AtomicInteger(0)).get()))
+            .orElse(instances.get(0));
+    }
+    
+    public void incrementConnection(String instanceId) {
+        connectionCounts.computeIfAbsent(instanceId, k -> new AtomicInteger(0))
+            .incrementAndGet();
+    }
+    
+    public void decrementConnection(String instanceId) {
+        AtomicInteger count = connectionCounts.get(instanceId);
+        if (count != null) {
+            count.decrementAndGet();
+        }
+    }
+}
+```
+
+**特点**：
+- ✅ 考虑实际负载情况
+- ✅ 适合长连接场景
+- ❌ 需要维护连接状态
+
+</TabItem>
+</Tabs>
+
 :::info 服务发现方案选择
 1. **Eureka**：适合Spring Cloud生态，简单易用
 2. **Consul**：功能丰富，支持多数据中心
 3. **Nacos**：阿里生态，功能全面，中文文档丰富
+:::
+
+## 4. 健康检查与监控
+
+### 4.1 健康检查机制
+
+#### 健康检查类型对比
+
+<Tabs>
+<TabItem value="http-check" label="HTTP检查">
+
+```java
+public class HttpHealthCheck {
+    private final String healthCheckUrl;
+    private final int timeout;
+    private final RestTemplate restTemplate;
+    
+    public HttpHealthCheck(String healthCheckUrl, int timeout) {
+        this.healthCheckUrl = healthCheckUrl;
+        this.timeout = timeout;
+        this.restTemplate = createRestTemplate();
+    }
+    
+    public boolean check(String serviceUrl) {
+        try {
+            ResponseEntity<String> response = restTemplate.getForEntity(
+                serviceUrl + healthCheckUrl, String.class);
+            return response.getStatusCode().is2xxSuccessful();
+        } catch (Exception e) {
+            return false;
+        }
+    }
+    
+    private RestTemplate createRestTemplate() {
+        RestTemplate template = new RestTemplate();
+        HttpComponentsClientHttpRequestFactory factory = 
+            new HttpComponentsClientHttpRequestFactory();
+        factory.setConnectTimeout(timeout);
+        factory.setReadTimeout(timeout);
+        template.setRequestFactory(factory);
+        return template;
+    }
+}
+```
+
+**适用场景**：Web服务、REST API
+
+</TabItem>
+<TabItem value="tcp-check" label="TCP检查">
+
+```java
+public class TcpHealthCheck {
+    private final int port;
+    private final int timeout;
+    
+    public TcpHealthCheck(int port, int timeout) {
+        this.port = port;
+        this.timeout = timeout;
+    }
+    
+    public boolean check(String host) {
+        try (Socket socket = new Socket()) {
+            socket.connect(new InetSocketAddress(host, port), timeout);
+            return socket.isConnected();
+        } catch (Exception e) {
+            return false;
+        }
+    }
+}
+```
+
+**适用场景**：数据库、缓存服务
+
+</TabItem>
+<TabItem value="heartbeat" label="心跳检查">
+
+```java
+public class HeartbeatHealthCheck {
+    private final Map<String, Long> lastHeartbeat = new ConcurrentHashMap<>();
+    private final long heartbeatTimeout;
+    
+    public HeartbeatHealthCheck(long heartbeatTimeout) {
+        this.heartbeatTimeout = heartbeatTimeout;
+    }
+    
+    public void recordHeartbeat(String instanceId) {
+        lastHeartbeat.put(instanceId, System.currentTimeMillis());
+    }
+    
+    public boolean isHealthy(String instanceId) {
+        Long lastBeat = lastHeartbeat.get(instanceId);
+        if (lastBeat == null) {
+            return false;
+        }
+        return System.currentTimeMillis() - lastBeat < heartbeatTimeout;
+    }
+}
+```
+
+**适用场景**：轻量级服务、高频检查
+
+</TabItem>
+</Tabs>
+
+### 4.2 监控指标
+
+#### 关键监控指标
+```java title="监控指标收集"
+@Component
+public class ServiceDiscoveryMetrics {
+    
+    private final MeterRegistry meterRegistry;
+    private final Counter registeredServices;
+    private final Counter deregisteredServices;
+    private final Gauge activeServices;
+    private final Timer discoveryLatency;
+    
+    public ServiceDiscoveryMetrics(MeterRegistry meterRegistry) {
+        this.meterRegistry = meterRegistry;
+        this.registeredServices = Counter.builder("service_discovery_registered_total")
+            .description("Total number of registered services")
+            .register(meterRegistry);
+        this.deregisteredServices = Counter.builder("service_discovery_deregistered_total")
+            .description("Total number of deregistered services")
+            .register(meterRegistry);
+        this.activeServices = Gauge.builder("service_discovery_active_services")
+            .description("Number of active services")
+            .register(meterRegistry, this, ServiceDiscoveryMetrics::getActiveServicesCount);
+        this.discoveryLatency = Timer.builder("service_discovery_latency")
+            .description("Service discovery latency")
+            .register(meterRegistry);
+    }
+    
+    public void recordServiceRegistration(String serviceId) {
+        registeredServices.increment(Tags.of("service", serviceId));
+    }
+    
+    public void recordServiceDeregistration(String serviceId) {
+        deregisteredServices.increment(Tags.of("service", serviceId));
+    }
+    
+    public void recordDiscoveryLatency(long duration) {
+        discoveryLatency.record(duration, TimeUnit.MILLISECONDS);
+    }
+    
+    private double getActiveServicesCount() {
+        // 获取活跃服务数量的实际实现
+        return 0.0;
+    }
+}
+```
+
+## 5. 面试题精选
+
+### 5.1 基础概念题
+
+#### Q1: 什么是服务发现？它的作用是什么？
+
+**答**: 服务发现是微服务架构中的一个重要组件，它解决了服务间如何相互找到并通信的问题。
+
+**主要作用**：
+1. **动态注册**：服务启动时自动向注册中心注册
+2. **自动发现**：服务调用时自动从注册中心获取目标服务实例
+3. **负载均衡**：在多个服务实例间分发请求
+4. **健康检查**：监控服务实例的健康状态
+5. **故障转移**：自动剔除故障实例
+
+#### Q2: 客户端发现和服务端发现的区别是什么？
+
+**答**: 主要区别如下：
+
+<Tabs>
+<TabItem value="client-side" label="客户端发现">
+
+**优势**：
+- 客户端可以灵活选择负载均衡策略
+- 减少网络跳数，提高性能
+- 客户端可以缓存服务实例列表
+
+**劣势**：
+- 客户端需要实现服务发现逻辑
+- 客户端需要处理注册中心故障
+- 不同语言的客户端需要重复实现
+
+</TabItem>
+<TabItem value="server-side" label="服务端发现">
+
+**优势**：
+- 客户端不需要实现服务发现逻辑
+- 服务发现逻辑集中管理
+- 支持多种协议和语言
+
+**劣势**：
+- 增加网络跳数
+- 负载均衡器可能成为瓶颈
+- 需要额外的基础设施
+
+</TabItem>
+</Tabs>
+
+### 5.2 实践题
+
+#### Q3: 如何配置Eureka集群？
+
+**答**: Eureka集群配置步骤如下：
+
+```yaml
+# eureka-server-1.yml
+eureka:
+  client:
+    service-url:
+      defaultZone: http://eureka-server-2:8762/eureka/,http://eureka-server-3:8763/eureka/
+
+# eureka-server-2.yml
+eureka:
+  client:
+    service-url:
+      defaultZone: http://eureka-server-1:8761/eureka/,http://eureka-server-3:8763/eureka/
+
+# eureka-server-3.yml
+eureka:
+  client:
+    service-url:
+      defaultZone: http://eureka-server-1:8761/eureka/,http://eureka-server-2:8762/eureka/
+```
+
+#### Q4: Eureka的自我保护机制是什么？
+
+**答**: Eureka自我保护机制是为了防止网络分区故障时服务被错误剔除。
+
+**工作原理**：
+- 当Eureka Server在短时间内丢失过多客户端时，会进入自我保护模式
+- 在自我保护模式下，Eureka Server不会删除任何服务实例
+- 当网络恢复后，Eureka Server会自动退出自我保护模式
+
+```yaml
+eureka:
+  server:
+    enable-self-preservation: true  # 启用自我保护
+    renewal-percent-threshold: 0.85 # 续约百分比阈值
+```
+
+### 5.3 架构设计题
+
+#### Q5: 如何设计一个高可用的服务发现系统？
+
+**答**: 高可用服务发现系统设计包括以下几个方面：
+
+```mermaid
+graph TB
+    subgraph "多注册中心集群"
+        Eureka1[Eureka-1]
+        Eureka2[Eureka-2]
+        Eureka3[Eureka-3]
+    end
+    
+    subgraph "客户端缓存"
+        Cache1[服务缓存-1]
+        Cache2[服务缓存-2]
+        Cache3[服务缓存-3]
+    end
+    
+    subgraph "健康检查"
+        Health1[健康检查-1]
+        Health2[健康检查-2]
+        Health3[健康检查-3]
+    end
+    
+    subgraph "监控告警"
+        Monitor[监控系统]
+        Alert[告警系统]
+    end
+    
+    Eureka1 <--> Eureka2
+    Eureka2 <--> Eureka3
+    Eureka3 <--> Eureka1
+    
+    Cache1 --> Eureka1
+    Cache2 --> Eureka2
+    Cache3 --> Eureka3
+    
+    Health1 --> Eureka1
+    Health2 --> Eureka2
+    Health3 --> Eureka3
+    
+    Eureka1 --> Monitor
+    Eureka2 --> Monitor
+    Eureka3 --> Monitor
+    
+    Monitor --> Alert
+```
+
+1. **多注册中心**：部署多个注册中心实例，相互同步数据
+2. **客户端缓存**：客户端缓存服务实例列表，减少对注册中心的依赖
+3. **健康检查**：定期检查服务实例健康状态，及时剔除故障实例
+4. **监控告警**：监控注册中心和服务实例状态，及时发现问题
+
+:::tip 服务发现最佳实践
+1. **理解原理**：掌握服务发现的核心概念和工作原理
+2. **掌握配置**：熟悉各种服务发现工具的配置方法
+3. **实践应用**：通过实际项目练习服务发现的使用
+4. **监控运维**：学会服务发现的监控和运维管理
+5. **高可用设计**：了解服务发现的高可用设计方法
+:::
+
+---
+
+通过本章的学习，你应该已经深入理解了服务发现的核心概念、实现方案和最佳实践。服务发现是微服务架构的基础设施，合理使用服务发现可以显著提高系统的可用性和可维护性。在实际项目中，要根据业务需求选择合适的服务发现方案，并注重高可用设计和监控运维。
+
+## 负载均衡策略对比
+
+<Tabs>
+<TabItem value="round-robin" label="轮询算法">
+
+```java
+public class RoundRobinLoadBalancer implements LoadBalancer {
+    private final AtomicInteger counter = new AtomicInteger(0);
+    
+    @Override
+    public ServiceInstance choose(String serviceId, List<ServiceInstance> instances) {
+        if (instances.isEmpty()) {
+            return null;
+        }
+        int index = counter.incrementAndGet() % instances.size();
+        return instances.get(index);
+    }
+}
+```
+
+**特点**：
+- ✅ 实现简单
+- ✅ 请求分布均匀
+- ❌ 不考虑服务器性能差异
+
+</TabItem>
+<TabItem value="weighted" label="权重算法">
+
+```java
+public class WeightedLoadBalancer implements LoadBalancer {
+    @Override
+    public ServiceInstance choose(String serviceId, List<ServiceInstance> instances) {
+        int totalWeight = instances.stream()
+            .mapToInt(this::getWeight)
+            .sum();
+        
+        int randomWeight = new Random().nextInt(totalWeight);
+        int currentWeight = 0;
+        
+        for (ServiceInstance instance : instances) {
+            currentWeight += getWeight(instance);
+            if (randomWeight < currentWeight) {
+                return instance;
+            }
+        }
+        return instances.get(0);
+    }
+    
+    private int getWeight(ServiceInstance instance) {
+        String weightStr = instance.getMetadata().get("weight");
+        return weightStr != null ? Integer.parseInt(weightStr) : 1;
+    }
+}
+```
+
+**特点**：
+- ✅ 考虑服务器性能差异
+- ✅ 灵活配置权重
+- ❌ 配置相对复杂
+
+</TabItem>
+<TabItem value="least-conn" label="最少连接">
+
+```java
+public class LeastConnectionLoadBalancer implements LoadBalancer {
+    private final Map<String, AtomicInteger> connectionCounts = new ConcurrentHashMap<>();
+    
+    @Override
+    public ServiceInstance choose(String serviceId, List<ServiceInstance> instances) {
+        return instances.stream()
+            .min(Comparator.comparingInt(instance -> 
+                connectionCounts.getOrDefault(instance.getInstanceId(), 
+                    new AtomicInteger(0)).get()))
+            .orElse(instances.get(0));
+    }
+    
+    public void incrementConnection(String instanceId) {
+        connectionCounts.computeIfAbsent(instanceId, k -> new AtomicInteger(0))
+            .incrementAndGet();
+    }
+    
+    public void decrementConnection(String instanceId) {
+        AtomicInteger count = connectionCounts.get(instanceId);
+        if (count != null) {
+            count.decrementAndGet();
+        }
+    }
+}
+```
+
+**特点**：
+- ✅ 考虑实际负载情况
+- ✅ 适合长连接场景
+- ❌ 需要维护连接状态
+
+</TabItem>
+</Tabs>
+
+:::info 服务发现方案选择
+1. **Eureka**：适合Spring Cloud生态，简单易用
+2. **Consul**：功能丰富，支持多数据中心
+3. **Nacos**：阿里生态，功能全面，中文文档丰富
+:::
+
+## 4. 健康检查与监控
+
+### 4.1 健康检查机制
+
+#### 健康检查类型对比
+
+<Tabs>
+<TabItem value="http-check" label="HTTP检查">
+
+```java
+public class HttpHealthCheck {
+    private final String healthCheckUrl;
+    private final int timeout;
+    private final RestTemplate restTemplate;
+    
+    public HttpHealthCheck(String healthCheckUrl, int timeout) {
+        this.healthCheckUrl = healthCheckUrl;
+        this.timeout = timeout;
+        this.restTemplate = createRestTemplate();
+    }
+    
+    public boolean check(String serviceUrl) {
+        try {
+            ResponseEntity<String> response = restTemplate.getForEntity(
+                serviceUrl + healthCheckUrl, String.class);
+            return response.getStatusCode().is2xxSuccessful();
+        } catch (Exception e) {
+            return false;
+        }
+    }
+    
+    private RestTemplate createRestTemplate() {
+        RestTemplate template = new RestTemplate();
+        HttpComponentsClientHttpRequestFactory factory = 
+            new HttpComponentsClientHttpRequestFactory();
+        factory.setConnectTimeout(timeout);
+        factory.setReadTimeout(timeout);
+        template.setRequestFactory(factory);
+        return template;
+    }
+}
+```
+
+**适用场景**：Web服务、REST API
+
+</TabItem>
+<TabItem value="tcp-check" label="TCP检查">
+
+```java
+public class TcpHealthCheck {
+    private final int port;
+    private final int timeout;
+    
+    public TcpHealthCheck(int port, int timeout) {
+        this.port = port;
+        this.timeout = timeout;
+    }
+    
+    public boolean check(String host) {
+        try (Socket socket = new Socket()) {
+            socket.connect(new InetSocketAddress(host, port), timeout);
+            return socket.isConnected();
+        } catch (Exception e) {
+            return false;
+        }
+    }
+}
+```
+
+**适用场景**：数据库、缓存服务
+
+</TabItem>
+<TabItem value="heartbeat" label="心跳检查">
+
+```java
+public class HeartbeatHealthCheck {
+    private final Map<String, Long> lastHeartbeat = new ConcurrentHashMap<>();
+    private final long heartbeatTimeout;
+    
+    public HeartbeatHealthCheck(long heartbeatTimeout) {
+        this.heartbeatTimeout = heartbeatTimeout;
+    }
+    
+    public void recordHeartbeat(String instanceId) {
+        lastHeartbeat.put(instanceId, System.currentTimeMillis());
+    }
+    
+    public boolean isHealthy(String instanceId) {
+        Long lastBeat = lastHeartbeat.get(instanceId);
+        if (lastBeat == null) {
+            return false;
+        }
+        return System.currentTimeMillis() - lastBeat < heartbeatTimeout;
+    }
+}
+```
+
+**适用场景**：轻量级服务、高频检查
+
+</TabItem>
+</Tabs>
+
+### 4.2 监控指标
+
+#### 关键监控指标
+```java title="监控指标收集"
+@Component
+public class ServiceDiscoveryMetrics {
+    
+    private final MeterRegistry meterRegistry;
+    private final Counter registeredServices;
+    private final Counter deregisteredServices;
+    private final Gauge activeServices;
+    private final Timer discoveryLatency;
+    
+    public ServiceDiscoveryMetrics(MeterRegistry meterRegistry) {
+        this.meterRegistry = meterRegistry;
+        this.registeredServices = Counter.builder("service_discovery_registered_total")
+            .description("Total number of registered services")
+            .register(meterRegistry);
+        this.deregisteredServices = Counter.builder("service_discovery_deregistered_total")
+            .description("Total number of deregistered services")
+            .register(meterRegistry);
+        this.activeServices = Gauge.builder("service_discovery_active_services")
+            .description("Number of active services")
+            .register(meterRegistry, this, ServiceDiscoveryMetrics::getActiveServicesCount);
+        this.discoveryLatency = Timer.builder("service_discovery_latency")
+            .description("Service discovery latency")
+            .register(meterRegistry);
+    }
+    
+    public void recordServiceRegistration(String serviceId) {
+        registeredServices.increment(Tags.of("service", serviceId));
+    }
+    
+    public void recordServiceDeregistration(String serviceId) {
+        deregisteredServices.increment(Tags.of("service", serviceId));
+    }
+    
+    public void recordDiscoveryLatency(long duration) {
+        discoveryLatency.record(duration, TimeUnit.MILLISECONDS);
+    }
+    
+    private double getActiveServicesCount() {
+        // 获取活跃服务数量的实际实现
+        return 0.0;
+    }
+}
+```
+
+## 5. 面试题精选
+
+### 5.1 基础概念题
+
+#### Q1: 什么是服务发现？它的作用是什么？
+
+**答**: 服务发现是微服务架构中的一个重要组件，它解决了服务间如何相互找到并通信的问题。
+
+**主要作用**：
+1. **动态注册**：服务启动时自动向注册中心注册
+2. **自动发现**：服务调用时自动从注册中心获取目标服务实例
+3. **负载均衡**：在多个服务实例间分发请求
+4. **健康检查**：监控服务实例的健康状态
+5. **故障转移**：自动剔除故障实例
+
+#### Q2: 客户端发现和服务端发现的区别是什么？
+
+**答**: 主要区别如下：
+
+<Tabs>
+<TabItem value="client-side" label="客户端发现">
+
+**优势**：
+- 客户端可以灵活选择负载均衡策略
+- 减少网络跳数，提高性能
+- 客户端可以缓存服务实例列表
+
+**劣势**：
+- 客户端需要实现服务发现逻辑
+- 客户端需要处理注册中心故障
+- 不同语言的客户端需要重复实现
+
+</TabItem>
+<TabItem value="server-side" label="服务端发现">
+
+**优势**：
+- 客户端不需要实现服务发现逻辑
+- 服务发现逻辑集中管理
+- 支持多种协议和语言
+
+**劣势**：
+- 增加网络跳数
+- 负载均衡器可能成为瓶颈
+- 需要额外的基础设施
+
+</TabItem>
+</Tabs>
+
+### 5.2 实践题
+
+#### Q3: 如何配置Eureka集群？
+
+**答**: Eureka集群配置步骤如下：
+
+```yaml
+# eureka-server-1.yml
+eureka:
+  client:
+    service-url:
+      defaultZone: http://eureka-server-2:8762/eureka/,http://eureka-server-3:8763/eureka/
+
+# eureka-server-2.yml
+eureka:
+  client:
+    service-url:
+      defaultZone: http://eureka-server-1:8761/eureka/,http://eureka-server-3:8763/eureka/
+
+# eureka-server-3.yml
+eureka:
+  client:
+    service-url:
+      defaultZone: http://eureka-server-1:8761/eureka/,http://eureka-server-2:8762/eureka/
+```
+
+#### Q4: Eureka的自我保护机制是什么？
+
+**答**: Eureka自我保护机制是为了防止网络分区故障时服务被错误剔除。
+
+**工作原理**：
+- 当Eureka Server在短时间内丢失过多客户端时，会进入自我保护模式
+- 在自我保护模式下，Eureka Server不会删除任何服务实例
+- 当网络恢复后，Eureka Server会自动退出自我保护模式
+
+```yaml
+eureka:
+  server:
+    enable-self-preservation: true  # 启用自我保护
+    renewal-percent-threshold: 0.85 # 续约百分比阈值
+```
+
+### 5.3 架构设计题
+
+#### Q5: 如何设计一个高可用的服务发现系统？
+
+**答**: 高可用服务发现系统设计包括以下几个方面：
+
+```mermaid
+graph TB
+    subgraph "多注册中心集群"
+        Eureka1[Eureka-1]
+        Eureka2[Eureka-2]
+        Eureka3[Eureka-3]
+    end
+    
+    subgraph "客户端缓存"
+        Cache1[服务缓存-1]
+        Cache2[服务缓存-2]
+        Cache3[服务缓存-3]
+    end
+    
+    subgraph "健康检查"
+        Health1[健康检查-1]
+        Health2[健康检查-2]
+        Health3[健康检查-3]
+    end
+    
+    subgraph "监控告警"
+        Monitor[监控系统]
+        Alert[告警系统]
+    end
+    
+    Eureka1 <--> Eureka2
+    Eureka2 <--> Eureka3
+    Eureka3 <--> Eureka1
+    
+    Cache1 --> Eureka1
+    Cache2 --> Eureka2
+    Cache3 --> Eureka3
+    
+    Health1 --> Eureka1
+    Health2 --> Eureka2
+    Health3 --> Eureka3
+    
+    Eureka1 --> Monitor
+    Eureka2 --> Monitor
+    Eureka3 --> Monitor
+    
+    Monitor --> Alert
+```
+
+1. **多注册中心**：部署多个注册中心实例，相互同步数据
+2. **客户端缓存**：客户端缓存服务实例列表，减少对注册中心的依赖
+3. **健康检查**：定期检查服务实例健康状态，及时剔除故障实例
+4. **监控告警**：监控注册中心和服务实例状态，及时发现问题
+
+:::tip 服务发现最佳实践
+1. **理解原理**：掌握服务发现的核心概念和工作原理
+2. **掌握配置**：熟悉各种服务发现工具的配置方法
+3. **实践应用**：通过实际项目练习服务发现的使用
+4. **监控运维**：学会服务发现的监控和运维管理
+5. **高可用设计**：了解服务发现的高可用设计方法
+:::
+
+---
+
+通过本章的学习，你应该已经深入理解了服务发现的核心概念、实现方案和最佳实践。服务发现是微服务架构的基础设施，合理使用服务发现可以显著提高系统的可用性和可维护性。在实际项目中，要根据业务需求选择合适的服务发现方案，并注重高可用设计和监控运维。态，功能全面，中文文档丰富
 :::
 
 ## 4. 健康检查与监控
@@ -1262,3 +2135,4 @@ public class HealthCheckService {
 ---
 
 通过本章的学习，你应该已经深入理解了服务发现的核心概念、实现方案和最佳实践。服务发现是微服务架构的基础设施，合理使用服务发现可以显著提高系统的可用性和可维护性。在实际项目中，要根据业务需求选择合适的服务发现方案，并注重高可用设计和监控运维。
+

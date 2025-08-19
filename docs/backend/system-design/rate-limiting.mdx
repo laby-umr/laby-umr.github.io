@@ -8,17 +8,55 @@ last_update:
   author: Laby
 ---
 
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+import TOCInline from '@theme/TOCInline';
+
 # 限流系统设计
 
 限流系统设计是保护系统免受流量冲击、确保系统稳定运行的重要技术。通过合理的限流算法和策略，可以有效控制请求流量，防止系统过载。
 
+:::info 本文内容概览
+<TOCInline toc={toc} />
+:::
+
 :::tip 核心价值
-限流 = 流量控制 + 系统保护 + 资源管理 + 用户体验 + 成本控制
+**限流 = 流量控制 + 系统保护 + 资源管理 + 用户体验 + 成本控制**
+- 🚦 **流量控制**：调节请求流量，避免系统过载
+- 🛡️ **系统保护**：防止系统崩溃，保证系统稳定性
+- 📊 **资源管理**：合理分配系统资源，提高资源利用率
+- 👤 **用户体验**：保证核心功能可用，提升用户满意度
+- 💰 **成本控制**：降低资源成本，提高系统经济性
 :::
 
 ## 1. 限流基础概念
 
 ### 1.1 限流目的
+
+```mermaid
+mindmap
+  root((限流目的))
+    保护系统
+      防止过载
+      资源耗尽保护
+      崩溃预防
+    资源管理
+      合理分配
+      优先级处理
+      关键资源保护
+    成本控制
+      API调用成本
+      计算资源成本
+      存储资源成本
+    用户体验
+      保证核心功能
+      降级非核心功能
+      响应时间保障
+    安全防护
+      防止DDoS攻击
+      恶意请求拦截
+      异常流量检测
+```
 
 限流系统的主要目的：
 
@@ -30,385 +68,571 @@ last_update:
 | **用户体验** | 保证核心功能可用 | 降级非核心功能 |
 | **安全防护** | 防止恶意攻击 | 异常流量检测 |
 
-```java title="限流配置示例"
-@Configuration
-public class RateLimitConfig {
-    
-    @Value("${rate.limit.enabled:true}")
-    private boolean rateLimitEnabled;
-    
-    @Value("${rate.limit.default.qps:100}")
-    private int defaultQps;
-    
-    @Value("${rate.limit.default.burst:200}")
-    private int defaultBurst;
-    
-    @Bean
-    public RateLimiter rateLimiter() {
-        return RateLimiter.create(defaultQps);
-    }
-    
-    @Bean
-    public RateLimitProperties rateLimitProperties() {
-        RateLimitProperties properties = new RateLimitProperties();
-        properties.setEnabled(rateLimitEnabled);
-        properties.setDefaultQps(defaultQps);
-        properties.setDefaultBurst(defaultBurst);
-        return properties;
-    }
-}
-
-@Component
-public class RateLimitProperties {
-    private boolean enabled;
-    private int defaultQps;
-    private int defaultBurst;
-    private Map<String, Integer> userLimits = new HashMap<>();
-    private Map<String, Integer> apiLimits = new HashMap<>();
-    
-    // getter和setter方法
-}
-```
+<Tabs>
+  <TabItem value="config" label="限流配置" default>
+  ```java
+  @Configuration
+  public class RateLimitConfig {
+      
+      @Value("${rate.limit.enabled:true}")
+      private boolean rateLimitEnabled;
+      
+      @Value("${rate.limit.default.qps:100}")
+      private int defaultQps;
+      
+      @Value("${rate.limit.default.burst:200}")
+      private int defaultBurst;
+      
+      @Bean
+      public RateLimiter rateLimiter() {
+          return RateLimiter.create(defaultQps);
+      }
+      
+      @Bean
+      public RateLimitProperties rateLimitProperties() {
+          RateLimitProperties properties = new RateLimitProperties();
+          properties.setEnabled(rateLimitEnabled);
+          properties.setDefaultQps(defaultQps);
+          properties.setDefaultBurst(defaultBurst);
+          return properties;
+      }
+  }
+  ```
+  </TabItem>
+  <TabItem value="properties" label="属性配置">
+  ```java
+  @Component
+  public class RateLimitProperties {
+      private boolean enabled;
+      private int defaultQps;
+      private int defaultBurst;
+      private Map<String, Integer> userLimits = new HashMap<>();
+      private Map<String, Integer> apiLimits = new HashMap<>();
+      
+      // getter和setter方法
+  }
+  ```
+  </TabItem>
+</Tabs>
 
 ### 1.2 限流维度
 
-```java title="限流维度定义"
-public enum RateLimitDimension {
-    // 全局限流
-    GLOBAL("全局限流", "对整个系统进行限流"),
-    
-    // 用户限流
-    USER("用户限流", "对单个用户进行限流"),
-    
-    // IP限流
-    IP("IP限流", "对单个IP地址进行限流"),
-    
-    // API限流
-    API("API限流", "对特定API接口进行限流"),
-    
-    // 接口限流
-    INTERFACE("接口限流", "对特定接口方法进行限流"),
-    
-    // 资源限流
-    RESOURCE("资源限流", "对特定资源进行限流");
-    
-    private final String name;
-    private final String description;
-    
-    RateLimitDimension(String name, String description) {
-        this.name = name;
-        this.description = description;
-    }
-}
+<div className="card">
+<div className="card__body">
 
-@Component
-public class RateLimitManager {
+限流可以从不同维度进行：
+
+1. **全局限流**：对整个系统进行总体流量控制
+2. **用户限流**：对单个用户的请求频率进行限制
+3. **IP限流**：对来自特定IP地址的请求进行限制
+4. **API限流**：对特定API接口的调用频率进行限制
+5. **接口限流**：对特定接口方法的调用频率进行限制
+6. **资源限流**：对特定资源的访问频率进行限制
+
+</div>
+</div>
+
+```mermaid
+graph TD
+    A[限流维度] --> B[全局限流]
+    A --> C[用户限流]
+    A --> D[IP限流]
+    A --> E[API限流]
+    A --> F[接口限流]
+    A --> G[资源限流]
     
-    private final Map<RateLimitDimension, RateLimiter> limiters = new ConcurrentHashMap<>();
-    
-    public boolean isAllowed(RateLimitDimension dimension, String key) {
-        RateLimiter limiter = getOrCreateLimiter(dimension, key);
-        return limiter.tryAcquire();
-    }
-    
-    private RateLimiter getOrCreateLimiter(RateLimitDimension dimension, String key) {
-        String limiterKey = dimension.name() + ":" + key;
-        return limiters.computeIfAbsent(dimension, k -> RateLimiter.create(100.0));
-    }
-}
+    B --> B1[系统整体QPS]
+    C --> C1[单用户请求频率]
+    D --> D1[单IP请求频率]
+    E --> E1[单API请求频率]
+    F --> F1[单方法调用频率]
+    G --> G1[单资源访问频率]
 ```
+
+<Tabs>
+  <TabItem value="enum" label="维度定义" default>
+  ```java
+  public enum RateLimitDimension {
+      // 全局限流
+      GLOBAL("全局限流", "对整个系统进行限流"),
+      
+      // 用户限流
+      USER("用户限流", "对单个用户进行限流"),
+      
+      // IP限流
+      IP("IP限流", "对单个IP地址进行限流"),
+      
+      // API限流
+      API("API限流", "对特定API接口进行限流"),
+      
+      // 接口限流
+      INTERFACE("接口限流", "对特定接口方法进行限流"),
+      
+      // 资源限流
+      RESOURCE("资源限流", "对特定资源进行限流");
+      
+      private final String name;
+      private final String description;
+      
+      RateLimitDimension(String name, String description) {
+          this.name = name;
+          this.description = description;
+      }
+  }
+  ```
+  </TabItem>
+  <TabItem value="manager" label="限流管理器">
+  ```java
+  @Component
+  public class RateLimitManager {
+      
+      private final Map<RateLimitDimension, RateLimiter> limiters = new ConcurrentHashMap<>();
+      
+      public boolean isAllowed(RateLimitDimension dimension, String key) {
+          RateLimiter limiter = getOrCreateLimiter(dimension, key);
+          return limiter.tryAcquire();
+      }
+      
+      private RateLimiter getOrCreateLimiter(RateLimitDimension dimension, String key) {
+          String limiterKey = dimension.name() + ":" + key;
+          return limiters.computeIfAbsent(dimension, k -> RateLimiter.create(100.0));
+      }
+  }
+  ```
+  </TabItem>
+</Tabs>
 
 ## 2. 限流算法
 
+:::info
+限流算法是限流系统的核心，不同算法有不同的特点和适用场景。常见的限流算法包括固定窗口、滑动窗口、令牌桶和漏桶算法。
+:::
+
+<div className="card">
+<div className="card__header">
+<h4>限流算法对比</h4>
+</div>
+<div className="card__body">
+
+| 算法 | 优点 | 缺点 | 适用场景 |
+|-----|-----|-----|---------|
+| **固定窗口** | 简单易实现、内存消耗少 | 边界突发流量问题 | 简单场景、低精度要求 |
+| **滑动窗口** | 平滑限流效果、避免边界问题 | 实现复杂、内存消耗大 | 需要精确限流的场景 |
+| **令牌桶** | 允许突发流量、灵活配置 | 实现较复杂 | 允许突发流量的场景 |
+| **漏桶** | 固定速率处理、流量整形 | 无法应对突发流量 | 需要固定处理速率的场景 |
+
+</div>
+</div>
+
 ### 2.1 固定窗口算法
 
-```java title="固定窗口限流实现"
-@Component
-public class FixedWindowRateLimiter {
-    
-    private final Map<String, WindowInfo> windows = new ConcurrentHashMap<>();
-    private final int limit;
-    private final long windowSize;
-    
-    public FixedWindowRateLimiter(int limit, long windowSize) {
-        this.limit = limit;
-        this.windowSize = windowSize;
-    }
-    
-    public boolean isAllowed(String key) {
-        long currentTime = System.currentTimeMillis();
-        long windowStart = currentTime - (currentTime % windowSize);
-        
-        WindowInfo window = windows.compute(key, (k, v) -> {
-            if (v == null || v.getWindowStart() != windowStart) {
-                return new WindowInfo(windowStart, 1);
-            } else {
-                v.incrementCount();
-                return v;
-            }
-        });
-        
-        return window.getCount() <= limit;
-    }
-    
-    public void reset(String key) {
-        windows.remove(key);
-    }
-}
+固定窗口算法将时间分为固定长度的窗口，在每个窗口内限制请求数量。
 
-class WindowInfo {
-    private final long windowStart;
-    private final AtomicInteger count;
+```mermaid
+graph LR
+    A[请求] --> B{当前窗口请求数<阈值?}
+    B -- 是 --> C[允许请求]
+    B -- 否 --> D[拒绝请求]
     
-    public WindowInfo(long windowStart, int initialCount) {
-        this.windowStart = windowStart;
-        this.count = new AtomicInteger(initialCount);
-    }
-    
-    public long getWindowStart() { return windowStart; }
-    public int getCount() { return count.get(); }
-    public void incrementCount() { count.incrementAndGet(); }
-}
+    subgraph 时间轴
+    E[窗口1] --> F[窗口2] --> G[窗口3]
+    end
 ```
+
+<Tabs>
+  <TabItem value="fixed" label="固定窗口实现" default>
+  ```java
+  @Component
+  public class FixedWindowRateLimiter {
+      
+      private final Map<String, WindowInfo> windows = new ConcurrentHashMap<>();
+      private final int limit;
+      private final long windowSize;
+      
+      public FixedWindowRateLimiter(int limit, long windowSize) {
+          this.limit = limit;
+          this.windowSize = windowSize;
+      }
+      
+      public boolean isAllowed(String key) {
+          long currentTime = System.currentTimeMillis();
+          long windowStart = currentTime - (currentTime % windowSize);
+          
+          WindowInfo window = windows.compute(key, (k, v) -> {
+              if (v == null || v.getWindowStart() != windowStart) {
+                  return new WindowInfo(windowStart, 1);
+              } else {
+                  v.incrementCount();
+                  return v;
+              }
+          });
+          
+          return window.getCount() <= limit;
+      }
+      
+      public void reset(String key) {
+          windows.remove(key);
+      }
+  }
+  ```
+  </TabItem>
+  <TabItem value="window" label="窗口信息类">
+  ```java
+  class WindowInfo {
+      private final long windowStart;
+      private final AtomicInteger count;
+      
+      public WindowInfo(long windowStart, int initialCount) {
+          this.windowStart = windowStart;
+          this.count = new AtomicInteger(initialCount);
+      }
+      
+      public long getWindowStart() { return windowStart; }
+      public int getCount() { return count.get(); }
+      public void incrementCount() { count.incrementAndGet(); }
+  }
+  ```
+  </TabItem>
+</Tabs>
+
+:::caution 固定窗口算法的局限性
+固定窗口算法在窗口边界可能导致突发流量问题。例如，在一个窗口的末尾和下一个窗口的开头，可能在短时间内通过两倍于阈值的请求。
+:::
 
 ### 2.2 滑动窗口算法
 
-```java title="滑动窗口限流实现"
-@Component
-public class SlidingWindowRateLimiter {
-    
-    private final Map<String, SlidingWindow> windows = new ConcurrentHashMap<>();
-    private final int limit;
-    private final long windowSize;
-    private final int bucketCount;
-    
-    public SlidingWindowRateLimiter(int limit, long windowSize, int bucketCount) {
-        this.limit = limit;
-        this.windowSize = windowSize;
-        this.bucketCount = bucketCount;
-    }
-    
-    public boolean isAllowed(String key) {
-        long currentTime = System.currentTimeMillis();
-        SlidingWindow window = windows.computeIfAbsent(key, k -> new SlidingWindow(windowSize, bucketCount));
-        
-        return window.isAllowed(currentTime, limit);
-    }
-    
-    public void reset(String key) {
-        windows.remove(key);
-    }
-}
+滑动窗口算法通过将时间窗口分为多个小块，并随着时间推移滑动，提供更平滑的限流效果。
 
-class SlidingWindow {
-    private final long windowSize;
-    private final int bucketCount;
-    private final long bucketSize;
-    private final AtomicLong[] buckets;
-    private final AtomicLong lastUpdateTime;
+```mermaid
+graph TD
+    A[请求] --> B[计算当前窗口请求总数]
+    B --> C{总数<阈值?}
+    C -- 是 --> D[允许请求]
+    C -- 否 --> E[拒绝请求]
     
-    public SlidingWindow(long windowSize, int bucketCount) {
-        this.windowSize = windowSize;
-        this.bucketCount = bucketCount;
-        this.bucketSize = windowSize / bucketCount;
-        this.buckets = new AtomicLong[bucketCount];
-        this.lastUpdateTime = new AtomicLong(System.currentTimeMillis());
-        
-        for (int i = 0; i < bucketCount; i++) {
-            buckets[i] = new AtomicLong(0);
-        }
-    }
-    
-    public boolean isAllowed(long currentTime, int limit) {
-        updateBuckets(currentTime);
-        
-        long totalCount = 0;
-        for (AtomicLong bucket : buckets) {
-            totalCount += bucket.get();
-        }
-        
-        if (totalCount < limit) {
-            int bucketIndex = (int) ((currentTime / bucketSize) % bucketCount);
-            buckets[bucketIndex].incrementAndGet();
-            return true;
-        }
-        
-        return false;
-    }
-    
-    private void updateBuckets(long currentTime) {
-        long lastTime = lastUpdateTime.get();
-        if (currentTime - lastTime >= bucketSize) {
-            long bucketIndex = (currentTime / bucketSize) % bucketCount;
-            long lastBucketIndex = (lastTime / bucketSize) % bucketCount;
-            
-            // 清空过期的桶
-            for (long i = (lastBucketIndex + 1) % bucketCount; i != bucketIndex; i = (i + 1) % bucketCount) {
-                buckets[(int) i].set(0);
-            }
-            
-            lastUpdateTime.set(currentTime);
-        }
-    }
-}
+    subgraph 滑动窗口
+    F[桶1] --- G[桶2] --- H[桶3] --- I[桶4]
+    end
 ```
+
+<details>
+<summary>滑动窗口工作原理</summary>
+
+1. **窗口分割**：将时间窗口分为多个小桶
+2. **请求计数**：每个请求落入对应的时间桶
+3. **窗口滑动**：随着时间推移，旧桶淘汰，新桶加入
+4. **流量控制**：根据所有桶的请求总数决定是否允许请求
+
+优点：
+- 平滑处理请求，避免边界突发问题
+- 提供更精确的流量控制
+- 适应性强，可根据需求调整桶的数量和大小
+
+</details>
+
+<Tabs>
+  <TabItem value="sliding" label="滑动窗口实现" default>
+  ```java
+  @Component
+  public class SlidingWindowRateLimiter {
+      
+      private final Map<String, SlidingWindow> windows = new ConcurrentHashMap<>();
+      private final int limit;
+      private final long windowSize;
+      private final int bucketCount;
+      
+      public SlidingWindowRateLimiter(int limit, long windowSize, int bucketCount) {
+          this.limit = limit;
+          this.windowSize = windowSize;
+          this.bucketCount = bucketCount;
+      }
+      
+      public boolean isAllowed(String key) {
+          long currentTime = System.currentTimeMillis();
+          SlidingWindow window = windows.computeIfAbsent(key, k -> 
+              new SlidingWindow(windowSize, bucketCount));
+          
+          return window.isAllowed(currentTime, limit);
+      }
+      
+      public void reset(String key) {
+          windows.remove(key);
+      }
+  }
+  ```
+  </TabItem>
+  <TabItem value="window-class" label="滑动窗口类">
+  ```java
+  class SlidingWindow {
+      private final long windowSize;
+      private final int bucketCount;
+      private final long bucketSize;
+      private final AtomicLong[] buckets;
+      private final AtomicLong lastUpdateTime;
+      
+      public SlidingWindow(long windowSize, int bucketCount) {
+          this.windowSize = windowSize;
+          this.bucketCount = bucketCount;
+          this.bucketSize = windowSize / bucketCount;
+          this.buckets = new AtomicLong[bucketCount];
+          this.lastUpdateTime = new AtomicLong(System.currentTimeMillis());
+          
+          for (int i = 0; i < bucketCount; i++) {
+              buckets[i] = new AtomicLong(0);
+          }
+      }
+      
+      public boolean isAllowed(long currentTime, int limit) {
+          updateBuckets(currentTime);
+          
+          long totalCount = 0;
+          for (AtomicLong bucket : buckets) {
+              totalCount += bucket.get();
+          }
+          
+          if (totalCount < limit) {
+              int bucketIndex = (int) ((currentTime / bucketSize) % bucketCount);
+              buckets[bucketIndex].incrementAndGet();
+              return true;
+          }
+          
+          return false;
+      }
+      
+      private void updateBuckets(long currentTime) {
+          long lastTime = lastUpdateTime.get();
+          if (currentTime - lastTime >= bucketSize) {
+              long bucketIndex = (currentTime / bucketSize) % bucketCount;
+              long lastBucketIndex = (lastTime / bucketSize) % bucketCount;
+              
+              // 清空过期的桶
+              for (long i = (lastBucketIndex + 1) % bucketCount; i != bucketIndex; 
+                   i = (i + 1) % bucketCount) {
+                  buckets[(int) i].set(0);
+              }
+              
+              lastUpdateTime.set(currentTime);
+          }
+      }
+  }
+  ```
+  </TabItem>
+</Tabs>
 
 ### 2.3 令牌桶算法
 
-```java title="令牌桶限流实现"
-@Component
-public class TokenBucketRateLimiter {
-    
-    private final Map<String, TokenBucket> buckets = new ConcurrentHashMap<>();
-    private final double rate;
-    private final int capacity;
-    
-    public TokenBucketRateLimiter(double rate, int capacity) {
-        this.rate = rate;
-        this.capacity = capacity;
-    }
-    
-    public boolean isAllowed(String key) {
-        TokenBucket bucket = buckets.computeIfAbsent(key, k -> new TokenBucket(rate, capacity));
-        return bucket.tryConsume(1);
-    }
-    
-    public boolean isAllowed(String key, int tokens) {
-        TokenBucket bucket = buckets.computeIfAbsent(key, k -> new TokenBucket(rate, capacity));
-        return bucket.tryConsume(tokens);
-    }
-    
-    public void reset(String key) {
-        buckets.remove(key);
-    }
-}
+令牌桶算法通过以固定速率向桶中添加令牌，请求到达时需要获取令牌才能被处理。
 
-class TokenBucket {
-    private final double rate;
-    private final int capacity;
-    private final AtomicInteger tokens;
-    private final AtomicLong lastRefillTime;
-    
-    public TokenBucket(double rate, int capacity) {
-        this.rate = rate;
-        this.capacity = capacity;
-        this.tokens = new AtomicInteger(capacity);
-        this.lastRefillTime = new AtomicLong(System.currentTimeMillis());
-    }
-    
-    public boolean tryConsume(int requestedTokens) {
-        refill();
-        
-        while (true) {
-            int currentTokens = tokens.get();
-            if (currentTokens < requestedTokens) {
-                return false;
-            }
-            
-            if (tokens.compareAndSet(currentTokens, currentTokens - requestedTokens)) {
-                return true;
-            }
-        }
-    }
-    
-    private void refill() {
-        long now = System.currentTimeMillis();
-        long lastRefill = lastRefillTime.get();
-        long timePassed = now - lastRefill;
-        
-        if (timePassed > 0) {
-            int newTokens = (int) (timePassed * rate / 1000);
-            if (newTokens > 0) {
-                while (true) {
-                    int currentTokens = tokens.get();
-                    int newTotal = Math.min(currentTokens + newTokens, capacity);
-                    
-                    if (tokens.compareAndSet(currentTokens, newTotal)) {
-                        lastRefillTime.addAndGet(timePassed);
-                        break;
-                    }
-                }
-            }
-        }
-    }
-}
+```mermaid
+graph TD
+    A[请求] --> B{桶中有足够令牌?}
+    B -- 是 --> C[获取令牌]
+    B -- 否 --> D[拒绝请求]
+    C --> E[处理请求]
+    F[固定速率产生令牌] --> G[令牌桶]
+    G --> B
 ```
+
+<Tabs>
+  <TabItem value="token" label="令牌桶实现" default>
+  ```java
+  @Component
+  public class TokenBucketRateLimiter {
+      
+      private final Map<String, TokenBucket> buckets = new ConcurrentHashMap<>();
+      private final double rate;
+      private final int capacity;
+      
+      public TokenBucketRateLimiter(double rate, int capacity) {
+          this.rate = rate;
+          this.capacity = capacity;
+      }
+      
+      public boolean isAllowed(String key) {
+          TokenBucket bucket = buckets.computeIfAbsent(key, k -> new TokenBucket(rate, capacity));
+          return bucket.tryConsume(1);
+      }
+      
+      public boolean isAllowed(String key, int tokens) {
+          TokenBucket bucket = buckets.computeIfAbsent(key, k -> new TokenBucket(rate, capacity));
+          return bucket.tryConsume(tokens);
+      }
+      
+      public void reset(String key) {
+          buckets.remove(key);
+      }
+  }
+  ```
+  </TabItem>
+  <TabItem value="bucket" label="令牌桶类">
+  ```java
+  class TokenBucket {
+      private final double rate;
+      private final int capacity;
+      private final AtomicInteger tokens;
+      private final AtomicLong lastRefillTime;
+      
+      public TokenBucket(double rate, int capacity) {
+          this.rate = rate;
+          this.capacity = capacity;
+          this.tokens = new AtomicInteger(capacity);
+          this.lastRefillTime = new AtomicLong(System.currentTimeMillis());
+      }
+      
+      public boolean tryConsume(int requestedTokens) {
+          refill();
+          
+          while (true) {
+              int currentTokens = tokens.get();
+              if (currentTokens < requestedTokens) {
+                  return false;
+              }
+              
+              if (tokens.compareAndSet(currentTokens, currentTokens - requestedTokens)) {
+                  return true;
+              }
+          }
+      }
+      
+      private void refill() {
+          long now = System.currentTimeMillis();
+          long lastRefill = lastRefillTime.get();
+          long timePassed = now - lastRefill;
+          
+          if (timePassed > 0) {
+              int newTokens = (int) (timePassed * rate / 1000);
+              if (newTokens > 0) {
+                  while (true) {
+                      int currentTokens = tokens.get();
+                      int newTotal = Math.min(currentTokens + newTokens, capacity);
+                      
+                      if (tokens.compareAndSet(currentTokens, newTotal)) {
+                          lastRefillTime.addAndGet(timePassed);
+                          break;
+                      }
+                  }
+              }
+          }
+      }
+  }
+  ```
+  </TabItem>
+</Tabs>
+
+:::tip 令牌桶特点
+令牌桶算法的关键特点是能够处理突发流量。通过预先存储的令牌，可以允许短时间内的请求突发，同时通过固定速率的令牌产生来限制长期的请求速率。
+:::
 
 ### 2.4 漏桶算法
 
-```java title="漏桶限流实现"
-@Component
-public class LeakyBucketRateLimiter {
-    
-    private final Map<String, LeakyBucket> buckets = new ConcurrentHashMap<>();
-    private final double rate;
-    private final int capacity;
-    
-    public LeakyBucketRateLimiter(double rate, int capacity) {
-        this.rate = rate;
-        this.capacity = capacity;
-    }
-    
-    public boolean isAllowed(String key) {
-        LeakyBucket bucket = buckets.computeIfAbsent(key, k -> new LeakyBucket(rate, capacity));
-        return bucket.tryConsume();
-    }
-    
-    public void reset(String key) {
-        buckets.remove(key);
-    }
-}
+漏桶算法以固定速率处理请求，多余的请求存储在桶中，如果桶满则拒绝新请求。
 
-class LeakyBucket {
-    private final double rate;
-    private final int capacity;
-    private final AtomicInteger water;
-    private final AtomicLong lastLeakTime;
-    
-    public LeakyBucket(double rate, int capacity) {
-        this.rate = rate;
-        this.capacity = capacity;
-        this.water = new AtomicInteger(0);
-        this.lastLeakTime = new AtomicLong(System.currentTimeMillis());
-    }
-    
-    public boolean tryConsume() {
-        leak();
-        
-        while (true) {
-            int currentWater = water.get();
-            if (currentWater >= capacity) {
-                return false;
-            }
-            
-            if (water.compareAndSet(currentWater, currentWater + 1)) {
-                return true;
-            }
-        }
-    }
-    
-    private void leak() {
-        long now = System.currentTimeMillis();
-        long lastLeak = lastLeakTime.get();
-        long timePassed = now - lastLeak;
-        
-        if (timePassed > 0) {
-            int leakedWater = (int) (timePassed * rate / 1000);
-            if (leakedWater > 0) {
-                while (true) {
-                    int currentWater = water.get();
-                    int newWater = Math.max(0, currentWater - leakedWater);
-                    
-                    if (water.compareAndSet(currentWater, newWater)) {
-                        lastLeakTime.addAndGet(timePassed);
-                        break;
-                    }
-                }
-            }
-        }
-    }
-}
+```mermaid
+graph TD
+    A[请求] --> B[漏桶]
+    B --> C{桶已满?}
+    C -- 是 --> D[拒绝请求]
+    C -- 否 --> E[加入桶]
+    B --> F[固定速率处理请求]
 ```
+
+<details>
+<summary>漏桶与令牌桶的区别</summary>
+
+**漏桶算法**：
+- 请求以固定速率处理
+- 不允许突发流量
+- 起到流量整形(Traffic Shaping)作用
+- 确保系统以稳定的速率处理请求
+
+**令牌桶算法**：
+- 可以处理短时间的突发流量
+- 长期平均速率受令牌产生速率限制
+- 更加灵活，可以通过参数调整应对不同场景
+- 适用于需要处理突发流量的场景
+
+</details>
+
+<Tabs>
+  <TabItem value="leaky" label="漏桶实现" default>
+  ```java
+  @Component
+  public class LeakyBucketRateLimiter {
+      
+      private final Map<String, LeakyBucket> buckets = new ConcurrentHashMap<>();
+      private final double rate;
+      private final int capacity;
+      
+      public LeakyBucketRateLimiter(double rate, int capacity) {
+          this.rate = rate;
+          this.capacity = capacity;
+      }
+      
+      public boolean isAllowed(String key) {
+          LeakyBucket bucket = buckets.computeIfAbsent(key, k -> new LeakyBucket(rate, capacity));
+          return bucket.tryConsume();
+      }
+      
+      public void reset(String key) {
+          buckets.remove(key);
+      }
+  }
+  ```
+  </TabItem>
+  <TabItem value="leaky-bucket" label="漏桶类">
+  ```java
+  class LeakyBucket {
+      private final double rate;
+      private final int capacity;
+      private final AtomicInteger water;
+      private final AtomicLong lastLeakTime;
+      
+      public LeakyBucket(double rate, int capacity) {
+          this.rate = rate;
+          this.capacity = capacity;
+          this.water = new AtomicInteger(0);
+          this.lastLeakTime = new AtomicLong(System.currentTimeMillis());
+      }
+      
+      public boolean tryConsume() {
+          leak();
+          
+          while (true) {
+              int currentWater = water.get();
+              if (currentWater >= capacity) {
+                  return false;
+              }
+              
+              if (water.compareAndSet(currentWater, currentWater + 1)) {
+                  return true;
+              }
+          }
+      }
+      
+      private void leak() {
+          long now = System.currentTimeMillis();
+          long lastLeak = lastLeakTime.get();
+          long timePassed = now - lastLeak;
+          
+          if (timePassed > 0) {
+              int leakedWater = (int) (timePassed * rate / 1000);
+              if (leakedWater > 0) {
+                  while (true) {
+                      int currentWater = water.get();
+                      int newWater = Math.max(0, currentWater - leakedWater);
+                      
+                      if (water.compareAndSet(currentWater, newWater)) {
+                          lastLeakTime.set(now);
+                          break;
+                      }
+                  }
+              }
+          }
+      }
+  }
+  ```
+  </TabItem>
+</Tabs>
 
 ## 3. 限流策略
 

@@ -146,7 +146,7 @@ function BlogPreview() {
         id: "blog.post1.excerpt",
         message: '探索使用React创建高性能Web应用的最新技术和最佳实践。'
       }),
-      url: '/blog/modern-react-patterns',
+      url: '/blog/ai-architecture-deployment',
     },
     {
       title: translate({
@@ -161,7 +161,7 @@ function BlogPreview() {
         id: "blog.post2.excerpt",
         message: '如何使用微服务设计能够高效处理增长和扩展的后端系统。'
       }),
-      url: '/blog/long-blog-post',
+      url: '/blog/enterprise-ai-implementation',
     },
   ];
 

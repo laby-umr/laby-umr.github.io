@@ -3,10 +3,15 @@ sidebar_position: 3
 title: Java垃圾回收详解
 description: 全面介绍Java垃圾回收机制、算法原理、收集器实现与最佳实践
 authors: [Laby]
+tags: [Java, JVM, 垃圾回收, GC算法, 内存管理]
 last_update:
-  date: 2025-08-07
+  date: 2023-08-15
   author: Laby
 ---
+
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+import CodeBlock from '@theme/CodeBlock';
 
 # Java垃圾回收详解
 
@@ -16,11 +21,137 @@ Java垃圾回收（Garbage Collection，GC）是Java虚拟机自动内存管理�
 Java垃圾回收 = 自动内存管理 + 多种回收算法 + 分代收集策略 + 并发回收机制 + 性能优化
 :::
 
+```mermaid
+graph TD
+    A[Java垃圾回收] --> B[对象标记]
+    A --> C[内存回收]
+    A --> D[内存整理]
+    
+    B --> B1[引用计数法]
+    B --> B2[可达性分析]
+    
+    C --> C1[清除阶段]
+    C --> C2[复制阶段]
+    C --> C3[整理阶段]
+    
+    D --> D1[标记-清除]
+    D --> D2[标记-复制]
+    D --> D3[标记-整理]
+    
+    subgraph "分代收集"
+        E1[新生代]
+        E2[老年代]
+        E3[永久代/元空间]
+    end
+    
+    style A fill:#f9f9fa,stroke:#333,stroke-width:2px
+    style B fill:#e3f2fd,stroke:#333,stroke-width:1px
+    style C fill:#e8f5e9,stroke:#333,stroke-width:1px
+    style D fill:#fff3cd,stroke:#333,stroke-width:1px
+    style E1 fill:#bbdefb,stroke:#333,stroke-width:1px
+    style E2 fill:#c8e6c9,stroke:#333,stroke-width:1px
+    style E3 fill:#ffecb3,stroke:#333,stroke-width:1px
+```
+
 ## 1. 垃圾回收基础概念
 
 ### 1.1 什么是垃圾回收？
 
 垃圾回收是Java虚拟机自动内存管理的核心机制，它通过自动识别和回收不再使用的对象来管理堆内存。
+
+<Tabs>
+<TabItem value="overview" label="基本概念">
+
+**垃圾回收定义**：
+自动识别并清除不再使用的内存区域，使该内存可被重新使用的过程。
+
+**主要目标**：
+1. **内存管理自动化**：无需程序员手动释放内存
+2. **提高内存利用率**：回收不再使用的对象占用的内存
+3. **减少内存碎片**：通过内存整理提高内存利用效率
+4. **降低开发难度**：简化内存管理，减少内存泄露和溢出风险
+
+**工作原理**：
+1. **标记阶段**：识别哪些对象是"垃圾"（不再被使用的对象）
+2. **回收阶段**：回收垃圾对象占用的内存空间
+3. **整理阶段**：（可选）重新排列存活对象，减少内存碎片
+
+</TabItem>
+<TabItem value="vs-manual" label="对比手动内存管理">
+
+| 特性 | 垃圾回收 | 手动内存管理 |
+|-----|---------|------------|
+| **开发效率** | 高 - 无需考虑内存释放 | 低 - 需要手动分配和释放 |
+| **错误风险** | 低 - 自动管理减少错误 | 高 - 容易导致内存泄漏或悬空指针 |
+| **性能控制** | 弱 - 回收时机不完全可控 | 强 - 精确控制内存释放时机 |
+| **内存使用** | 较高 - GC需要额外内存 | 较低 - 无额外开销 |
+| **暂停时间** | 存在STW暂停 | 无系统级暂停 |
+| **代码复杂度** | 低 - 内存管理透明 | 高 - 需手动跟踪内存 |
+| **适用场景** | 大多数业务应用 | 系统底层、实时系统 |
+
+**典型的手动内存管理语言**: C、C++
+**典型的垃圾回收语言**: Java、C#、Python、JavaScript
+
+```java title="Java vs C++ 内存管理"
+// Java - 自动垃圾回收
+public class AutomaticMemory {
+    public void createObjects() {
+        for (int i = 0; i < 1000; i++) {
+            Object obj = new Object(); // 不再引用时自动回收
+        }
+    } // 方法结束时，局部变量obj自动失去引用，对象可被回收
+}
+
+// C++ - 手动内存管理
+class ManualMemory {
+public:
+    void createObjects() {
+        for (int i = 0; i < 1000; i++) {
+            Object* obj = new Object(); // 必须手动释放
+            delete obj; // 不释放会造成内存泄漏
+        }
+    }
+};
+```
+
+</TabItem>
+<TabItem value="history" label="发展历史">
+
+**垃圾回收技术发展时间线**:
+
+- **1959**: Lisp首次引入垃圾回收概念
+- **1960年代**: 引用计数法被广泛使用
+- **1970年代**: 标记-清除和标记-整理算法出现
+- **1980年代**: 分代收集理论形成
+- **1995**: Java诞生，采用自动垃圾回收
+- **2000年代初**: CMS并发收集器推出
+- **2000年代中**: G1收集器研发
+- **2010年代**: ZGC、Shenandoah等低延迟收集器问世
+
+**JVM垃圾回收器发展**:
+
+```mermaid
+timeline
+    title JVM垃圾回收器演进
+    section 早期阶段
+        1996 : Serial收集器
+        1999 : Parallel收集器
+    section 并发时代
+        2002 : CMS收集器
+        2009 : G1收集器
+    section 低延迟时代
+        2018 : ZGC收集器
+        2019 : Shenandoah收集器
+```
+
+**主要技术突破**:
+- 从单线程到多线程并行收集
+- 从STW暂停到并发收集
+- 从全堆扫描到增量式收集
+- 从固定分代到区域化内存布局
+
+</TabItem>
+</Tabs>
 
 #### 垃圾回收的核心要素
 
@@ -475,1297 +606,806 @@ public class PhantomReferenceExample {
 
 ## 3. 垃圾回收算法详解
 
-### 3.1 标记-清除算法（Mark-Sweep）
+:::info 垃圾回收算法演进
+垃圾回收算法是JVM内存管理的核心，各种算法都有其特定优缺点和适用场景。随着技术发展，垃圾回收算法从简单的标记-清除，到复制、标记-整理，再到分代收集，不断演进，以适应不同应用场景的需求。
+:::
+
+```mermaid
+graph TD
+    A[垃圾回收算法] --> B[标记-清除]
+    A --> C[复制算法]
+    A --> D[标记-整理]
+    A --> E[分代收集]
+    
+    B --> B1["优点: 实现简单"]
+    B --> B2["缺点: 内存碎片化"]
+    
+    C --> C1["优点: 无内存碎片"]
+    C --> C2["缺点: 内存利用率低"]
+    
+    D --> D1["优点: 无内存碎片"]
+    D --> D2["缺点: 性能开销大"]
+    
+    E --> E1["新生代: 复制算法"]
+    E --> E2["老年代: 标记-整理"]
+    
+    style A fill:#f9f9fa,stroke:#333,stroke-width:2px
+    style B fill:#e3f2fd,stroke:#333,stroke-width:1px
+    style C fill:#e8f5e9,stroke:#333,stroke-width:1px
+    style D fill:#fff3cd,stroke:#333,stroke-width:1px
+    style E fill:#ffecb3,stroke:#333,stroke-width:1px
+```
+
+<Tabs>
+<TabItem value="mark-sweep" label="标记-清除">
+
+### 标记-清除算法（Mark-Sweep）
 
 标记-清除算法是最基础的垃圾回收算法，分为标记和清除两个阶段。
 
-#### 算法原理
-
-```java title="标记-清除算法示例"
-public class MarkSweepAlgorithm {
+```mermaid
+sequenceDiagram
+    participant Memory as 内存空间
+    participant GC as 垃圾收集器
     
-    /**
-     * 标记-清除算法实现
-     */
-    public static void markSweepDemo() {
-        // 标记阶段：从GC Roots开始，标记所有可达对象
-        markPhase();
-        
-        // 清除阶段：清除所有未被标记的对象
-        sweepPhase();
-    }
+    Note over GC,Memory: 初始状态: 混合有存活和垃圾对象
     
-    /**
-     * 标记阶段
-     */
-    public static void markPhase() {
-        // 从GC Roots开始遍历
-        for (Object root : getGCRoots()) {
-            markObject(root);
-        }
-    }
+    GC->>Memory: 1. 标记阶段开始
+    loop 标记阶段
+        GC->>Memory: 从GC Roots开始遍历
+        GC->>Memory: 标记所有可达对象为"存活"
+    end
     
-    /**
-     * 递归标记对象
-     */
-    public static void markObject(Object obj) {
-        if (obj == null || obj.isMarked()) {
-            return;
-        }
-        
-        // 标记当前对象
-        obj.setMarked(true);
-        
-        // 递归标记引用对象
-        for (Object ref : obj.getReferences()) {
-            markObject(ref);
-        }
-    }
+    GC->>Memory: 2. 清除阶段开始
+    loop 清除阶段
+        GC->>Memory: 遍历整个堆
+        GC->>Memory: 回收所有未标记对象
+    end
     
-    /**
-     * 清除阶段
-     */
-    public static void sweepPhase() {
-        for (Object obj : getAllObjects()) {
-            if (!obj.isMarked()) {
-                // 清除未标记的对象
-                freeObject(obj);
-            } else {
-                // 重置标记位
-                obj.setMarked(false);
-            }
-        }
-    }
-    
-    /**
-     * 标记-清除算法的优缺点
-     */
-    public static void markSweepAnalysis() {
-        // 优点：
-        // 1. 实现简单
-        // 2. 不需要额外的空间
-        // 3. 适合对象存活率高的场景
-        
-        // 缺点：
-        // 1. 效率不高（需要扫描两次）
-        // 2. 会产生大量内存碎片
-        // 3. 碎片化严重时影响大对象分配
-    }
-}
-
-// 模拟对象类
-class GCObject {
-    private boolean marked = false;
-    private List<GCObject> references = new ArrayList<>();
-    
-    public boolean isMarked() { return marked; }
-    public void setMarked(boolean marked) { this.marked = marked; }
-    public List<GCObject> getReferences() { return references; }
-    public void addReference(GCObject obj) { references.add(obj); }
-}
+    Note over GC,Memory: 结束状态: 存活对象保留，但内存空间不连续
 ```
 
-#### 算法特点分析
+**算法原理**:
+1. **标记阶段**: 从GC Roots开始遍历，标记所有可达对象
+2. **清除阶段**: 遍历整个堆，回收所有未被标记的对象
 
-| 特点 | 具体表现 | 影响 |
-|------|----------|------|
-| **实现简单** | 算法逻辑清晰，易于实现 | 适合作为其他算法的基础 |
-| **空间效率** | 不需要额外的内存空间 | 内存利用率高 |
-| **时间效率** | 需要扫描两次堆内存 | 效率相对较低 |
-| **内存碎片** | 会产生大量不连续的内存碎片 | 影响大对象分配 |
+**优缺点分析**:
+| 优点 | 缺点 |
+|------|------|
+| 实现简单，易于理解 | 效率不高，需要扫描两次堆 |
+| 不需要额外内存空间 | 产生大量内存碎片 |
+| 不需要移动对象 | 碎片化导致大对象分配困难 |
 
-### 3.2 复制算法（Copying）
+**适用场景**:
+- 老年代中对象存活率高的情况
+- 内存碎片不敏感的场景
+- 适合作为其他算法的基础
 
-复制算法将内存分为两块相等的区域，每次只使用其中一块。
-
-#### 算法原理
-
-```java title="复制算法示例"
-public class CopyingAlgorithm {
-    
-    /**
-     * 复制算法实现
-     */
-    public static void copyingDemo() {
-        // 内存分为From空间和To空间
-        Object[] fromSpace = new Object[1000];
-        Object[] toSpace = new Object[1000];
-        
-        // 当前使用From空间
-        int fromIndex = 0;
-        int toIndex = 0;
-        
-        // 分配对象到From空间
-        for (int i = 0; i < 100; i++) {
-            fromSpace[fromIndex++] = new Object();
-        }
-        
-        // 垃圾回收时，将存活对象复制到To空间
-        for (int i = 0; i < fromIndex; i++) {
-            Object obj = fromSpace[i];
-            if (obj != null && isAlive(obj)) {
-                toSpace[toIndex++] = obj;
-            }
-        }
-        
-        // 交换From和To空间
-        Object[] temp = fromSpace;
-        fromSpace = toSpace;
-        toSpace = temp;
-        
-        // 清空To空间（原来的From空间）
-        clearSpace(toSpace);
+```java title="标记-清除算法伪代码"
+void markSweep() {
+    // 标记阶段
+    for (Object root : GC_ROOTS) {
+        mark(root);
     }
     
-    /**
-     * 判断对象是否存活
-     */
-    public static boolean isAlive(Object obj) {
-        // 这里简化处理，实际需要从GC Roots开始可达性分析
-        return obj != null && Math.random() > 0.5;  // 随机判断
-    }
-    
-    /**
-     * 清空空间
-     */
-    public static void clearSpace(Object[] space) {
-        for (int i = 0; i < space.length; i++) {
-            space[i] = null;
+    // 清除阶段
+    for (MemoryBlock block : HEAP) {
+        if (!block.isMarked()) {
+            free(block);
+        } else {
+            block.unmark();
         }
     }
+}
+
+void mark(Object obj) {
+    if (obj == null || obj.isMarked()) return;
     
-    /**
-     * 复制算法的优缺点
-     */
-    public static void copyingAnalysis() {
-        // 优点：
-        // 1. 效率高（只需要扫描一次）
-        // 2. 没有内存碎片
-        // 3. 适合对象存活率低的场景
-        
-        // 缺点：
-        // 1. 内存利用率只有50%
-        // 2. 对象存活率高时效率下降
-        // 3. 需要额外的内存空间
+    obj.setMarked(true);
+    for (Object ref : obj.getReferences()) {
+        mark(ref);
     }
 }
 ```
 
-#### 算法特点分析
+</TabItem>
+<TabItem value="copying" label="复制算法">
 
-| 特点 | 具体表现 | 影响 |
-|------|----------|------|
-| **效率高** | 只需要扫描一次，复制存活对象 | 回收效率高 |
-| **无碎片** | 存活对象连续存储 | 内存分配效率高 |
-| **内存利用率低** | 只能使用一半的内存空间 | 内存浪费严重 |
-| **适合场景** | 对象存活率低的场景 | 新生代垃圾回收 |
+### 复制算法（Copying）
 
-### 3.3 标记-整理算法（Mark-Compact）
+复制算法将内存分为两块相等的区域（From空间和To空间），每次只使用其中一块，回收时将存活对象复制到另一块区域。
 
-标记-整理算法结合了标记-清除和复制算法的优点。
-
-#### 算法原理
-
-```java title="标记-整理算法示例"
-public class MarkCompactAlgorithm {
-    
-    /**
-     * 标记-整理算法实现
-     */
-    public static void markCompactDemo() {
-        // 第一阶段：标记阶段
-        markPhase();
+```mermaid
+graph TB
+    subgraph "回收前"
+        A1[From空间] --- B1[存活对象]
+        A1 --- C1[垃圾对象]
+        A1 --- D1[存活对象]
+        A1 --- E1[垃圾对象]
         
-        // 第二阶段：整理阶段
-        compactPhase();
+        F1[To空间<br>空闲]
+    end
+    
+    subgraph "回收后"
+        A2[From空间<br>空闲]
+        
+        F2[To空间] --- B2[存活对象]
+        F2 --- D2[存活对象]
+        F2 --- G2[空闲]
+    end
+    
+    X[GC] --> Y
+    Y[角色互换<br>From ↔ To]
+    
+    style A1 fill:#ffcdd2,stroke:#333,stroke-width:1px
+    style F1 fill:#e8f5e9,stroke:#333,stroke-width:1px
+    style A2 fill:#e8f5e9,stroke:#333,stroke-width:1px
+    style F2 fill:#ffcdd2,stroke:#333,stroke-width:1px
+    style B1 fill:#bbdefb,stroke:#333,stroke-width:1px
+    style D1 fill:#bbdefb,stroke:#333,stroke-width:1px
+    style B2 fill:#bbdefb,stroke:#333,stroke-width:1px
+    style D2 fill:#bbdefb,stroke:#333,stroke-width:1px
+    style C1 fill:#ffecb3,stroke:#333,stroke-width:1px
+    style E1 fill:#ffecb3,stroke:#333,stroke-width:1px
+```
+
+**算法原理**:
+1. **内存划分**: 将可用内存划分为两块等大的区域
+2. **对象分配**: 只在其中一个区域（From空间）分配对象
+3. **复制转移**: 当From空间用尽时，将存活对象复制到To空间
+4. **角色互换**: 两个空间角色互换，To空间变为新的From空间
+
+**优缺点分析**:
+| 优点 | 缺点 |
+|------|------|
+| 高效，只需扫描一次存活对象 | 内存利用率只有50% |
+| 无内存碎片，分配高效 | 需要额外空间进行复制 |
+| 复制后内存连续 | 对象存活率高时复制开销大 |
+
+**适用场景**:
+- 新生代垃圾回收（对象存活率低）
+- Eden区和Survivor区的设计基于此算法
+- 存活对象较少的内存区域
+
+```java title="复制算法伪代码"
+void copying() {
+    Address toSpace = TO_SPACE_START;
+    
+    // 标记并复制存活对象
+    for (Object root : GC_ROOTS) {
+        toSpace = copy(root, toSpace);
     }
     
-    /**
-     * 标记阶段（与标记-清除算法相同）
-     */
-    public static void markPhase() {
-        // 从GC Roots开始标记所有可达对象
-        for (Object root : getGCRoots()) {
-            markObject(root);
+    // 清空From空间
+    clear(FROM_SPACE_START, FROM_SPACE_END);
+    
+    // 交换From和To空间
+    swap(FROM_SPACE, TO_SPACE);
+}
+
+Address copy(Object obj, Address dest) {
+    if (obj == null || obj.isCopied()) 
+        return dest;
+    
+    // 复制对象到To空间
+    Address newAddress = dest;
+    memcpy(dest, obj, obj.size());
+    dest += obj.size();
+    
+    // 设置转发指针
+    obj.setForwardingAddress(newAddress);
+    
+    // 递归复制引用对象
+    for (Object ref : getReferences(newAddress)) {
+        dest = copy(ref, dest);
+    }
+    
+    return dest;
+}
+```
+
+</TabItem>
+<TabItem value="mark-compact" label="标记-整理">
+
+### 标记-整理算法（Mark-Compact）
+
+标记-整理算法结合了标记-清除和复制算法的优点，不会产生内存碎片，也不需要额外的内存空间。
+
+```mermaid
+sequenceDiagram
+    participant Memory as 内存空间
+    participant GC as 垃圾收集器
+    
+    Note over Memory: 初始状态：<br>□■□■□■■□■□<br>□表示垃圾对象，■表示存活对象
+    
+    GC->>Memory: 1. 标记阶段
+    Note over Memory: 标记后状态：<br>□■□■□■■□■□<br>■被标记为存活
+    
+    GC->>Memory: 2. 计算新地址
+    Note over Memory: 计算地址：<br>□■□■□■■□■□<br>■将被移动到左侧
+    
+    GC->>Memory: 3. 移动对象
+    Note over Memory: 整理后状态：<br>■■■■■□□□□□<br>存活对象连续排列在一起
+    
+    GC->>Memory: 4. 更新引用
+    Note over Memory: 最终状态：<br>■■■■■□□□□□<br>所有对象引用已更新
+```
+
+**算法原理**:
+1. **标记阶段**: 与标记-清除算法相同，标记所有可达对象
+2. **计算地址**: 计算所有存活对象的新位置
+3. **整理阶段**: 移动存活对象到新位置，使它们紧凑排列
+4. **更新引用**: 更新所有对象引用为新地址
+
+**优缺点分析**:
+| 优点 | 缺点 |
+|------|------|
+| 无内存碎片 | 效率较低，需要移动对象 |
+| 内存利用率高 | 需要更新所有对象引用 |
+| 适合对象存活率高的场景 | 停顿时间较长 |
+
+**适用场景**:
+- 老年代垃圾回收
+- 对象存活率高的区域
+- 对内存碎片敏感的应用
+
+```java title="标记-整理算法伪代码"
+void markCompact() {
+    // 标记阶段
+    for (Object root : GC_ROOTS) {
+        mark(root);
+    }
+    
+    // 计算新地址
+    Address freePointer = HEAP_START;
+    for (Object obj : HEAP) {
+        if (obj.isMarked()) {
+            obj.setForwardAddress(freePointer);
+            freePointer += obj.size();
         }
     }
     
-    /**
-     * 整理阶段
-     */
-    public static void compactPhase() {
-        // 计算存活对象的新位置
-        int newAddress = 0;
-        for (Object obj : getAllObjects()) {
-            if (obj.isMarked()) {
-                obj.setNewAddress(newAddress);
-                newAddress += obj.getSize();
-            }
+    // 移动对象并更新引用
+    for (Object obj : HEAP) {
+        if (obj.isMarked()) {
+            moveObject(obj, obj.getForwardAddress());
+            updateReferences(obj);
+            obj.unmark();
         }
-        
-        // 移动存活对象到新位置
-        for (Object obj : getAllObjects()) {
-            if (obj.isMarked()) {
-                moveObject(obj, obj.getNewAddress());
-            }
-        }
-        
-        // 更新对象引用
-        updateReferences();
-        
-        // 重置标记位
-        resetMarks();
-    }
-    
-    /**
-     * 移动对象
-     */
-    public static void moveObject(Object obj, int newAddress) {
-        // 将对象移动到新地址
-        // 这里简化处理，实际需要内存拷贝
-        System.out.println("Moving object to address: " + newAddress);
-    }
-    
-    /**
-     * 更新对象引用
-     */
-    public static void updateReferences() {
-        // 更新所有对象中的引用地址
-        // 这里简化处理
-        System.out.println("Updating references");
-    }
-    
-    /**
-     * 标记-整理算法的优缺点
-     */
-    public static void markCompactAnalysis() {
-        // 优点：
-        // 1. 没有内存碎片
-        // 2. 内存利用率高
-        // 3. 适合对象存活率高的场景
-        
-        // 缺点：
-        // 1. 效率相对较低（需要移动对象）
-        // 2. 需要更新对象引用
-        // 3. 停顿时间较长
     }
 }
 ```
 
-#### 算法特点分析
+</TabItem>
+<TabItem value="generational" label="分代收集">
 
-| 特点 | 具体表现 | 影响 |
-|------|----------|------|
-| **无碎片** | 存活对象连续存储 | 内存分配效率高 |
-| **内存利用率高** | 可以使用全部内存空间 | 内存利用率高 |
-| **效率较低** | 需要移动对象和更新引用 | 回收效率相对较低 |
-| **停顿时间长** | 需要暂停用户线程 | 影响程序响应性 |
+### 分代收集算法
 
-### 3.4 分代收集算法
+分代收集算法根据对象存活周期的不同，将内存分为几个代，对不同的代采用不同的收集策略。
 
-分代收集算法根据对象存活周期的不同，将内存分为几个代。
-
-#### 分代原理
-
-```java title="分代收集算法示例"
-public class GenerationalAlgorithm {
-    
-    /**
-     * 分代收集的基本原理
-     */
-    public static void generationalPrinciple() {
-        // 分代假设：
-        // 1. 大部分对象都是朝生夕死的
-        // 2. 经过多次垃圾回收的对象更可能继续存活
-        // 3. 不同代的对象有不同的特点
+```mermaid
+graph TD
+    subgraph "堆内存"
+        subgraph "新生代 (Young Generation)"
+            E[Eden<br>区域]
+            S1[Survivor<br>From]
+            S2[Survivor<br>To]
+        end
         
-        // 内存分代：
-        // 1. 新生代（Young Generation）：存放新创建的对象
-        // 2. 老年代（Old Generation）：存放存活时间长的对象
-        // 3. 永久代/元空间（Metaspace）：存放类信息、常量等
+        subgraph "老年代 (Old Generation)"
+            O1[长期存活对象]
+        end
+        
+        NE[新对象] --> E
+        E -- Minor GC --> S1
+        S1 -- Minor GC --> S2
+        S2 -- Minor GC --> S1
+        S1 -- 多次GC存活 --> O1
+        S2 -- 多次GC存活 --> O1
+        O1 -- Major GC --> O2{回收}
+    end
+    
+    style E fill:#bbdefb,stroke:#333,stroke-width:1px
+    style S1 fill:#90caf9,stroke:#333,stroke-width:1px
+    style S2 fill:#90caf9,stroke:#333,stroke-width:1px
+    style O1 fill:#a5d6a7,stroke:#333,stroke-width:1px
+    style NE fill:#e3f2fd,stroke:#333,stroke-width:1px
+    style O2 fill:#ffccbc,stroke:#333,stroke-width:1px
+```
+
+**算法原理**:
+1. **分代假设**: 
+   - 大部分对象很快就会死亡（朝生夕死）
+   - 存活时间长的对象很可能继续存活
+   
+2. **内存划分**: 
+   - 新生代：存放新创建的对象，使用复制算法
+   - 老年代：存放长期存活的对象，使用标记-整理算法
+   - 永久代/元空间：存放类信息等，使用标记-清除算法
+
+3. **回收策略**: 
+   - Minor GC：只回收新生代
+   - Major GC：只回收老年代
+   - Full GC：回收整个堆内存
+
+**分代内存占比**:
+| 区域 | 占比 | 存放对象 | 回收频率 | 回收算法 |
+|------|------|---------|---------|---------|
+| **Eden** | 新生代的80% | 新创建对象 | 高 | 复制算法 |
+| **Survivor** | 新生代的20% | 存活时间短的对象 | 高 | 复制算法 |
+| **老年代** | 堆的60-80% | 长期存活对象 | 低 | 标记-整理 |
+
+**适用场景**:
+- 几乎所有的商业JVM都采用分代收集
+- 综合了各种算法的优点
+- 适用于大多数Java应用程序
+
+```java title="分代收集伪代码"
+void generationalCollection() {
+    // 判断是否需要Minor GC
+    if (youngGenerationFull()) {
+        minorGC();
     }
     
-    /**
-     * 分代收集策略
-     */
-    public static void generationalStrategy() {
-        // 新生代收集（Minor GC）
-        // 1. 使用复制算法
-        // 2. 频率高，但停顿时间短
-        // 3. 大部分对象会被回收
-        
-        // 老年代收集（Major GC/Full GC）
-        // 1. 使用标记-整理算法
-        // 2. 频率低，但停顿时间长
-        // 3. 大部分对象会存活
-        
-        // 跨代引用处理
-        // 1. 老年代对象引用新生代对象
-        // 2. 需要特殊处理避免漏标
-        // 3. 使用记忆集（Remembered Set）
+    // 判断是否需要Major GC
+    if (oldGenerationFull() || tooManyPromotions()) {
+        majorGC();
     }
-    
-    /**
-     * 对象晋升机制
-     */
-    public static void objectPromotion() {
-        // 对象年龄：每经过一次Minor GC，对象年龄+1
-        
-        // 晋升条件：
-        // 1. 年龄达到阈值（默认15）
-        // 2. Survivor空间中相同年龄对象大小超过一半
-        
-        // 晋升过程：
-        // 1. 从Eden区晋升到Survivor区
-        // 2. 从Survivor区晋升到老年代
-        // 3. 大对象直接进入老年代
-    }
-    
-    /**
-     * 分代收集的优势
-     */
-    public static void generationalAdvantages() {
-        // 优势：
-        // 1. 针对不同代使用不同的回收算法
-        // 2. 提高整体回收效率
-        // 3. 减少停顿时间
-        // 4. 适应对象生命周期特点
-    }
+}
+
+void minorGC() {
+    // 使用复制算法回收新生代
+    evacuateEden();
+    evacuateSurvivorSpace();
+    swapSurvivorSpaces();
+}
+
+void majorGC() {
+    // 使用标记-整理算法回收老年代
+    markOldGeneration();
+    compactOldGeneration();
 }
 ```
 
-#### 分代结构
+</TabItem>
+</Tabs>
 
-| 代 | 特点 | 回收算法 | 回收频率 | 停顿时间 |
-|----|------|----------|----------|----------|
-| **新生代** | 对象生命周期短 | 复制算法 | 高 | 短 |
-| **老年代** | 对象生命周期长 | 标记-整理 | 低 | 长 |
-| **元空间** | 类信息、常量 | 标记-清除 | 很低 | 中等 |
+### 3.5 算法对比与选择
 
-#### 分代收集流程
+不同的垃圾回收算法有各自的优缺点，如何选择取决于应用场景和性能需求。
 
-```java title="分代收集流程示例"
-public class GenerationalCollectionFlow {
-    
-    /**
-     * 分代收集流程
-     */
-    public static void generationalCollectionProcess() {
-        // 1. 新对象分配在Eden区
-        allocateInEden();
-        
-        // 2. Eden区满时触发Minor GC
-        if (edenIsFull()) {
-            minorGC();
-        }
-        
-        // 3. 存活对象移动到Survivor区
-        moveToSurvivor();
-        
-        // 4. 对象年龄增加
-        increaseAge();
-        
-        // 5. 达到晋升条件时晋升到老年代
-        if (shouldPromote()) {
-            promoteToOldGen();
-        }
-        
-        // 6. 老年代满时触发Full GC
-        if (oldGenIsFull()) {
-            fullGC();
-        }
-    }
-    
-    /**
-     * Minor GC过程
-     */
-    public static void minorGC() {
-        // 1. 标记Eden区和From Survivor区的存活对象
-        markLiveObjects();
-        
-        // 2. 将存活对象复制到To Survivor区
-        copyToSurvivor();
-        
-        // 3. 清空Eden区和From Survivor区
-        clearEdenAndFromSurvivor();
-        
-        // 4. 交换From和To Survivor区
-        swapSurvivorSpaces();
-    }
-    
-    /**
-     * Full GC过程
-     */
-    public static void fullGC() {
-        // 1. 标记整个堆的存活对象
-        markAllLiveObjects();
-        
-        // 2. 整理老年代内存
-        compactOldGen();
-        
-        // 3. 清理元空间
-        cleanMetaspace();
-    }
-}
-```
+| 算法 | 空间效率 | 时间效率 | 内存碎片 | 移动对象 | 适用场景 |
+|------|---------|---------|---------|---------|----------|
+| **标记-清除** | 高 | 中 | 有 | 否 | 老年代，存活率高 |
+| **复制** | 低 | 高 | 无 | 是 | 新生代，存活率低 |
+| **标记-整理** | 高 | 低 | 无 | 是 | 老年代，内存碎片敏感 |
+| **分代收集** | 高 | 高 | 低 | 部分 | 综合场景，大多数应用 |
 
 ## 4. 垃圾收集器详解
 
-### 4.1 Serial收集器
+:::info Java虚拟机垃圾收集器家族
+垃圾收集器是垃圾回收算法的具体实现，不同的垃圾收集器适用于不同的场景。随着JVM的发展，垃圾收集器也在不断演进，从Serial到Parallel，再到CMS，最后到G1、ZGC、Shenandoah，性能不断提升，暂停时间不断缩短。
+:::
 
-Serial收集器是最古老、最基础的垃圾收集器，它是一个单线程的收集器。
-
-#### Serial收集器特点
-
-```java title="Serial收集器示例"
-public class SerialCollectorExample {
+```mermaid
+graph TD
+    A[JVM垃圾收集器家族] --> B[串行收集器]
+    A --> C[并行收集器]
+    A --> D[并发收集器]
+    A --> E[低延迟收集器]
     
-    /**
-     * Serial收集器特点
-     */
-    public static void serialCollectorCharacteristics() {
-        // 特点：
-        // 1. 单线程收集
-        // 2. 工作时暂停所有用户线程（Stop-The-World）
-        // 3. 新生代使用复制算法
-        // 4. 老年代使用标记-整理算法
-        // 5. 适合客户端应用
-        
-        // 适用场景：
-        // 1. 单CPU环境
-        // 2. 内存较小的应用
-        // 3. 对停顿时间不敏感的应用
+    B --> B1[Serial]
+    B --> B2[Serial Old]
+    
+    C --> C1[ParNew]
+    C --> C2[Parallel Scavenge]
+    C --> C3[Parallel Old]
+    
+    D --> D1[CMS]
+    
+    E --> E1[G1]
+    E --> E2[ZGC]
+    E --> E3[Shenandoah]
+    
+    style A fill:#f9f9fa,stroke:#333,stroke-width:2px
+    style B fill:#e3f2fd,stroke:#333,stroke-width:1px
+    style C fill:#e8f5e9,stroke:#333,stroke-width:1px
+    style D fill:#d1ecf1,stroke:#333,stroke-width:1px
+    style E fill:#fff3cd,stroke:#333,stroke-width:1px
+```
+
+<Tabs>
+<TabItem value="serial" label="Serial/Serial Old">
+
+### Serial/Serial Old收集器
+
+Serial收集器是最古老、最基础的垃圾收集器，它是一个单线程的收集器。Serial Old是其老年代版本。
+
+```mermaid
+sequenceDiagram
+    participant App as 应用线程
+    participant GC as Serial收集器
+    
+    Note over App: 应用正常运行
+    
+    GC->>App: 发起STW(Stop The World)
+    App->>App: 所有线程暂停
+    
+    Note over GC: 单线程执行GC
+    GC->>GC: 新生代: 复制算法
+    GC->>GC: 老年代: 标记-整理算法
+    
+    GC->>App: 恢复应用线程
+    Note over App: 应用继续运行
+```
+
+**Serial收集器特点**:
+1. **单线程执行**：只使用一个线程进行垃圾收集
+2. **Stop-The-World**：收集过程中必须暂停所有用户线程
+3. **高效简洁**：没有线程切换开销，单CPU环境下效率最高
+4. **内存占用小**：对资源要求最低的收集器
+
+**适用场景**:
+- **客户端应用**：如桌面应用程序
+- **单核CPU环境**
+- **内存较小（100MB左右）的嵌入式设备**
+- **对暂停时间不敏感的批处理任务**
+
+**启用参数**: `-XX:+UseSerialGC`
+
+**工作流程**:
+```java title="Serial收集器工作过程"
+void serialGC() {
+    // 1. 暂停所有用户线程
+    stopAllThreads();
+    
+    // 2. 执行垃圾收集
+    if (needYoungGC()) {
+        // 新生代收集 - 复制算法
+        evacuateEden();         // 复制Eden区存活对象到Survivor
+        evacuateFromSurvivor(); // 复制From Survivor存活对象到To Survivor
+        swapSurvivorSpaces();   // 交换From和To Survivor
     }
     
-    /**
-     * Serial收集器配置
-     */
-    public static void serialCollectorConfiguration() {
-        // 启用Serial收集器
-        // -XX:+UseSerialGC
-        
-        // 新生代大小
-        // -Xmn256m
-        
-        // 老年代大小
-        // -XX:NewRatio=2
-        
-        // Eden与Survivor比例
-        // -XX:SurvivorRatio=8
+    if (needOldGC()) {
+        // 老年代收集 - 标记-整理算法
+        markOldObjects();       // 标记存活对象
+        compactOldHeap();       // 整理老年代空间
     }
     
-    /**
-     * Serial收集器工作过程
-     */
-    public static void serialCollectorProcess() {
-        // 新生代收集过程：
-        // 1. 暂停所有用户线程
-        // 2. 标记Eden区和From Survivor区的存活对象
-        // 3. 将存活对象复制到To Survivor区
-        // 4. 清空Eden区和From Survivor区
-        // 5. 交换From和To Survivor区
-        // 6. 恢复用户线程
-        
-        // 老年代收集过程：
-        // 1. 暂停所有用户线程
-        // 2. 标记老年代中的存活对象
-        // 3. 整理内存，移动存活对象
-        // 4. 更新对象引用
-        // 5. 恢复用户线程
+    // 3. 恢复所有用户线程
+    resumeAllThreads();
+}
+```
+
+</TabItem>
+<TabItem value="parallel" label="Parallel收集器族">
+
+### Parallel Scavenge/Parallel Old收集器
+
+Parallel收集器族包括新生代的Parallel Scavenge和老年代的Parallel Old，它们都是多线程并行的收集器，注重高吞吐量。
+
+```mermaid
+sequenceDiagram
+    participant App as 应用线程
+    participant GC as Parallel收集器
+    participant T1 as GC线程1
+    participant T2 as GC线程2
+    participant T3 as GC线程...
+    
+    Note over App: 应用正常运行
+    
+    GC->>App: 发起STW(Stop The World)
+    App->>App: 所有线程暂停
+    
+    par 多线程并行执行GC
+        GC->>T1: 处理堆内存区域1
+        GC->>T2: 处理堆内存区域2
+        GC->>T3: 处理堆内存区域...
+    end
+    
+    T1-->>GC: 完成收集
+    T2-->>GC: 完成收集
+    T3-->>GC: 完成收集
+    
+    GC->>App: 恢复应用线程
+    Note over App: 应用继续运行
+```
+
+**Parallel收集器特点**:
+1. **多线程并行**：利用多核CPU提高收集效率
+2. **高吞吐量**：关注CPU利用率，适合后台运算
+3. **可控制暂停时间**：通过参数调整暂停时间目标
+4. **自适应调节**：根据系统运行情况自动调整参数
+
+**适用场景**:
+- **多核服务器环境**
+- **对吞吐量要求较高的后台应用**
+- **批处理系统、科学计算应用**
+- **不太关心停顿时间的场景**
+
+**关键参数**:
+- `-XX:+UseParallelGC`：使用Parallel Scavenge + Serial Old
+- `-XX:+UseParallelOldGC`：使用Parallel Scavenge + Parallel Old
+- `-XX:ParallelGCThreads=n`：设置并行收集线程数
+- `-XX:MaxGCPauseMillis=n`：设置最大GC停顿时间
+- `-XX:GCTimeRatio=n`：设置吞吐量大小
+
+```java title="自适应调节示例"
+void parallelGCWithAdaptive() {
+    // 目标最大停顿时间
+    int targetPauseTime = getMaxGCPauseMillis(); // -XX:MaxGCPauseMillis
+    
+    // 目标吞吐量
+    int throughputGoal = getGCTimeRatio();       // -XX:GCTimeRatio
+    
+    // 根据历史GC数据调整新生代大小
+    if (actualPauseTime > targetPauseTime) {
+        // 减小新生代大小以减少停顿时间
+        decreaseYoungGenSize();
+    } else if (actualThroughput < throughputGoal) {
+        // 增加新生代大小以提高吞吐量
+        increaseYoungGenSize();
     }
 }
 ```
 
-#### Serial收集器优缺点
+</TabItem>
+<TabItem value="cms" label="CMS收集器">
 
-| 优点 | 缺点 |
-|------|------|
-| **实现简单** | **停顿时间长** |
-| **内存开销小** | **单线程效率低** |
-| **适合小内存应用** | **不适合大内存应用** |
-| **无并发问题** | **不适合多CPU环境** |
+### CMS收集器 (Concurrent Mark Sweep)
 
-### 4.2 ParNew收集器
+CMS是一种以获取最短回收停顿时间为目标的收集器，适合对响应时间有要求的应用。
 
-ParNew收集器是Serial收集器的多线程版本，除了使用多线程进行垃圾收集外，其他行为与Serial收集器完全一样。
-
-#### ParNew收集器特点
-
-```java title="ParNew收集器示例"
-public class ParNewCollectorExample {
+```mermaid
+sequenceDiagram
+    participant App as 应用线程
+    participant CMS as CMS收集器
     
+    Note over App: 应用正常运行
+    
+    CMS->>App: 初始标记(STW)
+    App-->>CMS: 暂停很短时间
+    
+    Note over App,CMS: 并发标记(应用线程与GC线程并发执行)
+    App->>App: 继续运行
+    CMS->>CMS: 并发标记存活对象
+    
+    Note over App,CMS: 并发预清理(应用线程与GC线程并发执行)
+    App->>App: 继续运行
+    CMS->>CMS: 预处理标记数据
+    
+    CMS->>App: 重新标记(STW)
+    App-->>CMS: 暂停较短时间
+    
+    Note over App,CMS: 并发清除(应用线程与GC线程并发执行)
+    App->>App: 继续运行
+    CMS->>CMS: 并发清除垃圾对象
+    
+    Note over App,CMS: 并发重置(应用线程与GC线程并发执行)
+    App->>App: 继续运行
+    CMS->>CMS: 重置CMS数据结构
+```
+
+**CMS收集器特点**:
+1. **低延迟**：关注停顿时间，多数工作与用户线程并发执行
+2. **并发收集**：标记和清除阶段与用户线程并发执行
+3. **标记-清除算法**：会产生空间碎片
+4. **CPU敏感**：占用部分CPU资源，总吞吐量会下降
+5. **无法处理浮动垃圾**：并发清理阶段产生的新垃圾
+
+**CMS执行过程**:
+1. **初始标记**：STW，仅标记GC Roots能直接关联的对象
+2. **并发标记**：与用户线程同时执行，遍历对象图
+3. **并发预清理**：与用户线程同时执行，处理并发标记阶段引用变化的对象
+4. **重新标记**：STW，修正并发标记期间因用户程序运行导致的标记变动
+5. **并发清除**：与用户线程同时执行，清除没有标记的对象
+6. **并发重置**：与用户线程同时执行，重置CMS内部数据结构
+
+**适用场景**:
+- **Web应用、接口服务等交互系统**
+- **对停顿时间敏感的场景**
+- **中等规模堆内存的应用**
+- **具有多CPU资源的应用服务器**
+
+**关键参数**:
+- `-XX:+UseConcMarkSweepGC`：使用CMS收集器
+- `-XX:CMSInitiatingOccupancyFraction=n`：设置老年代使用率触发CMS的阈值
+- `-XX:+UseCMSCompactAtFullCollection`：Full GC时进行碎片整理
+- `-XX:+CMSClassUnloadingEnabled`：允许类卸载
+
+```java title="CMS问题与解决方案"
+class CMSChallenges {
     /**
-     * ParNew收集器特点
+     * 内存碎片问题
      */
-    public static void parNewCollectorCharacteristics() {
-        // 特点：
-        // 1. 多线程并行收集
-        // 2. 新生代使用复制算法
-        // 3. 老年代使用标记-整理算法
-        // 4. 与Serial收集器配合使用
-        // 5. 适合多CPU环境
-        
-        // 适用场景：
-        // 1. 多CPU环境
-        // 2. 对停顿时间有一定要求
-        // 3. 与CMS收集器配合使用
+    void fragmentationIssue() {
+        // CMS使用标记-清除算法，会产生内存碎片
+        // 解决方案：
+        // 1. -XX:+UseCMSCompactAtFullCollection
+        //    在Full GC时进行碎片整理
+        // 2. -XX:CMSFullGCsBeforeCompaction=n
+        //    每隔n次Full GC后进行一次碎片整理
     }
     
     /**
-     * ParNew收集器配置
+     * 并发模式失败
      */
-    public static void parNewCollectorConfiguration() {
-        // 启用ParNew收集器
-        // -XX:+UseParNewGC
+    void concurrentModeFailure() {
+        // 当CMS正在进行时，老年代空间不足，会触发并发模式失败
+        // 切换到Serial Old进行Full GC，STW时间长
         
-        // 并行GC线程数
-        // -XX:ParallelGCThreads=4
-        
-        // 新生代大小
-        // -Xmn1g
-        
-        // Eden与Survivor比例
-        // -XX:SurvivorRatio=8
+        // 解决方案：
+        // 1. 增大老年代空间
+        // 2. 调低CMSInitiatingOccupancyFraction，提前启动CMS
+        // 3. 增加并发线程数(-XX:ConcGCThreads)
     }
     
     /**
-     * ParNew收集器工作过程
+     * 浮动垃圾问题
      */
-    public static void parNewCollectorProcess() {
-        // 新生代收集过程：
-        // 1. 暂停所有用户线程
-        // 2. 多个GC线程并行标记存活对象
-        // 3. 多个GC线程并行复制存活对象
-        // 4. 清空Eden区和From Survivor区
-        // 5. 交换From和To Survivor区
-        // 6. 恢复用户线程
+    void floatingGarbageIssue() {
+        // 并发清理阶段用户线程产生的垃圾无法清理
+        // 需要预留空间应对浮动垃圾
         
-        // 优势：
-        // 1. 多线程并行，提高收集效率
-        // 2. 减少停顿时间
-        // 3. 适合多CPU环境
+        // 解决方案：
+        // 保守设置CMSInitiatingOccupancyFraction值
+        // 默认为92%，一般建议70%-80%
     }
 }
 ```
 
-### 4.3 Parallel Scavenge收集器
+</TabItem>
+<TabItem value="g1" label="G1收集器">
 
-Parallel Scavenge收集器是一个新生代收集器，它使用复制算法，也是并行的多线程收集器。
+### G1收集器 (Garbage First)
 
-#### Parallel Scavenge收集器特点
+G1是面向服务端的垃圾收集器，JDK 9开始成为默认收集器，设计目标是替代CMS。
 
-```java title="Parallel Scavenge收集器示例"
-public class ParallelScavengeCollectorExample {
-    
-    /**
-     * Parallel Scavenge收集器特点
-     */
-    public static void parallelScavengeCharacteristics() {
-        // 特点：
-        // 1. 多线程并行收集
-        // 2. 关注吞吐量而非响应时间
-        // 3. 可调节的吞吐量参数
-        // 4. 新生代使用复制算法
-        // 5. 老年代使用标记-整理算法
+```mermaid
+graph TB
+    subgraph "G1堆内存结构"
+        A1[Region 1<br>Eden]
+        A2[Region 2<br>Eden]
+        A3[Region 3<br>Survivor]
+        A4[Region 4<br>Old]
+        A5[Region 5<br>Old]
+        A6[Region 6<br>Eden]
+        A7[Region 7<br>Humongous]
+        A8[Region 8<br>Old]
         
-        // 适用场景：
-        // 1. 后台计算任务
-        // 2. 批处理应用
-        // 3. 对吞吐量要求高的应用
+        style A1 fill:#bbdefb,stroke:#333,stroke-width:1px
+        style A2 fill:#bbdefb,stroke:#333,stroke-width:1px
+        style A3 fill:#90caf9,stroke:#333,stroke-width:1px
+        style A4 fill:#a5d6a7,stroke:#333,stroke-width:1px
+        style A5 fill:#a5d6a7,stroke:#333,stroke-width:1px
+        style A6 fill:#bbdefb,stroke:#333,stroke-width:1px
+        style A7 fill:#ffcc80,stroke:#333,stroke-width:1px
+        style A8 fill:#a5d6a7,stroke:#333,stroke-width:1px
+    end
+```
+
+**G1收集器特点**:
+1. **区域化内存布局**：将堆分为多个大小相等的Region
+2. **并行与并发**：充分利用多核CPU
+3. **分代收集**：保留分代概念，但不再物理隔离
+4. **可预测的停顿时间**：建立可预测的停顿时间模型
+5. **增量式收集**：逐步收集整个堆，而不是一次性收集
+
+**G1收集过程**:
+1. **年轻代收集**：收集所有Eden和Survivor区域
+2. **并发标记**：标记整个堆中存活的对象
+3. **混合收集**：收集所有Eden、Survivor以及部分Old区域
+4. **必要时Full GC**：如果并发收集失败，回退到Full GC
+
+```mermaid
+sequenceDiagram
+    participant App as 应用线程
+    participant G1 as G1收集器
+    
+    Note over App: 应用正常运行
+    
+    G1->>App: Young GC(STW)
+    App-->>G1: 短暂暂停
+    
+    loop 多次Young GC后
+        G1->>App: 初始标记(搭配Young GC)
+        App-->>G1: 短暂暂停
+        
+        Note over App,G1: 并发标记(与应用并发)
+        App->>App: 继续运行
+        G1->>G1: 标记存活对象
+        
+        G1->>App: 最终标记(STW)
+        App-->>G1: 短暂暂停
+        
+        Note over App,G1: 清理(与应用并发)
+        G1->>G1: 计算各区域活跃度
+        
+        G1->>App: 混合收集(STW)
+        App-->>G1: 多次短暂暂停
+    end
+```
+
+**适用场景**:
+- **大内存多核服务器应用**
+- **需要低停顿时间的应用**
+- **需要大内存（超过4GB）的应用**
+- **对响应时间有较高要求的应用**
+
+**关键参数**:
+- `-XX:+UseG1GC`：使用G1收集器
+- `-XX:MaxGCPauseMillis=n`：设置最大暂停时间目标
+- `-XX:G1HeapRegionSize=n`：设置Region大小(1MB到32MB，必须是2的幂)
+- `-XX:InitiatingHeapOccupancyPercent=n`：设置触发并发标记的堆占用率阈值
+
+```java title="G1垃圾回收策略"
+class G1CollectionStrategy {
+    /**
+     * 回收集选择策略
+     */
+    void collectionSetSelection() {
+        // G1会计算每个Region的回收价值：
+        // 回收价值 = 回收所获得的空间 / 回收所需时间
+        
+        List<Region> regions = getAllRegions();
+        
+        // 根据回收价值对Region排序
+        regions.sort(byEvacuationEfficiency());
+        
+        // 从高到低选择Region，直到达到停顿时间目标
+        List<Region> collectionSet = new ArrayList<>();
+        long estimatedTime = 0;
+        
+        for (Region region : regions) {
+            if (estimatedTime + region.getEstimatedEvacTime() > maxPauseTime) {
+                break;
+            }
+            collectionSet.add(region);
+            estimatedTime += region.getEstimatedEvacTime();
+        }
+        
+        // 回收选定的Region
+        evacuateRegions(collectionSet);
     }
     
     /**
-     * Parallel Scavenge收集器配置
+     * Remember Set (RSet)
      */
-    public static void parallelScavengeConfiguration() {
-        // 启用Parallel Scavenge收集器
-        // -XX:+UseParallelGC
-        
-        // 并行GC线程数
-        // -XX:ParallelGCThreads=8
-        
-        // 最大停顿时间目标
-        // -XX:MaxGCPauseMillis=200
-        
-        // GC时间比例
-        // -XX:GCTimeRatio=99
-        
-        // 自适应大小策略
-        // -XX:+UseAdaptiveSizePolicy
-    }
-    
-    /**
-     * 吞吐量调优
-     */
-    public static void throughputTuning() {
-        // 吞吐量 = 用户代码时间 / (用户代码时间 + GC时间)
-        
-        // 提高吞吐量的方法：
-        // 1. 增加堆内存大小
-        // 2. 调整新生代比例
-        // 3. 使用自适应大小策略
-        // 4. 调整GC线程数
-        
-        // 权衡：
-        // 1. 更大的堆内存 -> 更高的吞吐量，但更长的停顿时间
-        // 2. 更多的GC线程 -> 更短的停顿时间，但更多的CPU开销
+    void rememberSetUsage() {
+        // G1中每个Region都维护了RSet
+        // RSet记录了哪些外部Region引用了本Region中的对象
+        // 这样在收集某个Region时，只需扫描其RSet，而不用扫描整个堆
     }
 }
 ```
 
-### 4.4 CMS收集器
+</TabItem>
+</Tabs>
 
-CMS（Concurrent Mark Sweep）收集器是一种以获取最短回收停顿时间为目标的收集器。
+### 4.6 垃圾收集器对比与选择
 
-#### CMS收集器特点
+不同的垃圾收集器有各自的优缺点，适合不同的应用场景。选择合适的垃圾收集器对应用性能至关重要。
 
-```java title="CMS收集器示例"
-public class CMSCollectorExample {
-    
-    /**
-     * CMS收集器特点
-     */
-    public static void cmsCollectorCharacteristics() {
-        // 特点：
-        // 1. 并发收集
-        // 2. 标记-清除算法
-        // 3. 停顿时间短
-        // 4. 会产生内存碎片
-        // 5. 对CPU敏感
-        
-        // 适用场景：
-        // 1. 对响应时间要求高的应用
-        // 2. 多CPU环境
-        // 3. 老年代对象存活率不高的应用
-    }
-    
-    /**
-     * CMS收集器工作过程
-     */
-    public static void cmsCollectorProcess() {
-        // CMS收集过程分为四个阶段：
-        
-        // 1. 初始标记（Initial Mark）
-        //    - 暂停用户线程
-        //    - 标记GC Roots直接关联的对象
-        //    - 停顿时间很短
-        
-        // 2. 并发标记（Concurrent Mark）
-        //    - 并发执行，不暂停用户线程
-        //    - 从初始标记的对象开始遍历
-        //    - 标记所有可达对象
-        
-        // 3. 重新标记（Remark）
-        //    - 暂停用户线程
-        //    - 修正并发标记期间的变化
-        //    - 停顿时间比初始标记稍长
-        
-        // 4. 并发清除（Concurrent Sweep）
-        //    - 并发执行，不暂停用户线程
-        //    - 清除未标记的对象
-        //    - 会产生内存碎片
-    }
-    
-    /**
-     * CMS收集器配置
-     */
-    public static void cmsCollectorConfiguration() {
-        // 启用CMS收集器
-        // -XX:+UseConcMarkSweepGC
-        
-        // 触发CMS的阈值
-        // -XX:CMSInitiatingOccupancyFraction=70
-        
-        // 仅使用阈值触发
-        // -XX:+UseCMSInitiatingOccupancyOnly
-        
-        // 重新标记前进行Young GC
-        // -XX:+CMSScavengeBeforeRemark
-        
-        // 并发GC线程数
-        // -XX:ConcGCThreads=4
-        
-        // 并行标记线程数
-        // -XX:ParallelGCThreads=8
-    }
-    
-    /**
-     * CMS收集器的优缺点
-     */
-    public static void cmsCollectorAnalysis() {
-        // 优点：
-        // 1. 并发收集，停顿时间短
-        // 2. 适合对响应时间要求高的应用
-        // 3. 可以与ParNew收集器配合使用
-        
-        // 缺点：
-        // 1. 会产生内存碎片
-        // 2. 对CPU敏感
-        // 3. 无法处理浮动垃圾
-        // 4. 可能出现Concurrent Mode Failure
-    }
-}
-```
+| 收集器 | 收集范围 | 线程数 | 算法 | 特点 | 适用场景 |
+|-------|---------|-------|------|------|---------|
+| **Serial** | 新生代 | 单线程 | 复制 | 简单高效，内存占用小 | 客户端应用，单CPU环境 |
+| **Serial Old** | 老年代 | 单线程 | 标记-整理 | 与Serial配合使用 | 客户端应用，单CPU环境 |
+| **ParNew** | 新生代 | 多线程 | 复制 | Serial的多线程版本 | 与CMS配合使用 |
+| **Parallel Scavenge** | 新生代 | 多线程 | 复制 | 高吞吐量 | 后台运算，批处理 |
+| **Parallel Old** | 老年代 | 多线程 | 标记-整理 | 高吞吐量 | 与Parallel Scavenge配合使用 |
+| **CMS** | 老年代 | 多线程 | 标记-清除 | 低延迟，并发收集 | Web应用，交互系统 |
+| **G1** | 全堆 | 多线程 | 整体标记-整理<br/>局部复制 | 低延迟，可预测停顿 | 大内存服务器应用 |
+| **ZGC** | 全堆 | 多线程 | 标记-整理 | 超低延迟(< 10ms) | 大内存，延迟敏感应用 |
+| **Shenandoah** | 全堆 | 多线程 | 标记-整理 | 超低延迟 | 大内存，延迟敏感应用 |
 
-### 4.5 G1收集器
-
-G1（Garbage First）收集器是面向服务端应用的垃圾收集器，它能够建立可预测的停顿时间模型。
-
-#### G1收集器特点
-
-```java title="G1收集器示例"
-public class G1CollectorExample {
-    
-    /**
-     * G1收集器特点
-     */
-    public static void g1CollectorCharacteristics() {
-        // 特点：
-        // 1. 并发收集
-        // 2. 可预测的停顿时间
-        // 3. 将堆空间分为多个Region
-        // 4. 优先回收垃圾最多的Region
-        // 5. 标记-整理算法
-        
-        // 适用场景：
-        // 1. 大堆内存应用（> 4GB）
-        // 2. 对停顿时间有要求
-        // 3. 多CPU环境
-    }
-    
-    /**
-     * G1收集器内存布局
-     */
-    public static void g1MemoryLayout() {
-        // G1将堆空间分为多个大小相等的Region
-        // 每个Region的大小可以通过参数调整
-        
-        // Region类型：
-        // 1. Eden Region：存放新创建的对象
-        // 2. Survivor Region：存放存活的对象
-        // 3. Old Region：存放老年代对象
-        // 4. Humongous Region：存放大对象
-        // 5. 空闲Region：未使用的Region
-        
-        // Region大小：
-        // -XX:G1HeapRegionSize=16m
-        // 必须是2的幂次方，范围1MB到32MB
-    }
-    
-    /**
-     * G1收集器工作过程
-     */
-    public static void g1CollectorProcess() {
-        // G1收集过程：
-        
-        // 1. 初始标记（Initial Mark）
-        //    - 暂停用户线程
-        //    - 标记GC Roots直接关联的对象
-        //    - 与Young GC一起执行
-        
-        // 2. 并发标记（Concurrent Mark）
-        //    - 并发执行，不暂停用户线程
-        //    - 从初始标记的对象开始遍历
-        //    - 标记所有可达对象
-        
-        // 3. 最终标记（Final Mark）
-        //    - 暂停用户线程
-        //    - 处理SATB（Snapshot-At-The-Beginning）缓冲区
-        //    - 修正并发标记期间的变化
-        
-        // 4. 筛选回收（Evacuation Pause）
-        //    - 暂停用户线程
-        //    - 选择垃圾最多的Region进行回收
-        //    - 将存活对象复制到其他Region
-    }
-    
-    /**
-     * G1收集器配置
-     */
-    public static void g1CollectorConfiguration() {
-        // 启用G1收集器
-        // -XX:+UseG1GC
-        
-        // 最大停顿时间目标
-        // -XX:MaxGCPauseMillis=200
-        
-        // Region大小
-        // -XX:G1HeapRegionSize=16m
-        
-        // 新生代最小比例
-        // -XX:G1NewSizePercent=30
-        
-        // 新生代最大比例
-        // -XX:G1MaxNewSizePercent=60
-        
-        // 并发GC线程数
-        // -XX:ConcGCThreads=4
-        
-        // 并行GC线程数
-        // -XX:ParallelGCThreads=8
-        
-        // 混合收集次数
-        // -XX:G1MixedGCCountTarget=8
-        
-        // 混合收集存活对象阈值
-        // -XX:G1MixedGCLiveThresholdPercent=85
-    }
-}
-```
-
-### 4.6 ZGC收集器
-
-ZGC（Z Garbage Collector）是JDK 11引入的低延迟垃圾收集器，它的停顿时间不超过10ms。
-
-#### ZGC收集器特点
-
-```java title="ZGC收集器示例"
-public class ZGCCollectorExample {
-    
-    /**
-     * ZGC收集器特点
-     */
-    public static void zgcCollectorCharacteristics() {
-        // 特点：
-        // 1. 并发收集
-        // 2. 停顿时间不超过10ms
-        // 3. 支持TB级别的堆内存
-        // 4. 使用读屏障技术
-        // 5. 标记-整理算法
-        
-        // 适用场景：
-        // 1. 对停顿时间要求极高的应用
-        // 2. 大堆内存应用
-        // 3. 实时应用
-    }
-    
-    /**
-     * ZGC收集器技术特点
-     */
-    public static void zgcTechnicalFeatures() {
-        // 核心技术：
-        // 1. 并发标记
-        // 2. 并发重定位
-        // 3. 读屏障
-        // 4. 着色指针
-        // 5. 多重映射
-        
-        // 读屏障：
-        // 1. 在对象访问时触发
-        // 2. 检查对象是否被重定位
-        // 3. 如果被重定位，更新引用
-        // 4. 确保并发重定位的正确性
-    }
-    
-    /**
-     * ZGC收集器配置
-     */
-    public static void zgcCollectorConfiguration() {
-        // 启用ZGC收集器
-        // -XX:+UseZGC
-        
-        // 并发GC线程数
-        // -XX:ConcGCThreads=2
-        
-        // 最大停顿时间目标
-        // -XX:MaxGCPauseMillis=10
-        
-        // 堆内存大小
-        // -Xms8g -Xmx8g
-    }
-}
-```
-
-### 4.2 ParNew收集器
-
-ParNew收集器是Serial收集器的多线程版本，除了使用多线程进行垃圾收集外，其他行为与Serial收集器完全一样。
-
-#### ParNew收集器特点
-
-```java title="ParNew收集器示例"
-public class ParNewCollectorExample {
-    
-    /**
-     * ParNew收集器特点
-     */
-    public static void parNewCollectorCharacteristics() {
-        // 特点：
-        // 1. 多线程并行收集
-        // 2. 新生代使用复制算法
-        // 3. 老年代使用标记-整理算法
-        // 4. 与Serial收集器配合使用
-        // 5. 适合多CPU环境
-        
-        // 适用场景：
-        // 1. 多CPU环境
-        // 2. 对停顿时间有一定要求
-        // 3. 与CMS收集器配合使用
-    }
-    
-    /**
-     * ParNew收集器配置
-     */
-    public static void parNewCollectorConfiguration() {
-        // 启用ParNew收集器
-        // -XX:+UseParNewGC
-        
-        // 并行GC线程数
-        // -XX:ParallelGCThreads=4
-        
-        // 新生代大小
-        // -Xmn1g
-        
-        // Eden与Survivor比例
-        // -XX:SurvivorRatio=8
-    }
-    
-    /**
-     * ParNew收集器工作过程
-     */
-    public static void parNewCollectorProcess() {
-        // 新生代收集过程：
-        // 1. 暂停所有用户线程
-        // 2. 多个GC线程并行标记存活对象
-        // 3. 多个GC线程并行复制存活对象
-        // 4. 清空Eden区和From Survivor区
-        // 5. 交换From和To Survivor区
-        // 6. 恢复用户线程
-        
-        // 优势：
-        // 1. 多线程并行，提高收集效率
-        // 2. 减少停顿时间
-        // 3. 适合多CPU环境
-    }
-}
-```
-
-### 4.3 Parallel Scavenge收集器
-
-Parallel Scavenge收集器是一个新生代收集器，它使用复制算法，也是并行的多线程收集器。
-
-#### Parallel Scavenge收集器特点
-
-```java title="Parallel Scavenge收集器示例"
-public class ParallelScavengeCollectorExample {
-    
-    /**
-     * Parallel Scavenge收集器特点
-     */
-    public static void parallelScavengeCharacteristics() {
-        // 特点：
-        // 1. 多线程并行收集
-        // 2. 关注吞吐量而非响应时间
-        // 3. 可调节的吞吐量参数
-        // 4. 新生代使用复制算法
-        // 5. 老年代使用标记-整理算法
-        
-        // 适用场景：
-        // 1. 后台计算任务
-        // 2. 批处理应用
-        // 3. 对吞吐量要求高的应用
-    }
-    
-    /**
-     * Parallel Scavenge收集器配置
-     */
-    public static void parallelScavengeConfiguration() {
-        // 启用Parallel Scavenge收集器
-        // -XX:+UseParallelGC
-        
-        // 并行GC线程数
-        // -XX:ParallelGCThreads=8
-        
-        // 最大停顿时间目标
-        // -XX:MaxGCPauseMillis=200
-        
-        // GC时间比例
-        // -XX:GCTimeRatio=99
-        
-        // 自适应大小策略
-        // -XX:+UseAdaptiveSizePolicy
-    }
-    
-    /**
-     * 吞吐量调优
-     */
-    public static void throughputTuning() {
-        // 吞吐量 = 用户代码时间 / (用户代码时间 + GC时间)
-        
-        // 提高吞吐量的方法：
-        // 1. 增加堆内存大小
-        // 2. 调整新生代比例
-        // 3. 使用自适应大小策略
-        // 4. 调整GC线程数
-        
-        // 权衡：
-        // 1. 更大的堆内存 -> 更高的吞吐量，但更长的停顿时间
-        // 2. 更多的GC线程 -> 更短的停顿时间，但更多的CPU开销
-    }
-}
-```
-
-### 4.4 CMS收集器
-
-CMS（Concurrent Mark Sweep）收集器是一种以获取最短回收停顿时间为目标的收集器。
-
-#### CMS收集器特点
-
-```java title="CMS收集器示例"
-public class CMSCollectorExample {
-    
-    /**
-     * CMS收集器特点
-     */
-    public static void cmsCollectorCharacteristics() {
-        // 特点：
-        // 1. 并发收集
-        // 2. 标记-清除算法
-        // 3. 停顿时间短
-        // 4. 会产生内存碎片
-        // 5. 对CPU敏感
-        
-        // 适用场景：
-        // 1. 对响应时间要求高的应用
-        // 2. 多CPU环境
-        // 3. 老年代对象存活率不高的应用
-    }
-    
-    /**
-     * CMS收集器工作过程
-     */
-    public static void cmsCollectorProcess() {
-        // CMS收集过程分为四个阶段：
-        
-        // 1. 初始标记（Initial Mark）
-        //    - 暂停用户线程
-        //    - 标记GC Roots直接关联的对象
-        //    - 停顿时间很短
-        
-        // 2. 并发标记（Concurrent Mark）
-        //    - 并发执行，不暂停用户线程
-        //    - 从初始标记的对象开始遍历
-        //    - 标记所有可达对象
-        
-        // 3. 重新标记（Remark）
-        //    - 暂停用户线程
-        //    - 修正并发标记期间的变化
-        //    - 停顿时间比初始标记稍长
-        
-        // 4. 并发清除（Concurrent Sweep）
-        //    - 并发执行，不暂停用户线程
-        //    - 清除未标记的对象
-        //    - 会产生内存碎片
-    }
-    
-    /**
-     * CMS收集器配置
-     */
-    public static void cmsCollectorConfiguration() {
-        // 启用CMS收集器
-        // -XX:+UseConcMarkSweepGC
-        
-        // 触发CMS的阈值
-        // -XX:CMSInitiatingOccupancyFraction=70
-        
-        // 仅使用阈值触发
-        // -XX:+UseCMSInitiatingOccupancyOnly
-        
-        // 重新标记前进行Young GC
-        // -XX:+CMSScavengeBeforeRemark
-        
-        // 并发GC线程数
-        // -XX:ConcGCThreads=4
-        
-        // 并行标记线程数
-        // -XX:ParallelGCThreads=8
-    }
-    
-    /**
-     * CMS收集器的优缺点
-     */
-    public static void cmsCollectorAnalysis() {
-        // 优点：
-        // 1. 并发收集，停顿时间短
-        // 2. 适合对响应时间要求高的应用
-        // 3. 可以与ParNew收集器配合使用
-        
-        // 缺点：
-        // 1. 会产生内存碎片
-        // 2. 对CPU敏感
-        // 3. 无法处理浮动垃圾
-        // 4. 可能出现Concurrent Mode Failure
-    }
-}
-```
-
-### 4.5 G1收集器
-
-G1（Garbage First）收集器是面向服务端应用的垃圾收集器，它能够建立可预测的停顿时间模型。
-
-#### G1收集器特点
-
-```java title="G1收集器示例"
-public class G1CollectorExample {
-    
-    /**
-     * G1收集器特点
-     */
-    public static void g1CollectorCharacteristics() {
-        // 特点：
-        // 1. 并发收集
-        // 2. 可预测的停顿时间
-        // 3. 将堆空间分为多个Region
-        // 4. 优先回收垃圾最多的Region
-        // 5. 标记-整理算法
-        
-        // 适用场景：
-        // 1. 大堆内存应用（> 4GB）
-        // 2. 对停顿时间有要求
-        // 3. 多CPU环境
-    }
-    
-    /**
-     * G1收集器内存布局
-     */
-    public static void g1MemoryLayout() {
-        // G1将堆空间分为多个大小相等的Region
-        // 每个Region的大小可以通过参数调整
-        
-        // Region类型：
-        // 1. Eden Region：存放新创建的对象
-        // 2. Survivor Region：存放存活的对象
-        // 3. Old Region：存放老年代对象
-        // 4. Humongous Region：存放大对象
-        // 5. 空闲Region：未使用的Region
-        
-        // Region大小：
-        // -XX:G1HeapRegionSize=16m
-        // 必须是2的幂次方，范围1MB到32MB
-    }
-    
-    /**
-     * G1收集器工作过程
-     */
-    public static void g1CollectorProcess() {
-        // G1收集过程：
-        
-        // 1. 初始标记（Initial Mark）
-        //    - 暂停用户线程
-        //    - 标记GC Roots直接关联的对象
-        //    - 与Young GC一起执行
-        
-        // 2. 并发标记（Concurrent Mark）
-        //    - 并发执行，不暂停用户线程
-        //    - 从初始标记的对象开始遍历
-        //    - 标记所有可达对象
-        
-        // 3. 最终标记（Final Mark）
-        //    - 暂停用户线程
-        //    - 处理SATB（Snapshot-At-The-Beginning）缓冲区
-        //    - 修正并发标记期间的变化
-        
-        // 4. 筛选回收（Evacuation Pause）
-        //    - 暂停用户线程
-        //    - 选择垃圾最多的Region进行回收
-        //    - 将存活对象复制到其他Region
-    }
-    
-    /**
-     * G1收集器配置
-     */
-    public static void g1CollectorConfiguration() {
-        // 启用G1收集器
-        // -XX:+UseG1GC
-        
-        // 最大停顿时间目标
-        // -XX:MaxGCPauseMillis=200
-        
-        // Region大小
-        // -XX:G1HeapRegionSize=16m
-        
-        // 新生代最小比例
-        // -XX:G1NewSizePercent=30
-        
-        // 新生代最大比例
-        // -XX:G1MaxNewSizePercent=60
-        
-        // 并发GC线程数
-        // -XX:ConcGCThreads=4
-        
-        // 并行GC线程数
-        // -XX:ParallelGCThreads=8
-        
-        // 混合收集次数
-        // -XX:G1MixedGCCountTarget=8
-        
-        // 混合收集存活对象阈值
-        // -XX:G1MixedGCLiveThresholdPercent=85
-    }
-}
-```
-
-### 4.6 ZGC收集器
-
-ZGC（Z Garbage Collector）是JDK 11引入的低延迟垃圾收集器，它的停顿时间不超过10ms。
-
-#### ZGC收集器特点
-
-```java title="ZGC收集器示例"
-public class ZGCCollectorExample {
-    
-    /**
-     * ZGC收集器特点
-     */
-    public static void zgcCollectorCharacteristics() {
-        // 特点：
-        // 1. 并发收集
-        // 2. 停顿时间不超过10ms
-        // 3. 支持TB级别的堆内存
-        // 4. 使用读屏障技术
-        // 5. 标记-整理算法
-        
-        // 适用场景：
-        // 1. 对停顿时间要求极高的应用
-        // 2. 大堆内存应用
-        // 3. 实时应用
-    }
-    
-    /**
-     * ZGC收集器技术特点
-     */
-    public static void zgcTechnicalFeatures() {
-        // 核心技术：
-        // 1. 并发标记
-        // 2. 并发重定位
-        // 3. 读屏障
-        // 4. 着色指针
-        // 5. 多重映射
-        
-        // 读屏障：
-        // 1. 在对象访问时触发
-        // 2. 检查对象是否被重定位
-        // 3. 如果被重定位，更新引用
-        // 4. 确保并发重定位的正确性
-    }
-    
-    /**
-     * ZGC收集器配置
-     */
-    public static void zgcCollectorConfiguration() {
-        // 启用ZGC收集器
-        // -XX:+UseZGC
-        
-        // 并发GC线程数
-        // -XX:ConcGCThreads=2
-        
-        // 最大停顿时间目标
-        // -XX:MaxGCPauseMillis=10
-        
-        // 堆内存大小
-        // -Xms8g -Xmx8g
-    }
-}
-```
+:::tip 如何选择垃圾收集器
+1. **响应时间优先**: G1、ZGC、Shenandoah
+2. **吞吐量优先**: Parallel Scavenge + Parallel Old
+3. **内存较小**: Serial + Serial Old
+4. **大内存且对延迟敏感**: G1、ZGC
+5. **通用场景**: G1 (JDK 9+默认)
+:::
 
 ## 5. 实际应用场景
 
@@ -1915,119 +1555,6 @@ class ObjectPool {
     
     public void returnObject(Object obj) {
         pool.offer(obj);
-    }
-}
-```
-
-## 6. 最佳实践总结
-
-### 6.1 垃圾回收调优原则
-
-:::tip 调优原则
-1. **先分析，后调优**：使用监控工具分析性能瓶颈
-2. **逐步调优**：每次只调整一个参数，观察效果
-3. **监控验证**：调优后要持续监控，验证效果
-4. **回归测试**：确保调优不影响功能
-:::
-
-```java title="调优原则示例"
-public class GCTuningPrinciples {
-    
-    /**
-     * 调优流程
-     */
-    public static void tuningProcess() {
-        // 1. 性能测试
-        PerformanceBaseline baseline = establishBaseline();
-        
-        // 2. 监控分析
-        PerformanceBottleneck bottleneck = analyzeBottleneck();
-        
-        // 3. 参数调优
-        TuningPlan plan = createTuningPlan(bottleneck);
-        applyTuningPlan(plan);
-        
-        // 4. 验证测试
-        PerformanceResult result = validateTuning();
-        
-        // 5. 持续监控
-        setupContinuousMonitoring();
-    }
-    
-    /**
-     * 常见调优误区
-     */
-    public static void commonTuningMistakes() {
-        // 1. 盲目增加堆内存
-        //    问题：可能导致GC停顿时间过长
-        //    解决：根据应用特点合理设置
-        
-        // 2. 过度优化
-        //    问题：可能影响系统稳定性
-        //    解决：在性能和稳定性间找到平衡
-        
-        // 3. 忽略监控
-        //    问题：调优后不持续监控
-        //    解决：建立完善的监控体系
-        
-        // 4. 参数照搬
-        //    问题：不同应用场景需要不同参数
-        //    解决：根据应用特点调整参数
-    }
-}
-```
-
-### 6.2 常见问题解决
-
-```java title="常见问题解决示例"
-public class CommonProblemSolutions {
-    
-    /**
-     * 频繁GC问题
-     */
-    public static void frequentGCProblem() {
-        // 问题表现：
-        // 1. GC频率过高
-        // 2. 应用响应时间波动
-        // 3. 系统负载高
-        
-        // 解决方案：
-        // 1. 增加堆内存大小
-        // 2. 优化对象分配
-        // 3. 调整新生代比例
-        // 4. 选择合适的收集器
-    }
-    
-    /**
-     * 长时间停顿问题
-     */
-    public static void longPauseProblem() {
-        // 问题表现：
-        // 1. GC停顿时间过长
-        // 2. 应用响应时间不稳定
-        // 3. 用户体验差
-        
-        // 解决方案：
-        // 1. 使用低停顿时间收集器（G1、ZGC）
-        // 2. 调整停顿时间目标
-        // 3. 优化对象分配
-        // 4. 减少大对象创建
-    }
-    
-    /**
-     * 内存泄漏问题
-     */
-    public static void memoryLeakProblem() {
-        // 问题表现：
-        // 1. 内存使用率持续上升
-        // 2. 频繁Full GC
-        // 3. 最终OOM
-        
-        // 解决方案：
-        // 1. 使用MAT分析堆转储
-        // 2. 检查静态集合
-        // 3. 检查监听器注册
-        // 4. 检查ThreadLocal使用
     }
 }
 ```

@@ -8,6 +8,9 @@ last_update:
   author: Laby
 ---
 
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
 # Java 集合工具类详解
 
 ## 1. 集合工具类概述
@@ -15,12 +18,76 @@ last_update:
 Java 提供了丰富的集合工具类，主要包括 `Collections` 和 `Arrays` 工具类，以及 Apache Commons Collections 等第三方库。这些工具类提供了大量便捷的方法来操作集合，大大简化了集合操作的复杂度。
 
 :::tip 核心价值
-集合工具类 = 便捷操作 + 性能优化 + 线程安全 + 代码复用
+**集合工具类 = 便捷操作 + 性能优化 + 线程安全 + 代码复用**
+
+- 🛠️ **便捷操作** - 提供丰富的方法简化常见集合操作，如排序、查找、转换等
+- ⚡ **性能优化** - 经过优化的算法实现，提供高效的集合处理能力
+- 🔒 **线程安全** - 提供线程安全的集合包装和操作方法，简化并发编程
+- 📦 **代码复用** - 减少重复代码，提高开发效率和代码质量
+- 🧩 **标准化** - 提供统一的API接口，使代码更加一致和可维护
 :::
 
 ### 1.1 什么是集合工具类？
 
 集合工具类是一组静态方法的集合，专门用于操作 Java 集合框架中的各种集合类型。它们提供了排序、查找、同步、不可变集合创建等常用功能，让开发者能够更高效地处理集合数据。
+
+```mermaid
+classDiagram
+    class Collections {
+        +sort(List) void
+        +binarySearch(List, Object) int
+        +shuffle(List) void
+        +reverse(List) void
+        +swap(List, int, int) void
+        +fill(List, Object) void
+        +max(Collection) T
+        +min(Collection) T
+        +unmodifiableList(List) List
+        +synchronizedList(List) List
+        +emptyList() List
+        +singleton(T) Set
+    }
+    
+    class Arrays {
+        +sort(T[]) void
+        +binarySearch(T[], Object) int
+        +fill(T[], Object) void
+        +copyOf(T[], int) T[]
+        +equals(T[], T[]) boolean
+        +asList(T...) List
+        +stream(T[]) Stream
+        +parallelSort(T[]) void
+        +spliterator(T[]) Spliterator
+    }
+    
+    class Guava {
+        +immutableList(T...) ImmutableList
+        +multiset() Multiset
+        +biMap() BiMap
+        +table() Table
+        +partition(List, int) List~List~
+        +transform(Collection, Function) Collection
+    }
+    
+    class ApacheCommons {
+        +isEmpty(Collection) boolean
+        +isNotEmpty(Collection) boolean
+        +union(Collection, Collection) Collection
+        +intersection(Collection, Collection) Collection
+        +subtract(Collection, Collection) Collection
+        +filter(Collection, Predicate) Collection
+    }
+    
+    Collections --> "操作" List
+    Collections --> "操作" Set
+    Collections --> "操作" Map
+    
+    Arrays --> "操作" Object[]
+    Arrays --> "转换" List
+    
+    Guava --> "扩展" Collections
+    ApacheCommons --> "扩展" Collections
+```
 
 #### 主要工具类分类
 
@@ -70,6 +137,40 @@ public class CollectionUtilsDesign {
 ## 2. Collections 工具类详解
 
 Collections 工具类是 Java 集合框架中最重要的工具类，提供了丰富的静态方法来操作各种集合类型。
+
+```mermaid
+graph TD
+    A["Collections 方法分类"] --> B["排序和查找"]
+    A --> C["修改操作"]
+    A --> D["集合包装"]
+    A --> E["集合工厂"]
+    
+    B --> B1["sort"]
+    B --> B2["binarySearch"]
+    B --> B3["shuffle"]
+    B --> B4["reverse"]
+    B --> B5["min/max"]
+    
+    C --> C1["copy"]
+    C --> C2["fill"]
+    C --> C3["swap"]
+    C --> C4["rotate"]
+    C --> C5["replaceAll"]
+    
+    D --> D1["unmodifiableXxx"]
+    D --> D2["synchronizedXxx"]
+    D --> D3["checkedXxx"]
+    
+    E --> E1["emptyXxx"]
+    E --> E2["singletonXxx"]
+    E --> E3["nCopies"]
+    
+    style A fill:#f9f,stroke:#333,stroke-width:2px
+    style B,C,D,E fill:#bbf,stroke:#333,stroke-width:1px
+```
+
+<Tabs>
+<TabItem value="sort" label="排序和查找操作">
 
 ### 2.1 排序操作
 
@@ -195,6 +296,69 @@ public class CollectionsSearchExample {
 | `Collections.max()/min()` | O(n) | 无 | 查找最大最小值 |
 | `Collections.indexOfSubList()` | O(n*m) | 无 | 查找子列表位置 |
 | `Collections.frequency()` | O(n) | 无 | 统计元素出现次数 |
+
+</TabItem>
+<TabItem value="modify" label="修改操作">
+
+### 2.3 集合修改操作
+
+Collections 工具类提供了丰富的集合修改方法，包括元素交换、旋转、打乱、反转等：
+
+```java title="集合修改操作示例"
+public class CollectionsModifyExample {
+    public static void main(String[] args) {
+        // 交换元素
+        List<String> swapList = new ArrayList<>(Arrays.asList("a", "b", "c", "d"));
+        System.out.println("交换前: " + swapList);
+        Collections.swap(swapList, 0, 2);
+        System.out.println("交换后: " + swapList);
+        
+        // 旋转集合
+        List<String> rotateList = new ArrayList<>(Arrays.asList("a", "b", "c", "d", "e"));
+        System.out.println("旋转前: " + rotateList);
+        
+        // 向右旋转2位
+        Collections.rotate(rotateList, 2);
+        System.out.println("向右旋转2位: " + rotateList);
+        
+        // 向左旋转1位
+        Collections.rotate(rotateList, -1);
+        System.out.println("向左旋转1位: " + rotateList);
+        
+        // 反转列表
+        List<Integer> reverseList = new ArrayList<>(Arrays.asList(1, 2, 3, 4, 5));
+        System.out.println("反转前: " + reverseList);
+        Collections.reverse(reverseList);
+        System.out.println("反转后: " + reverseList);
+        
+        // 复制集合
+        List<String> source = Arrays.asList("a", "b", "c");
+        List<String> dest = Arrays.asList("x", "y", "z");
+        System.out.println("复制前: 源=" + source + ", 目标=" + dest);
+        Collections.copy(dest, source);
+        System.out.println("复制后: 目标=" + dest);
+        
+        // 替换所有元素
+        List<String> replaceList = new ArrayList<>(Arrays.asList("a", "b", "a", "c", "a"));
+        System.out.println("替换前: " + replaceList);
+        Collections.replaceAll(replaceList, "a", "x");
+        System.out.println("替换后: " + replaceList);
+    }
+}
+```
+
+| 方法 | 功能 | 时间复杂度 | 特点 |
+|------|------|------------|------|
+| `swap(List, int, int)` | 交换两个位置的元素 | O(1) | 原地修改 |
+| `rotate(List, int)` | 将列表旋转指定距离 | O(n) | 正数右移，负数左移 |
+| `reverse(List)` | 反转列表 | O(n) | 原地修改 |
+| `shuffle(List)` | 随机打乱列表 | O(n) | 使用默认随机源 |
+| `copy(List dest, List src)` | 复制列表 | O(n) | 目标必须足够大 |
+| `fill(List, Object)` | 用指定元素填充列表 | O(n) | 覆盖所有元素 |
+| `replaceAll(List, old, new)` | 替换所有指定元素 | O(n) | 替换全部匹配项 |
+
+</TabItem>
+<TabItem value="wrapper" label="集合包装">
 
 ### 2.3 同步和不可变集合
 
@@ -399,9 +563,37 @@ public class CollectionsStatisticsExample {
 | `Collections.disjoint()` | 检查集合是否无交集 | boolean | 检查两个集合是否完全独立 |
 | `Collection.containsAll()` | 检查包含关系 | boolean | 检查一个集合是否包含另一个集合的所有元素 |
 
+</TabItem>
+</Tabs>
+
 ## 3. Arrays 工具类详解
 
 Arrays 工具类是 Java 中专门用于操作数组的工具类，提供了排序、查找、比较、填充等常用功能。
+
+```mermaid
+graph TD
+    A["Arrays 方法分类"] --> B["排序相关"]
+    A --> C["查找相关"]
+    A --> D["数组转换"]
+    A --> E["数组操作"]
+    
+    B --> B1["sort"]
+    B --> B2["parallelSort"]
+    
+    C --> C1["binarySearch"]
+    C --> C2["equals/deepEquals"]
+    
+    D --> D1["asList"]
+    D --> D2["copyOf"]
+    D --> D3["stream"]
+    
+    E --> E1["fill"]
+    E --> E2["copyOfRange"]
+    E --> E3["toString/deepToString"]
+    
+    style A fill:#f9f,stroke:#333,stroke-width:2px
+    style B,C,D,E fill:#bbf,stroke:#333,stroke-width:1px
+```
 
 ### 3.1 数组排序和查找
 
@@ -1422,6 +1614,36 @@ public class BatchProcessingExample {
    - 监控内存使用情况
 
 ## 7. 总结
+
+```mermaid
+graph TD
+    A["集合工具类最佳实践"] --> B["设计原则"]
+    A --> C["性能优化"]
+    A --> D["常见陷阱"]
+    A --> E["工具类选择"]
+    
+    B --> B1["单一职责"]
+    B --> B2["空安全"]
+    B --> B3["类型安全"]
+    B --> B4["一致性"]
+    
+    C --> C1["预分配容量"]
+    C --> C2["选择合适集合"]
+    C --> C3["并行处理"]
+    C --> C4["避免装箱拆箱"]
+    
+    D --> D1["Arrays.asList()不可变"]
+    D --> D2["同步集合复合操作"]
+    D --> D3["Stream延迟执行"]
+    
+    E --> E1["Collections: 集合操作"]
+    E --> E2["Arrays: 数组操作"]
+    E --> E3["Guava: 扩展功能"]
+    E --> E4["Apache: 工具补充"]
+    
+    style A fill:#f9f,stroke:#333,stroke-width:2px
+    style B,C,D,E fill:#bbf,stroke:#333,stroke-width:1px
+```
 
 Java集合工具类为集合操作提供了强大而便捷的功能。通过合理使用Collections和Arrays工具类，我们可以：
 

@@ -8,6 +8,9 @@ last_update:
   author: Laby
 ---
 
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
 # Java 集合对象去重技术详解
 
 在Java开发中，对象去重是一个常见且重要的需求。无论是处理用户数据、业务记录还是系统日志，去重技术都能帮助我们提高数据质量、优化存储空间和提升查询性能。本文将详细介绍各种去重技术及其适用场景。
@@ -17,10 +20,12 @@ last_update:
 ### 1.1 什么是对象去重？
 
 :::tip 核心概念
-对象去重是指从集合中移除重复元素，保留唯一元素的过程。去重的核心在于如何定义"重复"：
-- **基于对象引用**：两个对象引用指向同一内存地址
-- **基于对象内容**：两个对象在业务逻辑上被认为是相同的
-- **基于特定字段**：两个对象在指定字段上具有相同的值
+**对象去重是指从集合中移除重复元素，保留唯一元素的过程。去重的核心在于如何定义"重复"：**
+
+- 🔍 **基于对象引用**：两个对象引用指向同一内存地址，使用`==`比较
+- 📦 **基于对象内容**：两个对象在业务逻辑上被认为是相同的，通过`equals()`和`hashCode()`
+- 🏷️ **基于特定字段**：两个对象在指定字段上具有相同的值，使用自定义比较逻辑
+- 🔄 **基于组合条件**：多个字段或复杂业务规则的组合判断
 :::
 
 ### 1.2 去重的重要性
@@ -33,6 +38,35 @@ last_update:
 | **业务逻辑** | 确保业务规则的一致性 | 维护数据完整性 |
 
 ### 1.3 去重技术分类
+
+```mermaid
+graph TD
+    A[Java对象去重技术] --> B[基于集合]
+    A --> C[基于Stream]
+    A --> D[基于自定义逻辑]
+    A --> E[基于数据库]
+    
+    B --> B1[HashSet]
+    B --> B2[TreeSet]
+    B --> B3[LinkedHashSet]
+    
+    C --> C1[distinct()]
+    C --> C2[toMap()]
+    C --> C3[groupingBy()]
+    C --> C4[collectingAndThen()]
+    
+    D --> D1[自定义比较器]
+    D --> D2[多字段组合]
+    D --> D3[基于时间戳]
+    D --> D4[业务规则]
+    
+    E --> E1[唯一约束]
+    E --> E2[DISTINCT关键字]
+    E --> E3[GROUP BY子句]
+    
+    style A fill:#f9f,stroke:#333,stroke-width:2px
+    style B,C,D,E fill:#bbf,stroke:#333,stroke-width:1px
+```
 
 ```java title="去重技术分类示例"
 public class DeduplicationTechniques {
@@ -68,6 +102,9 @@ public class DeduplicationTechniques {
 ```
 
 ## 2. 基本去重方法详解
+
+<Tabs>
+<TabItem value="hashset" label="HashSet去重">
 
 ### 2.1 使用HashSet去重
 
@@ -150,6 +187,9 @@ public class HashSetDeduplicationExample {
 | **顺序保持** | 不保证原有顺序 | 顺序随机 | 不要求顺序 |
 | **null处理** | 支持null值 | 需要特殊处理 | 包含null的集合 |
 
+</TabItem>
+<TabItem value="stream" label="Stream API去重">
+
 ### 2.2 使用Stream API去重
 
 Java 8的Stream API提供了更优雅的去重方式：
@@ -221,6 +261,9 @@ public class StreamDeduplicationExample {
 | `collectingAndThen` | 链式操作优化 | 高 | 需要进一步处理的场景 |
 | `groupingBy` | 分组后去重 | 中等 | 需要分组统计的场景 |
 
+</TabItem>
+<TabItem value="linkedhashset" label="LinkedHashSet去重">
+
 ### 2.3 使用LinkedHashSet保持顺序
 
 如果需要保持原有顺序：
@@ -262,7 +305,110 @@ public class LinkedHashSetDeduplicationExample {
 }
 ```
 
+</TabItem>
+<TabItem value="treeset" label="TreeSet去重">
+
+### 2.4 使用TreeSet有序去重
+
+TreeSet基于红黑树实现，在去重的同时可以按指定顺序排序：
+
+```java title="TreeSet去重示例"
+public class TreeSetDeduplicationExample {
+    public static void main(String[] args) {
+        List<User> users = Arrays.asList(
+            new User("Alice", 25, "alice@example.com"),
+            new User("Bob", 30, "bob@example.com"),
+            new User("Charlie", 35, "charlie@example.com"),
+            new User("Bob", 30, "bob@example.com"),       // 重复
+            new User("Alice", 25, "alice@example.com")    // 重复
+        );
+        
+        System.out.println("=== TreeSet去重示例 ===");
+        System.out.println("原始用户列表: " + users);
+        
+        // 使用TreeSet按自然顺序去重
+        // 注意：User类需要实现Comparable接口
+        TreeSet<User> naturalOrderSet = new TreeSet<>(new Comparator<User>() {
+            @Override
+            public int compare(User u1, User u2) {
+                int nameCompare = u1.getName().compareTo(u2.getName());
+                if (nameCompare != 0) return nameCompare;
+                return Integer.compare(u1.getAge(), u2.getAge());
+            }
+        });
+        naturalOrderSet.addAll(users);
+        
+        System.out.println("自然顺序去重: " + naturalOrderSet);
+        
+        // 使用TreeSet按指定顺序去重
+        TreeSet<User> ageOrderSet = new TreeSet<>(
+            Comparator.comparingInt(User::getAge).thenComparing(User::getName)
+        );
+        ageOrderSet.addAll(users);
+        
+        System.out.println("按年龄排序去重: " + ageOrderSet);
+        
+        // 使用TreeSet的导航功能
+        User first = ageOrderSet.first();
+        User last = ageOrderSet.last();
+        
+        System.out.println("年龄最小的用户: " + first);
+        System.out.println("年龄最大的用户: " + last);
+        
+        // 范围查询
+        User target = new User("Bob", 30, "bob@example.com");
+        User higher = ageOrderSet.higher(target); // 获取比target大的下一个元素
+        
+        if (higher != null) {
+            System.out.println("比Bob年龄大的下一个用户: " + higher);
+        }
+    }
+}
+```
+
+| 特点 | TreeSet | HashSet | LinkedHashSet |
+|------|--------|---------|--------------|
+| **去重原理** | 基于红黑树和比较器 | 基于哈希码和equals | 基于哈希码和equals |
+| **是否有序** | 是（自然顺序或比较器指定） | 否 | 是（插入顺序） |
+| **时间复杂度** | O(log n) | O(1) | O(1) |
+| **空间复杂度** | O(n) | O(n) | O(n) |
+| **特有功能** | 范围查询、导航操作 | 无 | 保持插入顺序 |
+| **适用场景** | 需要有序去重 | 一般去重场景 | 保持顺序的去重 |
+
+</TabItem>
+</Tabs>
+
 ## 3. 高级去重技术
+
+```mermaid
+graph TD
+    A["高级去重技术"] --> B["基于多字段"]
+    A --> C["自定义比较器"]
+    A --> D["基于时间戳"]
+    A --> E["业务规则"]
+    
+    B --> B1["key拼接 (user.getName() + '|' + user.getAge())"]
+    B --> B2["CompositeKey对象 (name, department, location)"]
+    B --> B3["多字段提取器"]
+    
+    C --> C1["字段优先级比较器"]
+    C --> C2["条件过滤比较器"]
+    C --> C3["链式比较器"]
+    
+    D --> D1["保留最新记录"]
+    D --> D2["保留最早记录"]
+    D --> D3["时间窗口去重"]
+    
+    E --> E1["特殊业务场景去重"]
+    E --> E2["组合多规则去重"]
+    E --> E3["基于外部数据源去重"]
+    
+    style A fill:#f9f,stroke:#333,stroke-width:2px
+    style B,C,D,E fill:#bbf,stroke:#333,stroke-width:1px
+```
+
+<Tabs>
+<TabItem value="multifield" label="多字段去重">
 
 ### 3.1 基于多个字段去重
 
@@ -358,6 +504,9 @@ public class ComplexUser {
 }
 ```
 
+</TabItem>
+<TabItem value="comparator" label="自定义比较器去重">
+
 ### 3.2 自定义比较器去重
 
 ```java title="自定义比较器去重示例"
@@ -416,6 +565,9 @@ public class CustomComparatorDeduplicationExample {
     }
 }
 ```
+
+</TabItem>
+<TabItem value="timestamp" label="时间戳去重">
 
 ### 3.3 基于时间戳去重
 
@@ -483,7 +635,40 @@ public class TimestampedUser {
 }
 ```
 
+</TabItem>
+</Tabs>
+
 ## 4. 性能优化技巧
+
+```mermaid
+graph TD
+    A["性能优化技巧"] --> B["数据结构优化"]
+    A --> C["算法优化"]
+    A --> D["内存优化"]
+    A --> E["并发优化"]
+    
+    B --> B1["预分配容量 (new HashSet<>(size))"]
+    B --> B2["选择合适的集合"]
+    B --> B3["自定义哈希函数"]
+    
+    C --> C1["分批处理大数据集"]
+    C --> C2["避免重复计算"]
+    C --> C3["减少中间集合"]
+    
+    D --> D1["避免装箱拆箱"]
+    D --> D2["弱引用缓存"]
+    D --> D3["延迟加载"]
+    
+    E --> E1["并行流处理"]
+    E --> E2["线程池执行"]
+    E --> E3["分段去重合并"]
+    
+    style A fill:#f9f,stroke:#333,stroke-width:2px
+    style B,C,D,E fill:#bbf,stroke:#333,stroke-width:1px
+```
+
+<Tabs>
+<TabItem value="capacity" label="容量优化">
 
 ### 4.1 预分配容量
 
@@ -545,6 +730,9 @@ public class CapacityOptimizationExample {
     }
 }
 ```
+
+</TabItem>
+<TabItem value="parallel" label="并行流优化">
 
 ### 4.2 使用并行流处理大数据量
 
@@ -616,6 +804,9 @@ public class ParallelStreamDeduplicationExample {
     }
 }
 ```
+
+</TabItem>
+<TabItem value="batch" label="分批处理">
 
 ### 4.3 分批处理超大数据集
 
@@ -701,7 +892,40 @@ public class BatchProcessingDeduplicationExample {
 }
 ```
 
+</TabItem>
+</Tabs>
+
 ## 5. 实际应用场景
+
+```mermaid
+graph TD
+    A["实际应用场景"] --> B["数据层应用"]
+    A --> C["业务层应用"]
+    A --> D["展示层应用"]
+    A --> E["系统层应用"]
+    
+    B --> B1["用户数据去重"]
+    B --> B2["交易记录去重"]
+    B --> B3["日志数据去重"]
+    
+    C --> C1["业务对象去重"]
+    C --> C2["报表数据去重"]
+    C --> C3["消息队列去重"]
+    
+    D --> D1["界面元素去重"]
+    D --> D2["返回结果去重"]
+    D --> D3["搜索结果去重"]
+    
+    E --> E1["缓存数据去重"]
+    E --> E2["配置信息去重"]
+    E --> E3["任务队列去重"]
+    
+    style A fill:#f9f,stroke:#333,stroke-width:2px
+    style B,C,D,E fill:#bbf,stroke:#333,stroke-width:1px
+```
+
+<Tabs>
+<TabItem value="user" label="用户数据去重">
 
 ### 5.1 用户数据去重
 
@@ -771,6 +995,9 @@ public class UserDataDeduplicationExample {
     }
 }
 ```
+
+</TabItem>
+<TabItem value="logs" label="日志数据去重">
 
 ### 5.2 日志数据去重
 
@@ -843,6 +1070,9 @@ class LogEntry {
 }
 ```
 
+</TabItem>
+<TabItem value="business" label="业务数据去重">
+
 ### 5.3 业务数据去重
 
 ```java title="业务数据去重应用示例"
@@ -909,7 +1139,41 @@ class Order {
 }
 ```
 
+</TabItem>
+</Tabs>
+
 ## 6. 最佳实践总结
+
+```mermaid
+graph TD
+    A["去重最佳实践"] --> B["策略选择"]
+    A --> C["性能优化"]
+    A --> D["避免陷阱"]
+    A --> E["测试验证"]
+    
+    B --> B1["需要顺序: LinkedHashSet"]
+    B --> B2["高性能: HashSet"]
+    B --> B3["自动排序: TreeSet"]
+    B --> B4["多字段: CompositeKey"]
+    
+    C --> C1["预分配容量"]
+    C --> C2["减少临时对象"]
+    C --> C3["大数据量分批处理"]
+    C --> C4["并行流处理"]
+    
+    D --> D1["避免可变对象作为键"]
+    D --> D2["注意自定义equals/hashCode"]
+    D --> D3["避免创建多余集合"]
+    D --> D4["处理好null值"]
+    
+    E --> E1["单元测试不同场景"]
+    E --> E2["性能基准测试"]
+    E --> E3["边界情况验证"]
+    E --> E4["内存使用监控"]
+    
+    style A fill:#f9f,stroke:#333,stroke-width:2px
+    style B,C,D,E fill:#bbf,stroke:#333,stroke-width:1px
+```
 
 ### 6.1 去重策略选择
 

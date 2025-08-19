@@ -1,0 +1,1200 @@
+---
+sidebar_position: 2
+title: Vue常用组件开发指南
+description: Vue组件库开发与实践，包含常用UI组件与功能组件
+authors: [Laby]
+tags: [Vue.js, 组件, UI组件, 自定义组件]
+last_update:
+  date: 2025-08-15
+  author: Laby
+---
+
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+import CodeBlock from '@theme/CodeBlock';
+
+# Vue常用组件开发指南
+
+Vue组件是Vue应用的核心构建块，通过组件化开发可以提高代码复用性、可维护性和开发效率。本文将介绍Vue常用组件的开发与最佳实践。
+
+:::tip 核心价值
+**组件化开发优势**
+- 🧩 **代码复用**：将UI和逻辑封装为可重用组件
+- 🛠️ **关注点分离**：每个组件负责特定功能
+- 🔄 **可维护性**：独立开发、测试和维护
+- 📦 **共享生态**：利用社区组件库加速开发
+:::
+
+## 1. 表单组件
+
+表单组件是前端应用中最常用的组件类型之一，下面介绍几个常用表单组件的实现。
+
+### 1.1 高级输入框组件
+
+一个带验证、清除按钮和标签的增强输入框组件。
+
+```vue
+<template>
+  <div class="advanced-input">
+    <label v-if="label" :for="id" class="input-label">
+      {{ label }}
+      <span v-if="required" class="required">*</span>
+    </label>
+    
+    <div class="input-wrapper" :class="{ 'has-error': errorMessage }">
+      <input
+        :id="id"
+        :type="type"
+        :value="modelValue"
+        @input="onInput"
+        :placeholder="placeholder"
+        :disabled="disabled"
+        :required="required"
+        :class="{ 'has-clear': modelValue && clearable }"
+      />
+      
+      <button
+        v-if="modelValue && clearable"
+        type="button"
+        class="clear-button"
+        @click="clear"
+        aria-label="Clear input"
+      >
+        ✕
+      </button>
+    </div>
+    
+    <p v-if="errorMessage" class="error-message">{{ errorMessage }}</p>
+  </div>
+</template>
+
+<script setup>
+import { computed, ref } from 'vue';
+import { v4 as uuidv4 } from 'uuid';
+
+const props = defineProps({
+  modelValue: {
+    type: [String, Number],
+    default: ''
+  },
+  label: {
+    type: String,
+    default: ''
+  },
+  placeholder: {
+    type: String,
+    default: ''
+  },
+  type: {
+    type: String,
+    default: 'text'
+  },
+  required: {
+    type: Boolean,
+    default: false
+  },
+  disabled: {
+    type: Boolean,
+    default: false
+  },
+  clearable: {
+    type: Boolean,
+    default: true
+  },
+  validator: {
+    type: Function,
+    default: null
+  }
+});
+
+const emit = defineEmits(['update:modelValue']);
+const id = ref(`input-${uuidv4()}`);
+const errorMessage = ref('');
+
+const onInput = (event) => {
+  const value = event.target.value;
+  emit('update:modelValue', value);
+  
+  if (props.validator) {
+    const validationResult = props.validator(value);
+    errorMessage.value = typeof validationResult === 'string' ? validationResult : '';
+  }
+};
+
+const clear = () => {
+  emit('update:modelValue', '');
+  errorMessage.value = '';
+};
+</script>
+
+<style scoped>
+.advanced-input {
+  margin-bottom: 1rem;
+}
+
+.input-label {
+  display: block;
+  margin-bottom: 0.5rem;
+  font-weight: 500;
+}
+
+.input-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.input-wrapper input {
+  width: 100%;
+  padding: 0.75rem 1rem;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 1rem;
+  transition: border-color 0.2s;
+}
+
+.input-wrapper.has-error input {
+  border-color: #dc3545;
+}
+
+.input-wrapper input:focus {
+  border-color: #4c9aff;
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(76, 154, 255, 0.2);
+}
+
+.input-wrapper input.has-clear {
+  padding-right: 2.5rem;
+}
+
+.clear-button {
+  position: absolute;
+  right: 0.75rem;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #999;
+  padding: 0.25rem;
+}
+
+.clear-button:hover {
+  color: #333;
+}
+
+.required {
+  color: #dc3545;
+  margin-left: 0.25rem;
+}
+
+.error-message {
+  color: #dc3545;
+  font-size: 0.875rem;
+  margin-top: 0.25rem;
+}
+</style>
+```
+
+### 1.2 可搜索下拉选择组件
+
+一个支持搜索功能的下拉选择组件。
+
+```vue
+<template>
+  <div class="searchable-select" v-click-outside="closeDropdown">
+    <label v-if="label" class="select-label">
+      {{ label }}
+      <span v-if="required" class="required">*</span>
+    </label>
+    
+    <div 
+      class="select-input" 
+      @click="toggleDropdown" 
+      :class="{ 'is-open': isOpen, 'is-disabled': disabled }"
+    >
+      <template v-if="selectedOption">
+        <div class="selected-value">{{ selectedOption.label }}</div>
+      </template>
+      <template v-else>
+        <div class="placeholder">{{ placeholder }}</div>
+      </template>
+      <div class="select-arrow">▼</div>
+    </div>
+    
+    <div v-if="isOpen" class="dropdown-container">
+      <div class="search-container">
+        <input
+          ref="searchInput"
+          v-model="searchQuery"
+          type="text"
+          class="search-input"
+          placeholder="搜索..."
+          @click.stop
+        />
+      </div>
+      
+      <div class="options-list">
+        <div 
+          v-for="option in filteredOptions" 
+          :key="option.value" 
+          class="option-item"
+          :class="{ 'is-selected': modelValue === option.value }"
+          @click="selectOption(option)"
+        >
+          {{ option.label }}
+        </div>
+        
+        <div v-if="filteredOptions.length === 0" class="no-results">
+          无匹配结果
+        </div>
+      </div>
+    </div>
+  </div>
+</template>
+
+<script setup>
+import { ref, computed, nextTick, onMounted } from 'vue';
+
+// 自定义 v-click-outside 指令
+const vClickOutside = {
+  mounted(el, binding) {
+    el._clickOutside = (event) => {
+      if (!(el === event.target || el.contains(event.target))) {
+        binding.value(event);
+      }
+    };
+    document.addEventListener('click', el._clickOutside);
+  },
+  unmounted(el) {
+    document.removeEventListener('click', el._clickOutside);
+  }
+};
+
+const props = defineProps({
+  modelValue: {
+    type: [String, Number],
+    default: null
+  },
+  options: {
+    type: Array,
+    default: () => []
+  },
+  label: {
+    type: String,
+    default: ''
+  },
+  placeholder: {
+    type: String,
+    default: '请选择'
+  },
+  required: {
+    type: Boolean,
+    default: false
+  },
+  disabled: {
+    type: Boolean,
+    default: false
+  }
+});
+
+const emit = defineEmits(['update:modelValue', 'change']);
+const isOpen = ref(false);
+const searchQuery = ref('');
+const searchInput = ref(null);
+
+const selectedOption = computed(() => {
+  return props.options.find(option => option.value === props.modelValue);
+});
+
+const filteredOptions = computed(() => {
+  if (!searchQuery.value) return props.options;
+  return props.options.filter(option => 
+    option.label.toLowerCase().includes(searchQuery.value.toLowerCase())
+  );
+});
+
+const toggleDropdown = () => {
+  if (props.disabled) return;
+  
+  isOpen.value = !isOpen.value;
+  if (isOpen.value) {
+    searchQuery.value = '';
+    nextTick(() => {
+      searchInput.value?.focus();
+    });
+  }
+};
+
+const closeDropdown = () => {
+  isOpen.value = false;
+  searchQuery.value = '';
+};
+
+const selectOption = (option) => {
+  emit('update:modelValue', option.value);
+  emit('change', option);
+  closeDropdown();
+};
+</script>
+
+<style scoped>
+.searchable-select {
+  position: relative;
+  width: 100%;
+  font-size: 1rem;
+}
+
+.select-label {
+  display: block;
+  margin-bottom: 0.5rem;
+  font-weight: 500;
+}
+
+.select-input {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.75rem 1rem;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  cursor: pointer;
+  background-color: #fff;
+  transition: all 0.2s;
+}
+
+.select-input:hover {
+  border-color: #bbb;
+}
+
+.select-input.is-open {
+  border-color: #4c9aff;
+  box-shadow: 0 0 0 2px rgba(76, 154, 255, 0.2);
+}
+
+.select-input.is-disabled {
+  background-color: #f5f5f5;
+  cursor: not-allowed;
+  color: #999;
+}
+
+.selected-value {
+  flex-grow: 1;
+}
+
+.placeholder {
+  color: #999;
+  flex-grow: 1;
+}
+
+.select-arrow {
+  font-size: 0.75rem;
+  color: #666;
+  transition: transform 0.2s;
+}
+
+.is-open .select-arrow {
+  transform: rotate(180deg);
+}
+
+.dropdown-container {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  width: 100%;
+  background-color: #fff;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  margin-top: 0.25rem;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  z-index: 100;
+  max-height: 300px;
+  display: flex;
+  flex-direction: column;
+}
+
+.search-container {
+  padding: 0.5rem;
+  border-bottom: 1px solid #eee;
+}
+
+.search-input {
+  width: 100%;
+  padding: 0.5rem;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 0.875rem;
+}
+
+.options-list {
+  overflow-y: auto;
+  max-height: 240px;
+}
+
+.option-item {
+  padding: 0.75rem 1rem;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.option-item:hover {
+  background-color: #f5f9ff;
+}
+
+.option-item.is-selected {
+  background-color: #e6f1ff;
+  color: #1a73e8;
+  font-weight: 500;
+}
+
+.no-results {
+  padding: 0.75rem 1rem;
+  color: #999;
+  text-align: center;
+  font-style: italic;
+}
+
+.required {
+  color: #dc3545;
+  margin-left: 0.25rem;
+}
+</style>
+```
+
+## 2. 布局组件
+
+布局组件是构建应用界面结构的基础，下面介绍几个常用布局组件。
+
+### 2.1 可响应式网格系统
+
+一个简单但功能完备的网格系统，支持响应式布局。
+
+```vue
+<!-- GridRow.vue -->
+<template>
+  <div class="grid-row" :style="rowStyle">
+    <slot></slot>
+  </div>
+</template>
+
+<script setup>
+import { computed } from 'vue';
+
+const props = defineProps({
+  gutter: {
+    type: [Number, String],
+    default: 0
+  },
+  justify: {
+    type: String,
+    default: 'start',
+    validator: value => ['start', 'end', 'center', 'space-between', 'space-around'].includes(value)
+  },
+  align: {
+    type: String,
+    default: 'top',
+    validator: value => ['top', 'middle', 'bottom'].includes(value)
+  }
+});
+
+const rowStyle = computed(() => {
+  const gutterValue = parseInt(props.gutter);
+  const marginValue = gutterValue > 0 ? -(gutterValue / 2) : 0;
+  
+  const alignMap = {
+    top: 'flex-start',
+    middle: 'center',
+    bottom: 'flex-end'
+  };
+  
+  const justifyMap = {
+    start: 'flex-start',
+    end: 'flex-end',
+    center: 'center',
+    'space-between': 'space-between',
+    'space-around': 'space-around'
+  };
+  
+  return {
+    marginLeft: `${marginValue}px`,
+    marginRight: `${marginValue}px`,
+    justifyContent: justifyMap[props.justify],
+    alignItems: alignMap[props.align]
+  };
+});
+</script>
+
+<style scoped>
+.grid-row {
+  display: flex;
+  flex-wrap: wrap;
+}
+</style>
+```
+
+```vue
+<!-- GridCol.vue -->
+<template>
+  <div class="grid-col" :class="colClasses" :style="colStyle">
+    <slot></slot>
+  </div>
+</template>
+
+<script setup>
+import { computed, inject } from 'vue';
+
+const props = defineProps({
+  span: {
+    type: [Number, String],
+    default: 24
+  },
+  offset: {
+    type: [Number, String],
+    default: 0
+  },
+  xs: [Number, Object],
+  sm: [Number, Object],
+  md: [Number, Object],
+  lg: [Number, Object],
+  xl: [Number, Object]
+});
+
+// 从父组件注入gutter值
+const parentGutter = inject('gutter', 0);
+
+const colStyle = computed(() => {
+  const gutterValue = parseInt(parentGutter);
+  const paddingValue = gutterValue > 0 ? gutterValue / 2 : 0;
+  
+  return {
+    paddingLeft: `${paddingValue}px`,
+    paddingRight: `${paddingValue}px`
+  };
+});
+
+const colClasses = computed(() => {
+  const classes = [];
+  
+  // 基本列宽
+  classes.push(`col-${props.span}`);
+  
+  // 列偏移
+  if (props.offset > 0) {
+    classes.push(`col-offset-${props.offset}`);
+  }
+  
+  // 响应式布局类
+  ['xs', 'sm', 'md', 'lg', 'xl'].forEach(size => {
+    if (props[size]) {
+      const sizeValue = props[size];
+      if (typeof sizeValue === 'number') {
+        classes.push(`col-${size}-${sizeValue}`);
+      } else if (typeof sizeValue === 'object') {
+        if (sizeValue.span) {
+          classes.push(`col-${size}-${sizeValue.span}`);
+        }
+        if (sizeValue.offset) {
+          classes.push(`col-${size}-offset-${sizeValue.offset}`);
+        }
+      }
+    }
+  });
+  
+  return classes;
+});
+</script>
+
+<style scoped>
+.grid-col {
+  box-sizing: border-box;
+}
+
+/* 基本列宽定义，24栅格 */
+.col-1 { width: 4.166667%; }
+.col-2 { width: 8.333333%; }
+.col-3 { width: 12.5%; }
+.col-4 { width: 16.666667%; }
+.col-5 { width: 20.833333%; }
+.col-6 { width: 25%; }
+.col-7 { width: 29.166667%; }
+.col-8 { width: 33.333333%; }
+.col-9 { width: 37.5%; }
+.col-10 { width: 41.666667%; }
+.col-11 { width: 45.833333%; }
+.col-12 { width: 50%; }
+.col-13 { width: 54.166667%; }
+.col-14 { width: 58.333333%; }
+.col-15 { width: 62.5%; }
+.col-16 { width: 66.666667%; }
+.col-17 { width: 70.833333%; }
+.col-18 { width: 75%; }
+.col-19 { width: 79.166667%; }
+.col-20 { width: 83.333333%; }
+.col-21 { width: 87.5%; }
+.col-22 { width: 91.666667%; }
+.col-23 { width: 95.833333%; }
+.col-24 { width: 100%; }
+
+/* 列偏移 */
+.col-offset-1 { margin-left: 4.166667%; }
+.col-offset-2 { margin-left: 8.333333%; }
+.col-offset-3 { margin-left: 12.5%; }
+/* 以此类推... */
+
+/* 响应式布局断点 */
+@media (max-width: 576px) {
+  .col-xs-1 { width: 4.166667%; }
+  .col-xs-2 { width: 8.333333%; }
+  /* 以此类推... */
+}
+
+@media (min-width: 576px) {
+  .col-sm-1 { width: 4.166667%; }
+  .col-sm-2 { width: 8.333333%; }
+  /* 以此类推... */
+}
+
+@media (min-width: 768px) {
+  .col-md-1 { width: 4.166667%; }
+  .col-md-2 { width: 8.333333%; }
+  /* 以此类推... */
+}
+
+@media (min-width: 992px) {
+  .col-lg-1 { width: 4.166667%; }
+  .col-lg-2 { width: 8.333333%; }
+  /* 以此类推... */
+}
+
+@media (min-width: 1200px) {
+  .col-xl-1 { width: 4.166667%; }
+  .col-xl-2 { width: 8.333333%; }
+  /* 以此类推... */
+}
+</style>
+```
+
+### 2.2 响应式卡片布局组件
+
+一个适用于展示内容的卡片组件。
+
+```vue
+<template>
+  <div 
+    class="responsive-card" 
+    :class="[`elevation-${elevation}`, { hoverable }]"
+    @click="$emit('click')"
+  >
+    <div v-if="$slots.header || title" class="card-header">
+      <slot name="header">
+        <h3 class="card-title">{{ title }}</h3>
+        <div v-if="subtitle" class="card-subtitle">{{ subtitle }}</div>
+      </slot>
+    </div>
+    
+    <div v-if="$slots.media" class="card-media">
+      <slot name="media"></slot>
+    </div>
+    
+    <div class="card-body">
+      <slot></slot>
+    </div>
+    
+    <div v-if="$slots.footer" class="card-footer">
+      <slot name="footer"></slot>
+    </div>
+  </div>
+</template>
+
+<script setup>
+defineProps({
+  title: {
+    type: String,
+    default: ''
+  },
+  subtitle: {
+    type: String,
+    default: ''
+  },
+  elevation: {
+    type: Number,
+    default: 1,
+    validator: value => value >= 0 && value <= 5
+  },
+  hoverable: {
+    type: Boolean,
+    default: false
+  }
+});
+
+defineEmits(['click']);
+</script>
+
+<style scoped>
+.responsive-card {
+  background-color: #fff;
+  border-radius: 8px;
+  overflow: hidden;
+  transition: all 0.3s ease;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.responsive-card.hoverable {
+  cursor: pointer;
+}
+
+.responsive-card.hoverable:hover {
+  transform: translateY(-5px);
+}
+
+/* 不同阴影级别 */
+.elevation-0 {
+  box-shadow: none;
+  border: 1px solid #eee;
+}
+
+.elevation-1 {
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
+}
+
+.elevation-2 {
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.08);
+}
+
+.elevation-3 {
+  box-shadow: 0 6px 15px rgba(0, 0, 0, 0.1);
+}
+
+.elevation-4 {
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.12);
+}
+
+.elevation-5 {
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+}
+
+.card-header {
+  padding: 1rem;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.card-title {
+  margin: 0 0 0.25rem;
+  font-size: 1.25rem;
+  font-weight: 600;
+}
+
+.card-subtitle {
+  color: #6c757d;
+  font-size: 0.875rem;
+}
+
+.card-media {
+  position: relative;
+  overflow: hidden;
+}
+
+.card-media img {
+  width: 100%;
+  display: block;
+}
+
+.card-body {
+  padding: 1rem;
+  flex: 1;
+}
+
+.card-footer {
+  padding: 1rem;
+  border-top: 1px solid #f0f0f0;
+  background-color: #fafafa;
+}
+
+/* 响应式调整 */
+@media (max-width: 768px) {
+  .card-header {
+    padding: 0.75rem;
+  }
+  
+  .card-body {
+    padding: 0.75rem;
+  }
+  
+  .card-footer {
+    padding: 0.75rem;
+  }
+  
+  .card-title {
+    font-size: 1.1rem;
+  }
+}
+</style>
+```
+
+## 3. 功能组件
+
+功能组件提供特定的交互或功能，例如模态框、抽屉、轮播等。
+
+### 3.1 模态框组件
+
+一个可定制的模态对话框组件。
+
+```vue
+<template>
+  <Teleport to="body">
+    <Transition name="modal-fade">
+      <div v-if="modelValue" class="modal-overlay" @click="closeOnBackdrop && close()">
+        <div 
+          class="modal-container" 
+          :class="[sizeClass, { 'modal-centered': centered }]"
+          @click.stop
+        >
+          <div class="modal-header">
+            <h3 class="modal-title">
+              <slot name="title">{{ title }}</slot>
+            </h3>
+            <button v-if="closable" class="modal-close" @click="close" aria-label="Close modal">
+              ✕
+            </button>
+          </div>
+          
+          <div class="modal-body" :class="{ 'has-footer': $slots.footer }">
+            <slot></slot>
+          </div>
+          
+          <div v-if="$slots.footer" class="modal-footer">
+            <slot name="footer">
+              <button class="modal-btn modal-btn-cancel" @click="close">
+                {{ cancelText }}
+              </button>
+              <button class="modal-btn modal-btn-confirm" @click="confirm">
+                {{ confirmText }}
+              </button>
+            </slot>
+          </div>
+        </div>
+      </div>
+    </Transition>
+  </Teleport>
+</template>
+
+<script setup>
+import { computed, watch } from 'vue';
+import { onMounted, onUnmounted } from 'vue';
+
+const props = defineProps({
+  modelValue: {
+    type: Boolean,
+    default: false
+  },
+  title: {
+    type: String,
+    default: '对话框'
+  },
+  size: {
+    type: String,
+    default: 'medium',
+    validator: value => ['small', 'medium', 'large', 'full'].includes(value)
+  },
+  centered: {
+    type: Boolean,
+    default: true
+  },
+  closable: {
+    type: Boolean,
+    default: true
+  },
+  closeOnBackdrop: {
+    type: Boolean,
+    default: true
+  },
+  closeOnEsc: {
+    type: Boolean,
+    default: true
+  },
+  confirmText: {
+    type: String,
+    default: '确定'
+  },
+  cancelText: {
+    type: String,
+    default: '取消'
+  }
+});
+
+const emit = defineEmits(['update:modelValue', 'confirm', 'cancel']);
+
+const sizeClass = computed(() => {
+  return `modal-${props.size}`;
+});
+
+// 处理ESC键关闭
+const handleKeyDown = (e) => {
+  if (e.key === 'Escape' && props.closeOnEsc && props.modelValue) {
+    close();
+  }
+};
+
+// 阻止滚动
+const lockScroll = () => {
+  document.body.style.overflow = 'hidden';
+  document.body.style.paddingRight = '15px'; // 防止滚动条消失导致页面抖动
+};
+
+// 恢复滚动
+const unlockScroll = () => {
+  document.body.style.overflow = '';
+  document.body.style.paddingRight = '';
+};
+
+// 关闭模态框
+const close = () => {
+  emit('update:modelValue', false);
+  emit('cancel');
+};
+
+// 确认
+const confirm = () => {
+  emit('confirm');
+  close();
+};
+
+// 监听模态框状态变化
+watch(() => props.modelValue, (newValue) => {
+  if (newValue) {
+    lockScroll();
+  } else {
+    unlockScroll();
+  }
+});
+
+onMounted(() => {
+  document.addEventListener('keydown', handleKeyDown);
+  if (props.modelValue) {
+    lockScroll();
+  }
+});
+
+onUnmounted(() => {
+  document.removeEventListener('keydown', handleKeyDown);
+  unlockScroll();
+});
+</script>
+
+<style scoped>
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.modal-container {
+  background-color: #fff;
+  border-radius: 8px;
+  box-shadow: 0 15px 30px rgba(0, 0, 0, 0.2);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  max-height: 90vh;
+  margin: 1.5rem;
+}
+
+.modal-centered {
+  align-self: center;
+}
+
+/* 不同尺寸 */
+.modal-small {
+  width: 400px;
+}
+
+.modal-medium {
+  width: 600px;
+}
+
+.modal-large {
+  width: 800px;
+}
+
+.modal-full {
+  width: 90vw;
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem 1.5rem;
+  border-bottom: 1px solid #eee;
+}
+
+.modal-title {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 600;
+}
+
+.modal-close {
+  background: transparent;
+  border: none;
+  font-size: 1.25rem;
+  cursor: pointer;
+  color: #999;
+  padding: 0.25rem;
+  line-height: 1;
+}
+
+.modal-close:hover {
+  color: #333;
+}
+
+.modal-body {
+  padding: 1.5rem;
+  overflow-y: auto;
+}
+
+.modal-body.has-footer {
+  border-bottom: 1px solid #eee;
+}
+
+.modal-footer {
+  padding: 1rem 1.5rem;
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.75rem;
+}
+
+.modal-btn {
+  padding: 0.5rem 1.25rem;
+  border-radius: 4px;
+  font-weight: 500;
+  cursor: pointer;
+  border: none;
+  transition: all 0.2s;
+}
+
+.modal-btn-cancel {
+  background-color: #f3f4f6;
+  color: #374151;
+}
+
+.modal-btn-cancel:hover {
+  background-color: #e5e7eb;
+}
+
+.modal-btn-confirm {
+  background-color: #3b82f6;
+  color: white;
+}
+
+.modal-btn-confirm:hover {
+  background-color: #2563eb;
+}
+
+/* 动画过渡 */
+.modal-fade-enter-active,
+.modal-fade-leave-active {
+  transition: opacity 0.3s ease;
+}
+
+.modal-fade-enter-from,
+.modal-fade-leave-to {
+  opacity: 0;
+}
+
+.modal-fade-enter-active .modal-container {
+  animation: modal-slide-down 0.3s ease forwards;
+}
+
+.modal-fade-leave-active .modal-container {
+  animation: modal-slide-up 0.3s ease forwards;
+}
+
+@keyframes modal-slide-down {
+  from {
+    transform: translateY(-50px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+@keyframes modal-slide-up {
+  from {
+    transform: translateY(0);
+    opacity: 1;
+  }
+  to {
+    transform: translateY(-50px);
+    opacity: 0;
+  }
+}
+
+/* 响应式调整 */
+@media (max-width: 768px) {
+  .modal-small, .modal-medium, .modal-large {
+    width: 95%;
+    max-width: none;
+  }
+}
+</style>
+```
+
+## 4. 使用方法与最佳实践
+
+### 4.1 组件注册与使用
+
+```js
+// 全局注册
+import { createApp } from 'vue'
+import App from './App.vue'
+import AdvancedInput from './components/AdvancedInput.vue'
+import SearchableSelect from './components/SearchableSelect.vue'
+import ResponsiveCard from './components/ResponsiveCard.vue'
+import Modal from './components/Modal.vue'
+
+const app = createApp(App)
+
+app.component('AdvancedInput', AdvancedInput)
+app.component('SearchableSelect', SearchableSelect)
+app.component('ResponsiveCard', ResponsiveCard)
+app.component('Modal', Modal)
+
+app.mount('#app')
+```
+
+### 4.2 组件库开发最佳实践
+
+1. **组件设计原则**
+   - 单一职责: 每个组件只做一件事
+   - 可配置性: 通过props提供合理的定制选项
+   - 支持事件: 提供完善的事件系统
+   - 插槽灵活性: 利用插槽实现内容定制
+
+2. **可访问性建议**
+   - 支持键盘导航
+   - 适当的ARIA属性
+   - 提供合理的焦点管理
+   - 确保足够的色彩对比度
+
+3. **性能优化技巧**
+   - 使用`v-once`渲染静态内容
+   - 适当使用`v-memo`减少更新
+   - 大列表使用虚拟滚动
+   - 组件懒加载
+
+### 4.3 组件通信方式
+
+1. **Props向下传递数据**
+2. **事件向上传递数据**
+3. **v-model双向绑定**
+4. **Provide/Inject跨层级通信**
+5. **状态管理(Pinia/Vuex)** 

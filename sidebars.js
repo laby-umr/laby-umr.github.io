@@ -28,6 +28,7 @@ const sidebars = {
       },
       items: [
         'frontend/frontend-intro',
+        'frontend/frontend-comprehensive',
         {
           type: 'category',
           label: 'HTML和CSS',
@@ -40,8 +41,58 @@ const sidebars = {
         },
         {
           type: 'category',
+          label: 'TypeScript',
+          items: ['frontend/typescript/typescript-basics', 'frontend/typescript/advanced-types']
+        },
+        {
+          type: 'category',
           label: 'React',
           items: ['frontend/react/react-basics', 'frontend/react/hooks', 'frontend/react/state-management']
+        },
+        {
+          type: 'category',
+          label: 'Vue',
+          items: [
+            'frontend/vue/vue-basics', 
+            'frontend/vue/vue-components', 
+            'frontend/vue/vue-router', 
+            'frontend/vue/vue-state-management'
+          ]
+        },
+        {
+          type: 'category',
+          label: 'Angular',
+          items: [
+            'frontend/angular/angular-basics', 
+            'frontend/angular/angular-components', 
+            'frontend/angular/angular-services', 
+            'frontend/angular/angular-routing'
+          ]
+        },
+        {
+          type: 'category',
+          label: '性能优化',
+          items: [
+            'frontend/performance/performance-intro',
+            'frontend/performance/loading-optimization',
+            'frontend/performance/rendering-optimization'
+          ]
+        },
+        {
+          type: 'category',
+          label: '测试',
+          items: [
+            'frontend/testing/testing-intro',
+            'frontend/testing/unit-testing'
+          ]
+        },
+        {
+          type: 'category',
+          label: '开发工具',
+          items: [
+            'frontend/tools/build-tools',
+            'frontend/tools/package-managers'
+          ]
         },
         {
           type: 'category',
