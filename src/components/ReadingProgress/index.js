@@ -1,14 +1,22 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import styles from './styles.module.css';
 import { useLocation } from '@docusaurus/router';
+import clsx from 'clsx';
 
 export default function ReadingProgress() {
   const [width, setWidth] = useState(0);
+  const [showProgress, setShowProgress] = useState(false);
+  const [particles, setParticles] = useState([]);
+  const progressBarRef = useRef(null);
+  const particlesContainerRef = useRef(null);
   const location = useLocation();
+  const particleCount = 8; // 粒子数量
   
   // 重置进度条，当路由变化时
   useEffect(() => {
     setWidth(0);
+    setShowProgress(false);
+    setParticles([]);
   }, [location.pathname]);
 
   // 计算阅读进度
@@ -28,16 +36,104 @@ export default function ReadingProgress() {
       // 如果内容不需要滚动，直接返回
       if (contentHeight <= 0 || windowHeight <= 0) {
         setWidth(0);
+        setShowProgress(false);
         return;
       }
       
       // 计算滚动百分比
       const scrolled = window.scrollY / windowHeight;
-      setWidth(Math.min(scrolled * 100, 100));
+      const newWidth = Math.min(scrolled * 100, 100);
+      setWidth(newWidth);
+      
+      // 显示进度条（当用户开始滚动时）
+      if (window.scrollY > 100) {
+        setShowProgress(true);
+      } else {
+        setShowProgress(false);
+      }
+      
+      // 生成粒子
+      if (progressBarRef.current && particlesContainerRef.current && newWidth > 0) {
+        // 仅在进度更新且粒子数少于最大数量时创建新粒子
+        if (Math.random() > 0.85 && particles.length < 20) {
+          createParticle();
+        }
+      }
+    };
+
+    // 创建粒子函数
+    const createParticle = () => {
+      if (!progressBarRef.current) return;
+      
+      const progressRect = progressBarRef.current.getBoundingClientRect();
+      const progressWidth = progressRect.width;
+      
+      // 确保不在空白进度条上创建粒子
+      if (progressWidth <= 10) return;
+      
+      // 随机粒子位置 (x坐标在进度条范围内，y为中心)
+      const x = Math.random() * progressWidth * 0.9; // 在进度条长度内随机
+      const size = Math.random() * 6 + 4; // 4px ~ 10px
+      
+      // 随机速度和寿命
+      const vx = (Math.random() - 0.5) * 1; // 左右飘动
+      const vy = (Math.random() - 0.5) * 3 - 1; // 向上飘动为主
+      const life = Math.random() * 1 + 0.5; // 0.5s ~ 1.5s
+      
+      // 随机不透明度和颜色
+      const opacity = Math.random() * 0.7 + 0.3; // 0.3 ~ 1.0
+      const hue = Math.random() * 40 + 200; // 蓝色到紫色范围
+      
+      setParticles(prevParticles => [
+        ...prevParticles,
+        {
+          id: Date.now() + Math.random(),
+          x,
+          y: 0,
+          size,
+          vx,
+          vy,
+          life,
+          opacity,
+          color: `hsl(${hue}, 80%, 60%)`,
+          createdAt: Date.now()
+        }
+      ]);
+    };
+    
+    // 更新粒子位置和状态
+    const updateParticles = () => {
+      setParticles(prevParticles => 
+        prevParticles
+          .map(particle => {
+            const age = (Date.now() - particle.createdAt) / 1000; // 年龄(秒)
+            if (age > particle.life) return null; // 移除过期粒子
+            
+            // 更新位置
+            const lifeRatio = age / particle.life;
+            const fadeFactor = 1 - lifeRatio; // 随时间渐隐
+            
+            return {
+              ...particle,
+              x: particle.x + particle.vx,
+              y: particle.y + particle.vy,
+              opacity: particle.opacity * fadeFactor
+            };
+          })
+          .filter(Boolean) // 移除null值
+      );
     };
 
     // 初始化计算
     calculateScrollProgress();
+    
+    // 创建动画循环
+    let animationFrameId;
+    const animate = () => {
+      updateParticles();
+      animationFrameId = requestAnimationFrame(animate);
+    };
+    animate();
     
     // 监听滚动事件
     window.addEventListener('scroll', calculateScrollProgress);
@@ -46,8 +142,9 @@ export default function ReadingProgress() {
     return () => {
       window.removeEventListener('scroll', calculateScrollProgress);
       window.removeEventListener('resize', calculateScrollProgress);
+      cancelAnimationFrame(animationFrameId);
     };
-  }, [location.pathname]);
+  }, [location.pathname, particles.length]);
 
   // 只在文章页面显示进度条
   const shouldShowProgress = () => {
@@ -61,11 +158,35 @@ export default function ReadingProgress() {
   }
 
   return (
-    <div className={styles.progressContainer}>
+    <div className={clsx(styles.progressContainer, showProgress && styles.visible)}>
       <div 
+        ref={progressBarRef}
         className={styles.progressBar} 
         style={{ width: `${width}%` }}
-      />
+      >
+        <div className={styles.progressGlow}></div>
+      </div>
+      
+      <div 
+        ref={particlesContainerRef}
+        className={styles.particlesContainer}
+      >
+        {particles.map(particle => (
+          <div
+            key={particle.id}
+            className={styles.particle}
+            style={{
+              left: `${particle.x}px`,
+              top: `${particle.y}px`,
+              width: `${particle.size}px`,
+              height: `${particle.size}px`,
+              opacity: particle.opacity,
+              backgroundColor: particle.color,
+              boxShadow: `0 0 ${particle.size * 1.5}px ${particle.color}`
+            }}
+          />
+        ))}
+      </div>
     </div>
   );
 } 

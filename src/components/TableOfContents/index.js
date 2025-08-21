@@ -1,145 +1,167 @@
 import React, { useState, useEffect, useRef } from 'react';
-import styles from './styles.module.css';
 import { useLocation } from '@docusaurus/router';
-import { translate } from '@docusaurus/Translate';
-import { FaList } from 'react-icons/fa';
+import styles from './styles.module.css';
+import clsx from 'clsx';
 
-export default function TableOfContents() {
-  const [headings, setHeadings] = useState([]);
-  const [activeId, setActiveId] = useState('');
+function TOCItem({ heading, onClick, activeId, level }) {
+  const isActive = activeId === heading.id;
+  
+  return (
+    <li 
+      className={clsx(
+        styles.tocItem, 
+        styles[`tocLevel${level}`],
+        isActive && styles.tocItemActive
+      )}
+    >
+      <a
+        href={`#${heading.id}`}
+        className={clsx(
+          styles.tocLink,
+          isActive && styles.tocLinkActive
+        )}
+        onClick={(e) => {
+          e.preventDefault();
+          onClick(heading.id);
+        }}
+      >
+        <span className={styles.tocLinkContent}>
+          {heading.value}
+        </span>
+        {isActive && <span className={styles.tocActiveIndicator} />}
+      </a>
+    </li>
+  );
+}
+
+export default function TableOfContents({ toc = [], minHeadingLevel = 2, maxHeadingLevel = 4 }) {
+  const [activeId, setActiveId] = useState(null);
   const [isVisible, setIsVisible] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(false);
-  const tocRef = useRef(null);
+  const contentRef = useRef(null);
   const location = useLocation();
 
-  // 获取页面中的所有标题
-  useEffect(() => {
-    const getHeadings = () => {
-      // 只获取h2和h3标题
-      const elements = Array.from(document.querySelectorAll('article h2, article h3'));
-      
-      // 如果没有找到标题，尝试其他选择器
-      if (elements.length === 0) {
-        return Array.from(document.querySelectorAll('.markdown h2, .markdown h3, .theme-doc-markdown h2, .theme-doc-markdown h3'));
-      }
-      
-      return elements;
-    };
+  // 过滤适当级别的标题
+  const filteredToc = toc.filter(
+    (item) => item.level >= minHeadingLevel && item.level <= maxHeadingLevel,
+  );
 
-    const headingElements = getHeadings();
+  // 滚动到标题
+  const scrollToHeading = (id) => {
+    const element = document.getElementById(id);
+    if (!element) return;
     
-    // 如果页面中有标题，则显示TOC
-    if (headingElements.length > 0) {
-      setIsVisible(true);
-      
-      const headingsData = headingElements.map(heading => ({
-        id: heading.id,
-        text: heading.textContent,
-        level: parseInt(heading.tagName.substring(1), 10)
-      }));
-      
-      setHeadings(headingsData);
-    } else {
-      setIsVisible(false);
-    }
-  }, [location.pathname]);
+    const offset = 90; // 考虑固定头部的偏移
+    const bodyRect = document.body.getBoundingClientRect().top;
+    const elementRect = element.getBoundingClientRect().top;
+    const elementPosition = elementRect - bodyRect;
+    const offsetPosition = elementPosition - offset;
 
-  // 监听滚动，高亮当前可见的标题
+    window.scrollTo({
+      top: offsetPosition,
+      behavior: 'smooth',
+    });
+    
+    setActiveId(id);
+  };
+  
+  // 检查是否为文章或文档页面
   useEffect(() => {
-    if (headings.length === 0) return;
+    const isDocOrBlogPage = location.pathname.includes('/docs/') || location.pathname.includes('/blog/');
+    setIsVisible(isDocOrBlogPage && filteredToc.length > 0);
+    
+    // 重置激活状态
+    setActiveId(null);
+  }, [location.pathname, filteredToc]);
+  
+  // 监听滚动，更新当前活跃标题
+  useEffect(() => {
+    if (!isVisible) return;
+
+    const headingElements = Array.from(filteredToc)
+      .filter((item) => item.id)
+      .map((item) => document.getElementById(item.id))
+      .filter((el) => el !== null);
 
     const handleScroll = () => {
-      const headingElements = headings.map(heading => 
-        document.getElementById(heading.id)
-      ).filter(Boolean);
-      
-      if (headingElements.length === 0) return;
-      
-      // 找到当前视口中的第一个标题
-      const scrollPosition = window.scrollY + 100;
-      
-      for (let i = headingElements.length - 1; i >= 0; i--) {
-        const currentElement = headingElements[i];
-        if (currentElement.offsetTop <= scrollPosition) {
-          setActiveId(currentElement.id);
-          return;
-        }
-      }
-      
-      // 如果没有找到，则默认选中第一个
-      setActiveId(headingElements[0].id);
+      // 找出当前在视口上方最近的标题
+      const scrollPosition = window.scrollY + 100; // 添加偏移量
+
+      // 获取每个标题的位置
+      const headingPositions = headingElements.map(element => ({
+        id: element.id,
+        position: element.getBoundingClientRect().top + window.scrollY
+      }));
+
+      // 找出第一个在视口上方最近的标题
+      const currentHeading = headingPositions
+        .filter(heading => heading.position <= scrollPosition)
+        .reduce((acc, curr) => {
+          return !acc || curr.position > acc.position ? curr : acc;
+        }, null);
+
+      setActiveId(currentHeading?.id || null);
     };
 
-    handleScroll();
     window.addEventListener('scroll', handleScroll);
-    
+    // 初始调用一次确保首次加载时也设置正确的活跃项
+    handleScroll();
+
     return () => {
       window.removeEventListener('scroll', handleScroll);
     };
-  }, [headings]);
+  }, [filteredToc, isVisible]);
 
-  // 点击目录项，滚动到对应位置
-  const scrollToHeading = (id) => {
-    const element = document.getElementById(id);
-    if (element) {
-      window.scrollTo({
-        top: element.offsetTop - 80,
-        behavior: 'smooth'
-      });
-      setActiveId(id);
-    }
-  };
-
-  // 切换折叠状态
-  const toggleCollapse = () => {
-    setIsCollapsed(!isCollapsed);
-  };
-
-  if (!isVisible || headings.length === 0) {
+  if (!isVisible || filteredToc.length === 0) {
     return null;
   }
 
   return (
-    <div 
-      className={`${styles.tocContainer} ${isCollapsed ? styles.collapsed : ''}`}
-      ref={tocRef}
-    >
-      <div className={styles.tocHeader} onClick={toggleCollapse}>
-        <FaList className={styles.tocIcon} />
-        <span className={styles.tocTitle}>
-          {translate({
-            id: 'theme.TableOfContents.title',
-            message: '目录',
-            description: 'The title of the table of contents'
-          })}
-        </span>
+    <div className={clsx(
+      styles.tocContainer,
+      isCollapsed && styles.collapsed
+    )}>
+      <div className={styles.tocHeader}>
+        <h4 className={styles.tocTitle}>
+          目录
+        </h4>
+        <button
+          className={clsx(styles.collapseButton, isCollapsed && styles.expanded)}
+          onClick={() => setIsCollapsed(!isCollapsed)}
+          aria-label={isCollapsed ? "展开目录" : "收起目录"}
+        >
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
+            <path 
+              fillRule="evenodd" 
+              clipRule="evenodd" 
+              d={isCollapsed 
+                ? "M5 8l5 5 5-5z" // 向下箭头
+                : "M15 12l-5-5-5 5z" // 向上箭头
+              }
+            />
+          </svg>
+        </button>
       </div>
       
-      <nav className={styles.tocContent}>
+      <div 
+        ref={contentRef}
+        className={styles.tocContent}
+        style={{ 
+          maxHeight: isCollapsed ? '0' : '500px'
+        }}
+      >
         <ul className={styles.tocList}>
-          {headings.map(heading => (
-            <li 
+          {filteredToc.map((heading) => (
+            <TOCItem
               key={heading.id}
-              className={`
-                ${styles.tocItem} 
-                ${styles[`tocLevel${heading.level}`]}
-                ${activeId === heading.id ? styles.tocItemActive : ''}
-              `}
-            >
-              <a
-                href={`#${heading.id}`}
-                onClick={(e) => {
-                  e.preventDefault();
-                  scrollToHeading(heading.id);
-                }}
-                className={styles.tocLink}
-              >
-                {heading.text}
-              </a>
-            </li>
+              heading={heading}
+              onClick={scrollToHeading}
+              activeId={activeId}
+              level={heading.level}
+            />
           ))}
         </ul>
-      </nav>
+      </div>
     </div>
   );
 } 
