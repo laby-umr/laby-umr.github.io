@@ -2407,3 +2407,176 @@ mindmap
 :::
 
 Spring Boot让开发者能够专注于业务逻辑的开发，而不必过多关注底层框架的配置细节。它与Spring Cloud生态系统的完美结合，更是为微服务架构和云原生应用开发提供了强大的支持。
+
+## 9. 面试题精选
+
+### Q1: 什么是Spring Boot？它有什么优势？
+**答:** Spring Boot是Spring框架的扩展，专注于简化Spring应用的初始搭建和开发过程。主要优势包括：
+- **自动配置**：减少配置，自动配置大部分组件
+- **起步依赖**：简化依赖管理，解决版本兼容性问题
+- **内嵌服务器**：内置Tomcat等服务器，无需部署WAR文件
+- **Actuator**：提供监控和管理功能
+- **无代码生成和XML配置**：减少样板代码
+- **独立运行**：可以像普通Java程序一样运行
+
+### Q2: Spring Boot的自动配置原理是什么？
+**答:** Spring Boot自动配置基于以下机制：
+1. 通过`@EnableAutoConfiguration`注解启用自动配置
+2. 该注解通过`@Import`导入`AutoConfigurationImportSelector`类
+3. `AutoConfigurationImportSelector`会从所有JAR包中的`META-INF/spring.factories`文件加载`EnableAutoConfiguration`配置项
+4. 根据条件注解（`@ConditionalOnClass`, `@ConditionalOnBean`等）判断哪些配置类生效
+5. 匹配条件的配置类会被注册为Bean，创建需要的组件
+
+### Q3: Spring Boot常用的核心注解有哪些？
+**答:** Spring Boot常用的核心注解：
+- `@SpringBootApplication`：包含三个注解（`@Configuration`, `@EnableAutoConfiguration`, `@ComponentScan`）
+- `@EnableAutoConfiguration`：启用自动配置
+- `@Configuration`：标记配置类
+- `@ComponentScan`：组件扫描
+- `@ConfigurationProperties`：绑定配置属性
+- `@ConditionalOnXXX`：条件化配置（如`@ConditionalOnClass`, `@ConditionalOnBean`, `@ConditionalOnProperty`等）
+- `@SpringBootConfiguration`：特定于Spring Boot的配置类
+- `@EnableConfigurationProperties`：启用`@ConfigurationProperties`注解
+
+### Q4: Spring Boot如何管理配置文件？配置文件的优先级如何？
+**答:** Spring Boot支持多种配置方式，主要有：
+- `application.properties`或`application.yml`文件
+- 特定环境的配置文件（如`application-dev.yml`）
+- 环境变量
+- 命令行参数
+
+配置优先级从高到低：
+1. 命令行参数
+2. Java系统属性（`System.getProperties()`）
+3. 操作系统环境变量
+4. `application-{profile}.properties`（外部配置）
+5. `application.properties`（外部配置）
+6. `application-{profile}.properties`（内部配置）
+7. `application.properties`（内部配置）
+8. `@PropertySource`注解引入的属性
+9. 默认属性
+
+### Q5: 如何理解Spring Boot的起步依赖（Starter）？
+**答:** Spring Boot起步依赖是一种特殊的Maven或Gradle依赖，用于简化项目依赖管理：
+- 一个起步依赖通常会引入一组功能相关的传递性依赖
+- 通过`spring-boot-starter-*`命名，如`spring-boot-starter-web`
+- 提供了版本管理，确保依赖组件间的兼容性
+- 与自动配置协同工作，自动配置需要的组件
+- 减少了手动添加依赖的工作量和版本冲突的风险
+
+### Q6: Spring Boot的启动流程是怎样的？
+**答:** Spring Boot启动流程主要包括：
+1. 创建`SpringApplication`对象
+   - 确定应用类型（SERVLET、REACTIVE、NONE）
+   - 设置初始化器和监听器
+   - 推断主应用类
+2. 运行`SpringApplication`
+   - 创建并启动计时器
+   - 发布`ApplicationStartingEvent`事件
+   - 准备环境并加载配置
+   - 创建`ApplicationContext`
+   - 准备上下文，加载Bean定义
+   - 刷新上下文，实例化单例Bean
+   - 发布`ApplicationStartedEvent`事件
+   - 调用`ApplicationRunner`和`CommandLineRunner`
+   - 发布`ApplicationReadyEvent`事件
+
+### Q7: 如何在Spring Boot中集成自定义配置？
+**答:** 在Spring Boot中集成自定义配置有多种方式：
+1. 使用`@Value`注解直接注入单个属性
+   ```java
+   @Value("${custom.property}")
+   private String customProperty;
+   ```
+2. 使用`@ConfigurationProperties`绑定配置到Java类
+   ```java
+   @Component
+   @ConfigurationProperties(prefix = "custom")
+   public class CustomProperties {
+       private String property;
+       // getters and setters
+   }
+   ```
+3. 创建自定义的配置类：
+   ```java
+   @Configuration
+   public class CustomConfiguration {
+       @Bean
+       public SomeBean someBean() {
+           return new SomeBean();
+       }
+   }
+   ```
+
+### Q8: Spring Boot中如何实现安全认证？
+**答:** Spring Boot中实现安全认证主要通过Spring Security：
+1. 添加依赖：`spring-boot-starter-security`
+2. 创建配置类：
+   ```java
+   @Configuration
+   @EnableWebSecurity
+   public class SecurityConfig extends WebSecurityConfigurerAdapter {
+       
+       @Override
+       protected void configure(HttpSecurity http) throws Exception {
+           http
+               .authorizeRequests()
+                   .antMatchers("/public/**").permitAll()
+                   .anyRequest().authenticated()
+                   .and()
+               .formLogin()
+                   .loginPage("/login")
+                   .permitAll()
+                   .and()
+               .logout()
+                   .permitAll();
+       }
+       
+       @Override
+       protected void configure(AuthenticationManagerBuilder auth) throws Exception {
+           auth.inMemoryAuthentication()
+               .withUser("user").password("{noop}password").roles("USER");
+       }
+   }
+   ```
+3. 对于生产环境，可以配置JDBC认证、OAuth2、LDAP等认证方式
+
+### Q9: Spring Boot Actuator的作用是什么？有哪些常用端点？
+**答:** Spring Boot Actuator提供生产就绪功能，用于监控和管理应用：
+
+**作用：**
+- 监控应用健康状态
+- 收集应用指标
+- 查看应用配置
+- 查看环境信息
+- 管理日志级别
+- 查看线程信息
+
+**常用端点：**
+- `/actuator/health`：健康状态
+- `/actuator/info`：应用信息
+- `/actuator/metrics`：指标收集
+- `/actuator/env`：环境变量
+- `/actuator/configprops`：配置属性
+- `/actuator/mappings`：请求映射
+- `/actuator/beans`：应用中的Bean
+- `/actuator/loggers`：日志配置
+
+### Q10: 如何自定义Spring Boot的Banner？
+**答:** 自定义Spring Boot启动Banner的方法：
+1. 在`src/main/resources`目录下创建`banner.txt`文件
+2. 使用文本/ASCII艺术设计Banner
+3. 也可以通过代码方式设置：
+   ```java
+   SpringApplication app = new SpringApplication(MyApp.class);
+   app.setBannerMode(Banner.Mode.OFF); // 关闭Banner
+   // 或者设置自定义Banner
+   app.setBanner(new ResourceBanner(new ClassPathResource("path/to/banner.txt")));
+   app.run(args);
+   ```
+4. 可以在配置文件中设置：
+   ```properties
+   spring.main.banner-mode=off
+   # 或者指定文件
+   spring.banner.location=classpath:path/to/banner.txt
+   ```

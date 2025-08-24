@@ -241,6 +241,18 @@ const sidebars = {
         },
         {
           type: 'category',
+          label: '大数据技术',
+          items: [
+            'backend/big-data/big-data-intro',
+            'backend/big-data/hadoop-ecosystem',
+            'backend/big-data/spark-technology',
+            'backend/big-data/data-warehouse-etl',
+            'backend/big-data/influxdb-data-collection',
+            'backend/big-data/big-data-summary',
+          ]
+        },
+        {
+          type: 'category',
           label: '系统设计',
           items: [
             'backend/system-design/devops-intro',

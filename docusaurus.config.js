@@ -139,6 +139,20 @@ const config = {
         disableSwitch: false,
         respectPrefersColorScheme: true,
       },
+      // 添加Giscus评论系统
+      giscus: {
+        repo: 'MasterLiu93/web-blog',
+        repoId: 'R_kgDOPZrqqQ',
+        category: 'Announcements',
+        categoryId: 'DIC_kwDOPZrqqc4Ct73X',
+        mapping: 'pathname',
+        strict: '0',
+        reactionsEnabled: '1',
+        emitMetadata: '0',
+        inputPosition: 'bottom',
+        theme: 'preferred_color_scheme',
+        lang: 'zh-CN',
+      },
       // Replace with your project's social card
       image: 'img/docusaurus-social-card.jpg',
       navbar: {

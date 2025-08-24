@@ -35,7 +35,7 @@ export default function ParticleBackground() {
     
     // 粒子配置
     const particlesArray = [];
-    const numberOfParticles = 50;
+    const numberOfParticles = 80; // 增加粒子数量
     
     // 粒子颜色
     const getParticleColor = () => {
@@ -51,23 +51,28 @@ export default function ParticleBackground() {
       constructor() {
         this.x = Math.random() * canvas.width;
         this.y = Math.random() * canvas.height;
-        this.size = Math.random() * 5 + 1;
-        this.speedX = Math.random() * 2 - 1;
-        this.speedY = Math.random() * 2 - 1;
-        this.maxSize = Math.random() * 5 + 5;
-        this.opacity = Math.random() * 0.5 + 0.1;
+        this.size = Math.random() * 4 + 0.5; // 调整粒子大小范围
+        this.speedX = Math.random() * 1.5 - 0.75; // 调整粒子水平速度
+        this.speedY = Math.random() * 1.5 - 0.75; // 调整粒子垂直速度
+        this.maxSize = Math.random() * 4 + 3; // 调整粒子最大尺寸
+        this.opacity = Math.random() * 0.5 + 0.1; // 保持不变
       }
       
       update() {
         this.x += this.speedX;
         this.y += this.speedY;
         
-        // 边界检查
-        if (this.x > canvas.width || this.x < 0) {
-          this.speedX *= -1;
+        // 边界检查 - 使用回绕方式处理边界
+        if (this.x > canvas.width) {
+          this.x = 0;
+        } else if (this.x < 0) {
+          this.x = canvas.width;
         }
-        if (this.y > canvas.height || this.y < 0) {
-          this.speedY *= -1;
+        
+        if (this.y > canvas.height) {
+          this.y = 0;
+        } else if (this.y < 0) {
+          this.y = canvas.height;
         }
         
         // 微小浮动
@@ -115,7 +120,7 @@ export default function ParticleBackground() {
     
     // 粒子之间的连线
     function connectParticles() {
-      const maxDistance = 150;
+      const maxDistance = 180; // 增加连线的最大距离
       for (let a = 0; a < particlesArray.length; a++) {
         for (let b = a; b < particlesArray.length; b++) {
           const dx = particlesArray[a].x - particlesArray[b].x;
@@ -124,7 +129,7 @@ export default function ParticleBackground() {
           
           if (distance < maxDistance) {
             const opacity = 1 - (distance / maxDistance);
-            ctx.strokeStyle = `${getParticleColor()}${opacity * 0.5})`;
+            ctx.strokeStyle = `${getParticleColor()}${opacity * 0.4})`; // 减小连线的不透明度
             ctx.lineWidth = 0.5;
             ctx.beginPath();
             ctx.moveTo(particlesArray[a].x, particlesArray[a].y);
