@@ -92,6 +92,7 @@ function CodeBlock({
   const [mounted, setMounted] = useState(false);
   const button = useRef(null);
   const codeBlockRef = useRef(null);
+  const contentRef = useRef(null);
   
   const {prism} = useThemeConfig();
   
@@ -100,6 +101,140 @@ function CodeBlock({
   useEffect(() => {
     setMounted(true);
   }, []);
+
+  // 矩阵背景效果
+  useEffect(() => {
+    if (!contentRef.current) return;
+    
+    const canvas = document.createElement('canvas');
+    const matrixContainer = document.createElement('div');
+    matrixContainer.className = styles.matrixContainer;
+    matrixContainer.appendChild(canvas);
+    
+    // 插入到内容区域
+    contentRef.current.prepend(matrixContainer);
+    
+    const ctx = canvas.getContext('2d');
+    
+    // 设置画布大小
+    const updateCanvasSize = () => {
+      const rect = contentRef.current.getBoundingClientRect();
+      canvas.width = rect.width;
+      canvas.height = rect.height;
+    };
+    
+    updateCanvasSize();
+    window.addEventListener('resize', updateCanvasSize);
+    
+    // 检测主题
+    const isDarkTheme = () => document.documentElement.getAttribute('data-theme') === 'dark';
+    
+    // 矩阵效果参数
+    const getFontSize = () => isDarkTheme() ? 15 : 15; // 调整字体大小为15px
+    const updateFontSize = () => {
+      const fontSize = getFontSize();
+      const columns = Math.floor(canvas.width / fontSize);
+      return { fontSize, columns };
+    };
+    
+    let { fontSize, columns } = updateFontSize();
+    const drops = [];
+    
+    // 初始化雨滴位置
+    for (let i = 0; i < columns; i++) {
+      drops[i] = Math.floor(Math.random() * canvas.height / fontSize);
+    }
+    
+    // 显示的字符 - 使用英文字符和数字，以及laby的名字
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789labylabylaby';
+    
+    // 绘制函数
+    const draw = () => {
+      // 更新字体大小和列数
+      const oldColumns = columns;
+      ({ fontSize, columns } = updateFontSize());
+      
+      // 如果列数变化，重新初始化drops
+      if (columns !== oldColumns) {
+        for (let i = 0; i < columns; i++) {
+          if (i < oldColumns) {
+            // 保留现有的
+            continue;
+          }
+          drops[i] = Math.floor(Math.random() * canvas.height / fontSize);
+        }
+      }
+      
+      // 背景色根据主题调整
+      if (isDarkTheme()) {
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.05)';
+      } else {
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.05)';
+      }
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      
+      // 文字颜色根据主题调整
+      if (isDarkTheme()) {
+        ctx.fillStyle = '#0F0'; // 深色主题绿色
+      } else {
+        ctx.fillStyle = 'rgba(0, 80, 0, 0.8)'; // 亮色主题下使用深绿色
+      }
+      ctx.font = `${fontSize}px 'Courier New', monospace`;
+      ctx.textBaseline = 'top'; // 确保文本对齐方式一致
+      
+      // 处理每一列雨滴
+      for (let i = 0; i < drops.length; i++) {
+        // 随机字符
+        const text = chars[Math.floor(Math.random() * chars.length)];
+        
+        // 绘制字符
+        ctx.fillText(text, i * fontSize, drops[i] * fontSize);
+        
+        // 到达底部或随机重置
+        if (drops[i] * fontSize > canvas.height && Math.random() > 0.975) {
+          drops[i] = 0;
+        }
+        
+        // 移动雨滴（放慢速度）
+        if (Math.random() > 0.6) { // 40%的概率移动，使动画更流畅
+          drops[i]++;
+        }
+      }
+    };
+    
+    // 动画循环
+    let animationId;
+    const animate = () => {
+      draw();
+      animationId = setTimeout(() => requestAnimationFrame(animate), 70); // 调整动画速度
+    };
+    
+    // 开始动画
+    animate();
+    
+    // 主题变化监听
+    const observer = new MutationObserver((mutations) => {
+      mutations.forEach((mutation) => {
+        if (mutation.attributeName === 'data-theme') {
+          // 清除画布，重新绘制
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
+        }
+      });
+    });
+    
+    // 观察文档根元素的主题变化
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ['data-theme'],
+    });
+    
+    return () => {
+      observer.disconnect();
+      window.removeEventListener('resize', updateCanvasSize);
+      clearTimeout(animationId);
+      cancelAnimationFrame(animationId);
+    };
+  }, [mounted]);
 
   // 提取语言
   const language =
@@ -193,41 +328,43 @@ function CodeBlock({
       </div>
       
       {/* 代码块内容 */}
-      <Highlight
-        code={children.trim()}
-        language={language || 'text'}
-        theme={prismTheme}
-      >
-        {({className, style, tokens, getLineProps, getTokenProps}) => (
-          <pre className={clsx(className, styles.codeBlock)} style={style}>
-            <code className={styles.codeBlockLines}>
-              {tokens.map((line, i) => {
-                if (line.length === 1 && line[0].content === '\n') {
-                  line[0].content = '';
-                }
-                
-                const lineProps = getLineProps({line, key: i});
-                // 移除key，单独处理，避免通过扩展运算符传递
-                const { key: lineKey, ...linePropsWithoutKey } = lineProps;
-                
-                return (
-                  <div key={lineKey || i} {...linePropsWithoutKey} className={clsx(linePropsWithoutKey.className, styles.codeLine)}>
-                    <span className={styles.codeLineNumber}>{i + 1}</span>
-                    <span className={styles.codeLineContent}>
-                      {line.map((token, key) => {
-                        const tokenProps = getTokenProps({token, key});
-                        // 移除key，单独处理，避免通过扩展运算符传递
-                        const { key: tokenKey, ...tokenPropsWithoutKey } = tokenProps;
-                        return <span key={tokenKey || key} {...tokenPropsWithoutKey} />;
-                      })}
-                    </span>
-                  </div>
-                );
-              })}
-            </code>
-          </pre>
-        )}
-      </Highlight>
+      <div className={styles.codeBlockContent} ref={contentRef}>
+        <Highlight
+          code={children.trim()}
+          language={language || 'text'}
+          theme={prismTheme}
+        >
+          {({className, style, tokens, getLineProps, getTokenProps}) => (
+            <pre className={clsx(className, styles.codeBlock)} style={style}>
+              <code className={styles.codeBlockLines}>
+                {tokens.map((line, i) => {
+                  if (line.length === 1 && line[0].content === '\n') {
+                    line[0].content = '';
+                  }
+                  
+                  const lineProps = getLineProps({line, key: i});
+                  // 移除key，单独处理，避免通过扩展运算符传递
+                  const { key: lineKey, ...linePropsWithoutKey } = lineProps;
+                  
+                  return (
+                    <div key={lineKey || i} {...linePropsWithoutKey} className={clsx(linePropsWithoutKey.className, styles.codeLine)}>
+                      <span className={styles.codeLineNumber}>{i + 1}</span>
+                      <span className={styles.codeLineContent}>
+                        {line.map((token, key) => {
+                          const tokenProps = getTokenProps({token, key});
+                          // 移除key，单独处理，避免通过扩展运算符传递
+                          const { key: tokenKey, ...tokenPropsWithoutKey } = tokenProps;
+                          return <span key={tokenKey || key} {...tokenPropsWithoutKey} />;
+                        })}
+                      </span>
+                    </div>
+                  );
+                })}
+              </code>
+            </pre>
+          )}
+        </Highlight>
+      </div>
     </div>
   );
 }
