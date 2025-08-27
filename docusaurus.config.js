@@ -137,7 +137,7 @@ const config = {
       colorMode: {
         defaultMode: 'dark',
         disableSwitch: false,
-        respectPrefersColorScheme: true,
+        respectPrefersColorScheme: false,
       },
       // 添加Giscus评论系统
       giscus: {
