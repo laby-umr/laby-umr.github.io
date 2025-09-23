@@ -24,7 +24,7 @@ export default function BlogLayout(props) {
           <main
             className={clsx('col', {
               'col--6': hasSidebar,
-              'col--9 col--offset-1': !hasSidebar,
+              'col--12 ': !hasSidebar,
             })}>
             {children}
           </main>

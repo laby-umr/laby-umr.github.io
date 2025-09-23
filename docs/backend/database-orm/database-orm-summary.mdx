@@ -170,6 +170,145 @@ NoSQL数据库提供了更灵活的数据模型和更好的可扩展性。
 // 负载均衡：读写分离、分片路由
 ```
 
+### 1.3 关系型与NoSQL数据库特性对比
+
+在选择数据库时，需要根据应用场景和需求考虑不同类型数据库的特性。
+
+#### 数据库类型对比
+
+| 特性 | MySQL | PostgreSQL | MongoDB | Redis |
+|------|-------|------------|---------|-------|
+| **数据模型** | 关系表 | 关系表+JSON | 文档(BSON) | 键值+数据结构 |
+| **查询语言** | SQL | SQL+JSON | 类JSON查询 | 命令+Lua |
+| **事务支持** | 完整ACID | 完整ACID | 4.0+支持多文档事务 | 有限支持(Redis 7.0+) |
+| **一致性** | 强一致性 | 强一致性 | 可配置一致性 | 单机强一致/集群弱一致 |
+| **可扩展性** | 主从复制 | 主从复制+逻辑复制 | 分片+副本集 | 集群模式 |
+| **数据类型** | 标准类型 | 丰富类型+扩展 | 灵活模式+BSON类型 | 多种数据结构 |
+| **索引支持** | B+树 | B+树+GIN/GiST | B树+多种索引 | 有限索引 |
+| **特色功能** | 简单易用 | PostGIS/JSON/全文搜索 | 文档灵活性/地理查询 | 高性能/数据结构 |
+| **适用场景** | 通用应用 | 复杂查询/地理信息 | 大数据/灵活模式 | 缓存/实时应用 |
+
+#### PostgreSQL核心特性
+
+PostgreSQL是一个功能强大的开源对象关系型数据库系统，提供了众多企业级特性：
+
+```sql title="PostgreSQL特性"
+-- 1. JSON/JSONB支持
+CREATE TABLE products (
+  id SERIAL PRIMARY KEY,
+  name TEXT NOT NULL,
+  attributes JSONB
+);
+
+-- 查询JSONB数据
+SELECT * FROM products 
+WHERE attributes @> '{"color": "red", "size": "large"}';
+
+-- 2. 高级数据类型
+CREATE TABLE location_data (
+  id SERIAL PRIMARY KEY,
+  name TEXT,
+  location GEOGRAPHY(POINT),  -- 地理类型
+  time_range TSRANGE,         -- 时间范围
+  tags TEXT[]                 -- 数组类型
+);
+
+-- 3. 全文搜索
+CREATE TABLE articles (
+  id SERIAL PRIMARY KEY,
+  title TEXT,
+  body TEXT,
+  ts_vector TSVECTOR  -- 全文搜索向量
+);
+
+CREATE INDEX idx_articles_fts ON articles USING GIN(ts_vector);
+
+SELECT title FROM articles 
+WHERE ts_vector @@ to_tsquery('english', 'database & performance');
+
+-- 4. 表继承
+CREATE TABLE devices (
+  id SERIAL PRIMARY KEY,
+  name TEXT NOT NULL
+);
+
+CREATE TABLE phones (
+  carrier TEXT,
+  model TEXT
+) INHERITS (devices);
+
+-- 5. 物化视图
+CREATE MATERIALIZED VIEW sales_summary AS
+SELECT 
+  product_id, 
+  SUM(quantity) as total_sold, 
+  AVG(price) as avg_price
+FROM sales
+GROUP BY product_id;
+
+-- 6. 扩展系统
+CREATE EXTENSION postgis;  -- 地理信息系统
+CREATE EXTENSION pg_stat_statements;  -- SQL统计
+```
+
+#### MongoDB核心特性
+
+MongoDB是领先的文档数据库，具有高可扩展性和灵活的数据模型：
+
+```javascript title="MongoDB特性"
+// 1. 文档数据模型
+db.users.insertOne({
+  name: "John Doe",
+  email: "john@example.com",
+  profile: {
+    age: 30,
+    interests: ["coding", "music", "hiking"],
+    address: {
+      city: "New York",
+      zip: "10001"
+    }
+  },
+  created_at: new Date()
+});
+
+// 2. 灵活模式
+// 同一集合中的文档可以有不同的字段
+db.products.insertMany([
+  { name: "Phone", price: 699, specs: { ram: "8GB", storage: "128GB" } },
+  { name: "Laptop", price: 1299, specs: { cpu: "i7", ram: "16GB" }, colors: ["silver", "black"] }
+]);
+
+// 3. 强大的查询语言
+db.orders.find({
+  status: "completed",
+  "customer.country": "US",
+  total: { $gt: 100 },
+  items: { $elemMatch: { product_id: "xyz123", quantity: { $gte: 2 } } }
+}).sort({ created_at: -1 }).limit(10);
+
+// 4. 聚合框架
+db.sales.aggregate([
+  { $match: { date: { $gte: ISODate("2023-01-01") } } },
+  { $group: {
+      _id: "$product_id",
+      totalSales: { $sum: "$amount" },
+      count: { $sum: 1 }
+  }},
+  { $sort: { totalSales: -1 } },
+  { $limit: 5 }
+]);
+
+// 5. 索引支持
+db.users.createIndex({ email: 1 }, { unique: true });  // 单字段索引
+db.products.createIndex({ category: 1, name: 1 });  // 复合索引
+db.stores.createIndex({ location: "2dsphere" });  // 地理空间索引
+db.articles.createIndex({ title: "text", content: "text" });  // 全文索引
+
+// 6. 分片集群
+// 水平扩展能力
+sh.shardCollection("database.collection", { shardKey: 1 });
+```
+
 ## 2. ORM框架体系
 
 ### 2.1 JPA规范
@@ -267,14 +406,18 @@ public List<User> findUsersByCriteria(String username, String email) {
 ### 2.2 主流ORM框架对比
 
 #### 框架特性对比
-| 特性 | Hibernate | MyBatis | JPA | Spring Data JPA |
-|------|-----------|---------|-----|-----------------|
-| **类型** | 全功能ORM | 半自动ORM | 规范 | 数据访问抽象 |
-| **SQL控制** | 自动生成 | 手动编写 | 自动生成 | 自动生成 |
-| **学习成本** | 高 | 低 | 中 | 低 |
-| **性能** | 中等 | 高 | 中等 | 中等 |
-| **灵活性** | 中等 | 高 | 中等 | 中等 |
-| **适用场景** | 复杂业务 | 复杂查询 | 标准CRUD | 快速开发 |
+| 特性 | Hibernate | MyBatis | JPA | Spring Data JPA | Spring Data MongoDB |
+|------|-----------|---------|-----|-----------------|---------------------|
+| **类型** | 全功能ORM | 半自动ORM | 规范 | 数据访问抽象 | MongoDB数据访问 |
+| **SQL控制** | 自动生成 | 手动编写 | 自动生成 | 自动生成 | MongoDB查询 |
+| **学习成本** | 高 | 低 | 中 | 低 | 低 |
+| **性能** | 中等 | 高 | 中等 | 中等 | 高 |
+| **灵活性** | 中等 | 高 | 中等 | 中等 | 高 |
+| **适用场景** | 复杂业务 | 复杂查询 | 标准CRUD | 快速开发 | 文档存储 |
+| **数据库支持** | 多种关系型 | 多种关系型 | 多种关系型 | 多种关系型 | MongoDB |
+| **缓存机制** | 多级缓存 | 一级缓存 | 依赖实现 | 依赖实现 | 无内置缓存 |
+| **关系映射** | 强大完整 | 需手动配置 | 完整标准 | 继承JPA | 文档引用 |
+| **代码生成** | 不擅长 | 擅长 | 不擅长 | 不擅长 | 不擅长 |
 
 #### Hibernate特性
 ```java title="Hibernate特性"
@@ -322,6 +465,32 @@ for (int i = 0; i < 1000; i++) {
 
 session.getTransaction().commit();
 session.close();
+
+// 5. 对象生命周期管理
+// 瞬时态：新创建的对象，未持久化
+User newUser = new User("张三");
+
+// 持久态：通过Session保存或查询获取的对象
+User persistedUser = session.get(User.class, 1L);
+persistedUser.setName("李四"); // 自动检测和同步到数据库
+
+// 游离态：Session关闭后的对象
+session.close();
+// persistedUser现在是游离态
+
+// 6. 继承映射策略
+@Entity
+@Inheritance(strategy = InheritanceType.JOINED)
+public abstract class Payment {
+    @Id
+    private Long id;
+    private BigDecimal amount;
+}
+
+@Entity
+public class CreditCardPayment extends Payment {
+    private String cardNumber;
+}
 ```
 
 #### MyBatis特性
@@ -365,6 +534,163 @@ session.close();
         <property name="helperDialect" value="mysql"/>
     </plugin>
 </plugins>
+```
+
+#### JPA规范与实现
+```java title="JPA特性"
+// 1. 标准实体定义
+@Entity
+@Table(name = "products")
+public class Product {
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+    
+    @Column(nullable = false)
+    private String name;
+    
+    @Column(precision = 10, scale = 2)
+    private BigDecimal price;
+    
+    @Enumerated(EnumType.STRING)
+    private ProductStatus status;
+    
+    @Temporal(TemporalType.TIMESTAMP)
+    private Date createdAt;
+    
+    // 关系映射
+    @ManyToOne
+    @JoinColumn(name = "category_id")
+    private Category category;
+    
+    // JPA生命周期回调
+    @PrePersist
+    protected void onCreate() {
+        createdAt = new Date();
+    }
+}
+
+// 2. JPQL查询
+EntityManager em = entityManagerFactory.createEntityManager();
+
+// 基本查询
+TypedQuery<Product> query = em.createQuery(
+    "SELECT p FROM Product p WHERE p.price > :minPrice", Product.class);
+query.setParameter("minPrice", new BigDecimal("100.00"));
+List<Product> products = query.getResultList();
+
+// 使用Criteria API构建动态查询
+CriteriaBuilder cb = em.getCriteriaBuilder();
+CriteriaQuery<Product> cq = cb.createQuery(Product.class);
+Root<Product> root = cq.from(Product.class);
+cq.select(root).where(cb.equal(root.get("status"), ProductStatus.ACTIVE));
+List<Product> activeProducts = em.createQuery(cq).getResultList();
+
+// 3. Spring Data JPA
+public interface ProductRepository extends JpaRepository<Product, Long> {
+    // 方法名自动生成查询
+    List<Product> findByPriceGreaterThanAndStatusEquals(
+        BigDecimal minPrice, ProductStatus status);
+        
+    // 使用@Query定义JPQL
+    @Query("SELECT p FROM Product p WHERE p.category.name = :categoryName")
+    List<Product> findByCategoryName(@Param("categoryName") String categoryName);
+    
+    // 分页查询
+    Page<Product> findAll(Pageable pageable);
+}
+```
+
+#### MongoDB数据访问
+```java title="Spring Data MongoDB"
+// 1. 文档映射
+@Document(collection = "users")
+public class User {
+    @Id
+    private String id;
+    
+    private String name;
+    private String email;
+    
+    @Field("created_date")
+    private Date createdAt;
+    
+    @DBRef
+    private List<Order> orders;
+    
+    // 嵌入式文档
+    private Address address;
+}
+
+// 2. MongoDB仓库
+public interface UserRepository extends MongoRepository<User, String> {
+    // 自动实现基本CRUD
+    
+    // 基于方法名的查询定义
+    List<User> findByNameLikeAndEmailLike(String name, String email);
+    
+    // 基于@Query注解的查询
+    @Query("{ 'address.city': ?0, 'age': { $gte: ?1 } }")
+    List<User> findByCityAndAgeGreaterThan(String city, int age);
+    
+    // 聚合查询
+    @Aggregation("{ $match: { 'status': ?0 } }, { $group: { _id: '$department', count: { $sum: 1 } } }")
+    List<CountResult> countByStatus(String status);
+}
+
+// 3. MongoTemplate使用
+@Autowired
+private MongoTemplate mongoTemplate;
+
+public List<User> findActiveUsersByCity(String city) {
+    Query query = new Query();
+    query.addCriteria(Criteria.where("address.city").is(city)
+                            .and("status").is("active"));
+    return mongoTemplate.find(query, User.class);
+}
+```
+
+### 2.3 ORM框架选型对比
+
+在实际项目中，ORM框架的选择应考虑以下因素：
+
+1. **业务复杂度**：
+   - 简单CRUD操作：Spring Data JPA
+   - 复杂业务逻辑：Hibernate
+   - 复杂查询和性能要求：MyBatis
+
+2. **团队技术栈**：
+   - Java传统企业应用：JPA/Hibernate
+   - 互联网公司：MyBatis
+   - 微服务架构：Spring Data JPA
+
+3. **灵活性与控制力**：
+   - 高度控制SQL：MyBatis
+   - 快速开发：Spring Data JPA
+   - 复杂对象图：Hibernate
+
+4. **性能要求**：
+   - 极致性能：JDBC/MyBatis
+   - 均衡性能：JPA/Hibernate + 缓存
+   - 读写分离：自定义数据源 + ORM
+
+```mermaid
+flowchart TB
+    A[选择ORM框架] --> B{业务类型}
+    B -->|简单CRUD| C[Spring Data JPA]
+    B -->|复杂SQL查询| D[MyBatis]
+    B -->|复杂对象关系| E[Hibernate]
+    
+    C --> F{性能要求}
+    D --> F
+    E --> F
+    
+    F -->|一般| G[原方案]
+    F -->|苛刻| H[性能优化]
+    
+    H --> I[缓存策略]
+    H --> J[批处理]
+    H --> K[SQL优化]
 ```
 
 ## 3. 数据库性能优化
@@ -664,12 +990,160 @@ A: 分库分表策略：
 - **垂直分库**：按业务模块分割
 - **分片策略**：取模、范围、哈希等
 
+### 5.6 PostgreSQL与MongoDB面试题
+
+**Q: PostgreSQL和MySQL有哪些主要区别？如何选择？**
+
+A: PostgreSQL与MySQL的主要区别：
+1. **功能丰富度**：PostgreSQL提供更丰富的数据类型、更强大的索引类型和更多的SQL扩展
+2. **扩展性**：PostgreSQL有完善的扩展机制，如PostGIS地理信息扩展
+3. **事务处理**：PostgreSQL提供更完善的事务隔离和MVCC支持
+4. **复杂查询**：PostgreSQL更适合处理复杂查询和数据分析
+5. **合规性**：PostgreSQL对SQL标准的遵循度更高
+
+选择标准：
+- 简单应用且易于管理优先考虑MySQL
+- 复杂应用、空间数据、分析型应用优先考虑PostgreSQL
+
+**Q: MongoDB适合什么场景？不适合什么场景？**
+
+A: MongoDB适合场景：
+1. **非结构化或半结构化数据**：灵活的文档模型适合变化的数据结构
+2. **高写入量**：高性能写入和水平扩展能力
+3. **大数据存储**：通过分片可扩展到TB级数据
+4. **敏捷开发**：模式灵活支持快速迭代
+5. **内容管理**：适合博客、文章等内容存储
+
+不适合场景：
+1. **复杂事务**：多文档事务支持仍有限制
+2. **复杂关联查询**：JOIN操作不如关系型数据库高效
+3. **强一致性要求**：最终一致性可能不适合某些业务场景
+4. **固定结构数据**：高度规范化的数据可能更适合关系型数据库
+
+**Q: 如何优化PostgreSQL和MongoDB性能？**
+
+A: PostgreSQL性能优化：
+1. **索引优化**：合理使用B-tree、GIN、BRIN等不同类型索引
+2. **查询优化**：EXPLAIN分析、查询重写和物化视图
+3. **配置调整**：shared_buffers、work_mem、effective_cache_size等参数调优
+4. **表分区**：大表使用表分区提高性能
+5. **并行查询**：利用多CPU并行处理大型查询
+
+MongoDB性能优化：
+1. **索引策略**：创建正确的索引支持常用查询
+2. **文档结构**：设计合理的文档结构避免深层嵌套
+3. **分片策略**：选择良好的分片键实现数据均衡分布
+4. **读写分离**：利用读取偏好从次要节点读取
+5. **批量操作**：使用批量插入/更新而非单条操作
+
+### 5.7 Hibernate与JPA面试题
+
+**Q: Hibernate的Session和JPA的EntityManager有什么异同？**
+
+A: Hibernate Session与JPA EntityManager的比较：
+1. **关系**：EntityManager是JPA规范的接口，Session是Hibernate的接口，EntityManager在Hibernate中的实现内部使用了Session
+2. **功能相似性**：两者都提供实体的基本CRUD操作、查询功能和事务支持
+3. **API差异**：
+   - Session提供save()、update()、saveOrUpdate()等方法
+   - EntityManager提供persist()、merge()、remove()等方法
+4. **缓存操作**：Session提供更多的缓存控制API，如evict()、clear()
+5. **查询API**：Session有更丰富的查询API，如createCriteria()
+
+**Q: Hibernate的对象状态转换是怎样的？**
+
+A: Hibernate对象状态：
+1. **瞬时态(Transient)**：新创建的对象，没有持久化标识符，未与Session关联
+2. **持久态(Persistent)**：与当前Session关联的对象，有持久化标识符，修改会自动同步到数据库
+3. **游离态(Detached)**：曾经持久化，但当前未与任何Session关联的对象
+4. **删除态(Removed)**：被标记为删除的对象
+
+状态转换：
+- 瞬时态→持久态：`session.save()`, `session.persist()`
+- 持久态→游离态：`session.evict()`, `session.clear()`, `session.close()`
+- 游离态→持久态：`session.update()`, `session.merge()`, `session.saveOrUpdate()`
+- 持久态→删除态：`session.delete()`
+
+**Q: Hibernate的一级缓存和二级缓存有什么区别？如何优化？**
+
+A: Hibernate缓存比较：
+1. **一级缓存(Session缓存)**：
+   - 作用域：单个Session
+   - 生命周期：Session开启到关闭
+   - 特点：强制启用，不能禁用
+   - 数据一致性：自动管理，与事务绑定
+
+2. **二级缓存(SessionFactory缓存)**：
+   - 作用域：应用级别，所有Session共享
+   - 生命周期：应用程序生命周期
+   - 特点：需要显式配置，可选择缓存提供者(EhCache, Infinispan等)
+   - 数据一致性：需要配置合适的缓存并发策略
+
+优化策略：
+1. 合理设置缓存对象，只缓存不经常变化的数据
+2. 为频繁查询的实体启用二级缓存
+3. 为只读数据配置READ_ONLY策略，提高性能
+4. 合理设置缓存过期时间和大小
+5. 监控缓存命中率，调整缓存策略
+
+**Q: JPA与Spring Data JPA的区别是什么？**
+
+A: JPA与Spring Data JPA的区别：
+1. **定义**：
+   - JPA(Java Persistence API)是Java持久化的标准规范
+   - Spring Data JPA是在JPA基础上的更高抽象，简化数据访问层开发
+
+2. **功能对比**：
+   - JPA提供基本的对象关系映射和实体管理
+   - Spring Data JPA提供方法名生成查询、分页排序、自动实现Repository等功能
+
+3. **使用方式**：
+   - JPA需要编写实现类和查询代码
+   - Spring Data JPA只需定义接口，无需编写实现类
+
+4. **扩展性**：
+   - Spring Data JPA支持多种数据存储(MongoDB, Redis等)
+   - JPA主要针对关系型数据库
+
+**Q: 如何处理Hibernate的N+1查询问题？**
+
+A: N+1查询问题解决方案：
+1. **使用JOIN FETCH**：
+   ```java
+   // 解决N+1问题
+   String hql = "SELECT o FROM Order o JOIN FETCH o.items WHERE o.status = :status";
+   ```
+
+2. **使用EntityGraph**：
+   ```java
+   @EntityGraph(attributePaths = {"items", "customer"})
+   Order findById(Long id);
+   ```
+
+3. **使用批量获取**：
+   ```java
+   // 在实体类上配置
+   @BatchSize(size = 20)
+   @OneToMany(mappedBy = "order")
+   private Set<OrderItem> items;
+   
+   // 或全局配置
+   <property name="hibernate.default_batch_fetch_size" value="20" />
+   ```
+
+4. **在查询中预先指定加载关系**：
+   ```java
+   Criteria criteria = session.createCriteria(Order.class);
+   criteria.setFetchMode("items", FetchMode.JOIN);
+   ```
+
 :::tip 学习要点总结
 1. **掌握数据库设计原则**：理解规范化理论，合理设计表结构
-2. **熟悉ORM框架特性**：掌握JPA、Hibernate、MyBatis的使用
+2. **熟悉ORM框架特性**：掌握JPA、Hibernate、MyBatis、Spring Data的使用
 3. **学会性能优化技巧**：掌握索引优化、SQL优化、缓存策略
 4. **理解事务管理机制**：掌握ACID特性、隔离级别、锁机制
 5. **了解高可用架构**：掌握主从复制、集群模式、分库分表
+6. **掌握NoSQL特性**：理解文档数据库和键值数据库的场景与用法
+7. **深入ORM原理**：理解对象状态、缓存机制、延迟加载
 :::
 
 ---

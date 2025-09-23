@@ -1,0 +1,2534 @@
+---
+sidebar_position: 6
+title: MongoDB详解
+description: 深入理解MongoDB核心特性、架构设计与Spring Boot集成
+authors: [Laby]
+tags: [MongoDB, NoSQL, 文档数据库, 分布式数据库, Spring Data]
+last_update:
+  date: 2025-09-02
+  author: Laby
+---
+
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+import CodeBlock from '@theme/CodeBlock';
+
+# MongoDB详解
+
+MongoDB是一款领先的开源NoSQL文档数据库，以其灵活的文档模型、强大的查询功能和卓越的可扩展性著称。作为现代应用开发的优选数据存储方案，MongoDB能够轻松处理海量数据并支持分布式架构，适合敏捷开发和微服务体系结构。
+
+:::tip 核心价值
+**MongoDB = 文档模型 + 灵活扩展 + 高可用性 + 丰富的查询语言**
+- 📄 **文档数据模型**：灵活的JSON(BSON)格式，无需预定义模式
+- 🚀 **高性能**：内存映射存储引擎、索引支持、聚合框架
+- 🔄 **横向扩展**：原生分片支持，轻松实现数据库集群
+- 💼 **企业级功能**：复制集、事务支持、安全认证
+- 🔍 **强大的查询**：丰富的查询语言和聚合管道
+:::
+
+本文将深入探讨MongoDB的核心概念、高级特性及其在Spring Boot应用中的最佳实践，帮助开发者构建高性能、可靠的现代应用程序。
+
+## 1. MongoDB基础与核心概念
+
+MongoDB以其灵活性和可扩展性改变了传统的数据存储思维方式，摒弃了关系型数据库的表结构设计，转而采用文档模型。深入理解其基本概念是高效使用MongoDB的前提。
+
+### 1.1 MongoDB架构概览
+
+MongoDB的整体架构由以下核心组件构成：
+
+![MongoDB架构](https://www.mongodb.com/assets/images/resource-center/icons/icon-architecture-300x163.png)
+
+1. **MongoDB服务器**：核心数据库服务
+2. **存储引擎**：负责数据持久化，默认为WiredTiger
+3. **复制集**：提供数据冗余和高可用性
+4. **分片集群**：实现水平扩展，处理大数据量
+5. **MongoDB客户端**：应用程序通过驱动程序连接数据库
+
+#### 1.1.1 基本术语对比
+
+MongoDB与关系型数据库在概念上有许多对应关系：
+
+| 关系型数据库 | MongoDB |
+|------------|---------|
+| 数据库(Database) | 数据库(Database) |
+| 表(Table) | 集合(Collection) |
+| 行(Row) | 文档(Document) |
+| 列(Column) | 字段(Field) |
+| 主键(Primary Key) | ObjectId(_id) |
+| 索引(Index) | 索引(Index) |
+| 连接(Join) | 引用或嵌入 |
+| 视图(View) | 视图(View) |
+
+### 1.2 文档模型详解
+
+MongoDB的核心是文档模型，它以BSON(Binary JSON)格式存储数据。
+
+#### 1.2.1 BSON格式
+
+BSON扩展了JSON格式，增加了额外的数据类型支持（如日期、二进制数据、正则表达式等）：
+
+```javascript
+{
+  "_id": ObjectId("507f1f77bcf86cd799439011"),
+  "name": "张三",
+  "age": 30,
+  "email": "zhangsan@example.com",
+  "created_at": ISODate("2023-01-15T09:30:00Z"),
+  "tags": ["vip", "active"],
+  "address": {
+    "city": "北京",
+    "street": "中关村大街",
+    "zip": "100080"
+  },
+  "orders": [
+    { "product": "手机", "price": 4999 },
+    { "product": "耳机", "price": 999 }
+  ]
+}
+```
+
+#### 1.2.2 文档大小限制
+
+- 单个文档最大不超过16MB
+- 对于大型文档，可以使用GridFS存储
+
+#### 1.2.3 _id字段
+
+每个文档必须有一个`_id`字段作为主键：
+- 默认为ObjectId类型（自动生成）
+- 可自定义为任何唯一值
+- 不可变且必须唯一
+
+### 1.3 数据库操作基础
+
+#### 1.3.1 创建数据库和集合
+
+```javascript
+// 切换到指定数据库（不存在则隐式创建）
+use mydb
+
+// 创建集合（显式创建，可指定选项）
+db.createCollection("users", {
+  validator: {
+    $jsonSchema: {
+      bsonType: "object",
+      required: ["name", "email"],
+      properties: {
+        name: { bsonType: "string" },
+        email: { bsonType: "string", pattern: "^.+@.+$" }
+      }
+    }
+  }
+})
+
+// 隐式创建集合（插入文档时自动创建）
+db.products.insertOne({
+  name: "智能手机",
+  price: 4999,
+  stock: 200
+})
+```
+
+#### 1.3.2 基本CRUD操作
+
+```javascript
+// 插入文档
+db.users.insertOne({
+  name: "李四",
+  age: 28,
+  email: "lisi@example.com"
+})
+
+// 批量插入
+db.users.insertMany([
+  { name: "王五", age: 35, email: "wangwu@example.com" },
+  { name: "赵六", age: 42, email: "zhaoliu@example.com" }
+])
+
+// 查询文档
+db.users.find({ age: { $gt: 30 } })
+
+// 更新文档
+db.users.updateOne(
+  { name: "李四" },
+  { $set: { age: 29 }, $currentDate: { lastModified: true } }
+)
+
+// 删除文档
+db.users.deleteOne({ name: "赵六" })
+```
+
+#### 1.3.3 查询操作符
+
+MongoDB提供丰富的查询操作符：
+
+```javascript
+// 比较操作符
+db.products.find({ price: { $lt: 1000 } })  // 小于
+db.products.find({ price: { $gt: 1000, $lt: 5000 } })  // 区间查询
+
+// 逻辑操作符
+db.users.find({ $or: [{ age: { $lt: 25 } }, { age: { $gt: 50 } }] })
+
+// 元素操作符
+db.users.find({ age: { $exists: true } })  // 存在字段
+db.users.find({ score: { $type: "number" } })  // 类型匹配
+
+// 数组操作符
+db.posts.find({ tags: { $all: ["mongodb", "nosql"] } })  // 包含所有指定元素
+db.posts.find({ tags: { $size: 3 } })  // 数组长度匹配
+```
+
+### 1.4 索引与性能
+
+#### 1.4.1 索引类型
+
+MongoDB支持多种索引类型：
+
+```javascript
+// 单字段索引
+db.users.createIndex({ email: 1 })  // 1表示升序，-1表示降序
+
+// 复合索引
+db.products.createIndex({ category: 1, price: -1 })
+
+// 多键索引（数组字段）
+db.posts.createIndex({ tags: 1 })
+
+// 地理空间索引
+db.places.createIndex({ location: "2dsphere" })
+
+// 文本索引（全文搜索）
+db.articles.createIndex({ title: "text", content: "text" })
+
+// 哈希索引
+db.users.createIndex({ username: "hashed" })
+```
+
+#### 1.4.2 索引属性
+
+索引可以配置多种属性：
+
+```javascript
+// 唯一索引
+db.users.createIndex({ email: 1 }, { unique: true })
+
+// 稀疏索引（只索引包含该字段的文档）
+db.users.createIndex({ mobile: 1 }, { sparse: true })
+
+// TTL索引（自动过期）
+db.sessions.createIndex(
+  { lastActive: 1 },
+  { expireAfterSeconds: 3600 }  // 一小时后过期
+)
+
+// 部分索引（条件索引）
+db.products.createIndex(
+  { price: 1 },
+  { partialFilterExpression: { quantity: { $gt: 0 } } }
+)
+```
+
+#### 1.4.3 查看和管理索引
+
+```javascript
+// 查看集合的所有索引
+db.users.getIndexes()
+
+// 删除特定索引
+db.users.dropIndex("email_1")
+
+// 删除所有索引（除_id外）
+db.users.dropIndexes()
+```
+
+### 1.5 聚合框架
+
+MongoDB的聚合框架提供强大的数据处理能力，可进行复杂的分组、过滤和转换操作。
+
+#### 1.5.1 基本聚合管道
+
+```javascript
+db.orders.aggregate([
+  // 筛选阶段
+  { $match: { status: "completed" } },
+  
+  // 分组阶段
+  { $group: {
+      _id: "$customer_id",
+      totalAmount: { $sum: "$amount" },
+      count: { $sum: 1 }
+  }},
+  
+  // 排序阶段
+  { $sort: { totalAmount: -1 } },
+  
+  // 限制阶段
+  { $limit: 10 }
+])
+```
+
+#### 1.5.2 常用聚合操作符
+
+```javascript
+// 投影操作符
+db.users.aggregate([
+  { $project: {
+      _id: 0,
+      name: 1,
+      firstLetter: { $substr: ["$name", 0, 1] }
+  }}
+])
+
+// 展开数组
+db.products.aggregate([
+  { $unwind: "$categories" }
+])
+
+// 查找操作（类似关系型数据库的JOIN）
+db.orders.aggregate([
+  { $lookup: {
+      from: "users",
+      localField: "user_id",
+      foreignField: "_id",
+      as: "user_info"
+  }}
+])
+```
+
+#### 1.5.3 聚合表达式
+
+```javascript
+// 条件表达式
+db.products.aggregate([
+  { $project: {
+      name: 1,
+      price: 1,
+      priceCategory: {
+        $switch: {
+          branches: [
+            { case: { $lt: ["$price", 100] }, then: "便宜" },
+            { case: { $lt: ["$price", 500] }, then: "适中" }
+          ],
+          default: "昂贵"
+        }
+      }
+  }}
+])
+
+// 日期操作
+db.orders.aggregate([
+  { $project: {
+      year: { $year: "$created_at" },
+      month: { $month: "$created_at" },
+      day: { $dayOfMonth: "$created_at" }
+  }}
+])
+```
+
+## 2. MongoDB高级数据建模
+
+MongoDB的文档模型提供了极大的设计灵活性，但优秀的数据模型设计对性能和可维护性至关重要。
+
+### 2.1 数据建模策略
+
+#### 2.1.1 嵌入式文档 vs. 引用关系
+
+MongoDB提供两种主要的关系处理方式：
+
+**嵌入式文档（反规范化）**：
+```javascript
+// 嵌入式文档示例 - 用户及其地址
+{
+  "_id": ObjectId("..."),
+  "name": "张三",
+  "email": "zhangsan@example.com",
+  "addresses": [
+    {
+      "type": "home",
+      "street": "中关村大街1号",
+      "city": "北京",
+      "zip": "100080"
+    },
+    {
+      "type": "work",
+      "street": "金融大街2号",
+      "city": "北京",
+      "zip": "100033"
+    }
+  ]
+}
+```
+
+**引用关系（规范化）**：
+```javascript
+// 用户集合
+{
+  "_id": ObjectId("user1"),
+  "name": "张三",
+  "email": "zhangsan@example.com"
+}
+
+// 地址集合
+{
+  "_id": ObjectId("addr1"),
+  "user_id": ObjectId("user1"),
+  "type": "home",
+  "street": "中关村大街1号",
+  "city": "北京",
+  "zip": "100080"
+}
+{
+  "_id": ObjectId("addr2"),
+  "user_id": ObjectId("user1"),
+  "type": "work",
+  "street": "金融大街2号",
+  "city": "北京",
+  "zip": "100033"
+}
+```
+
+**选择标准**：
+- 嵌入式适用于：
+  - 一对一或一对少量关系
+  - 子文档是主文档的组成部分
+  - 子文档不单独访问
+  - 文档总大小在16MB以内
+
+- 引用适用于：
+  - 一对多或多对多关系
+  - 子数据需要单独查询
+  - 文档频繁变化
+  - 文档大小接近或超过16MB限制
+
+#### 2.1.2 模式设计模式
+
+**目录模式**：适用于产品目录等层次结构
+```javascript
+// 产品目录结构
+{
+  "_id": ObjectId("..."),
+  "name": "电子产品",
+  "path": ",电子产品,",
+  "parent_id": null,
+  "level": 1
+}
+
+{
+  "_id": ObjectId("..."),
+  "name": "手机",
+  "path": ",电子产品,手机,",
+  "parent_id": ObjectId("..."),
+  "level": 2
+}
+```
+
+**多态模式**：适用于存储相似但不完全相同的数据
+```javascript
+{
+  "_id": ObjectId("..."),
+  "type": "book",
+  "title": "MongoDB实战",
+  "author": "张三",
+  "isbn": "978-1-4842-1182-3"
+}
+
+{
+  "_id": ObjectId("..."),
+  "type": "movie",
+  "title": "星际穿越",
+  "director": "克里斯托弗·诺兰",
+  "duration": 169
+}
+```
+
+**版本控制模式**：追踪文档历史变更
+```javascript
+// 当前版本
+{
+  "_id": ObjectId("..."),
+  "title": "MongoDB指南",
+  "content": "最新内容...",
+  "version": 3,
+  "is_current": true
+}
+
+// 历史版本
+{
+  "_id": ObjectId("..."),
+  "title": "MongoDB入门",
+  "content": "旧版内容...",
+  "version": 2,
+  "is_current": false,
+  "current_id": ObjectId("...") // 指向当前版本
+}
+```
+
+### 2.2 复杂关系建模示例
+
+#### 2.2.1 电子商务系统建模
+
+电子商务系统包含用户、产品、订单等核心对象，关系较为复杂。
+
+**用户集合**：
+```javascript
+{
+  "_id": ObjectId("user1"),
+  "name": "王小明",
+  "email": "wang@example.com",
+  "shipping_addresses": [
+    {
+      "address_id": "addr1",
+      "street": "中关村大街1号",
+      "city": "北京",
+      "is_default": true
+    }
+  ],
+  "payment_methods": [
+    {
+      "type": "credit_card",
+      "last4": "1234",
+      "expires": "04/25",
+      "is_default": true
+    }
+  ]
+}
+```
+
+**产品集合**：
+```javascript
+{
+  "_id": ObjectId("prod1"),
+  "name": "iPhone 13",
+  "description": "Apple最新智能手机",
+  "price": 5999,
+  "stock": 100,
+  "category": "手机",
+  "attributes": {
+    "color": ["黑色", "白色", "蓝色"],
+    "storage": ["128GB", "256GB", "512GB"]
+  },
+  "images": [
+    "iphone13_main.jpg",
+    "iphone13_back.jpg"
+  ],
+  "ratings": {
+    "average": 4.8,
+    "count": 245
+  }
+}
+```
+
+**订单集合**：
+```javascript
+{
+  "_id": ObjectId("order1"),
+  "user_id": ObjectId("user1"),
+  "status": "shipped",
+  "created_at": ISODate("2023-06-15T10:30:00Z"),
+  "shipping_address": {
+    "street": "中关村大街1号",
+    "city": "北京"
+  },
+  "payment": {
+    "method": "credit_card",
+    "last4": "1234",
+    "amount": 6598,
+    "status": "paid"
+  },
+  "items": [
+    {
+      "product_id": ObjectId("prod1"),
+      "name": "iPhone 13",
+      "price": 5999,
+      "quantity": 1,
+      "attributes": {
+        "color": "黑色",
+        "storage": "128GB"
+      }
+    },
+    {
+      "product_id": ObjectId("prod2"),
+      "name": "手机保护壳",
+      "price": 599,
+      "quantity": 1
+    }
+  ],
+  "shipping": {
+    "method": "express",
+    "fee": 0,
+    "tracking_number": "SF1234567890"
+  },
+  "total": 6598
+}
+```
+
+**评论集合**：
+```javascript
+{
+  "_id": ObjectId("review1"),
+  "product_id": ObjectId("prod1"),
+  "user_id": ObjectId("user1"),
+  "user_name": "王小明", // 冗余存储
+  "rating": 5,
+  "title": "非常好用的手机",
+  "content": "屏幕清晰，性能强劲...",
+  "created_at": ISODate("2023-06-20T14:25:00Z"),
+  "helpful_votes": 12
+}
+```
+
+#### 2.2.2 社交网络建模
+
+社交网络包含用户、关系网络、帖子和互动等元素。
+
+**用户集合**：
+```javascript
+{
+  "_id": ObjectId("user1"),
+  "username": "zhang_san",
+  "name": "张三",
+  "email": "zhangsan@example.com",
+  "profile": {
+    "avatar": "zhang_san.jpg",
+    "bio": "热爱技术与创新",
+    "location": "北京"
+  },
+  "stats": {
+    "followers_count": 1250,
+    "following_count": 350,
+    "posts_count": 142
+  },
+  "preferences": {
+    "privacy": "public",
+    "notifications": {
+      "likes": true,
+      "comments": true,
+      "follows": true
+    }
+  },
+  "created_at": ISODate("2020-01-15")
+}
+```
+
+**关系集合**：
+```javascript
+{
+  "_id": ObjectId("..."),
+  "follower": ObjectId("user2"),
+  "following": ObjectId("user1"),
+  "status": "active", // active, blocked, muted
+  "created_at": ISODate("2023-05-20")
+}
+```
+
+**帖子集合**：
+```javascript
+{
+  "_id": ObjectId("post1"),
+  "user_id": ObjectId("user1"),
+  "user_info": {
+    "username": "zhang_san",
+    "name": "张三",
+    "avatar": "zhang_san.jpg"
+  },
+  "content": "今天学习了MongoDB的高级数据建模",
+  "media": [
+    {
+      "type": "image",
+      "url": "mongodb_diagram.jpg",
+      "width": 1200,
+      "height": 800
+    }
+  ],
+  "tags": ["技术", "数据库", "MongoDB"],
+  "location": {
+    "name": "北京科技园",
+    "coordinates": [116.3, 40.0]
+  },
+  "stats": {
+    "likes": 45,
+    "comments": 12,
+    "shares": 5
+  },
+  "created_at": ISODate("2023-06-25T09:15:00Z")
+}
+```
+
+**互动集合**：
+```javascript
+{
+  "_id": ObjectId("..."),
+  "type": "comment", // comment, like, share
+  "post_id": ObjectId("post1"),
+  "user_id": ObjectId("user3"),
+  "user_info": {
+    "username": "li_si",
+    "name": "李四",
+    "avatar": "li_si.jpg"
+  },
+  "content": "非常实用的文章！",
+  "created_at": ISODate("2023-06-25T10:30:00Z")
+}
+```
+
+### 2.3 模式验证
+
+MongoDB 3.6+支持JSON Schema验证，可以确保数据符合预定义的结构和规则。
+
+```javascript
+db.createCollection("products", {
+  validator: {
+    $jsonSchema: {
+      bsonType: "object",
+      required: ["name", "price", "category"],
+      properties: {
+        name: {
+          bsonType: "string",
+          description: "必须是字符串且不可为空"
+        },
+        price: {
+          bsonType: "number",
+          minimum: 0,
+          description: "必须是非负数"
+        },
+        stock: {
+          bsonType: "int",
+          minimum: 0,
+          description: "必须是非负整数"
+        },
+        category: {
+          bsonType: "string",
+          enum: ["电子产品", "家居", "服装", "食品"],
+          description: "必须是指定类别之一"
+        },
+        tags: {
+          bsonType: "array",
+          items: {
+            bsonType: "string"
+          }
+        }
+      }
+    }
+  },
+  validationLevel: "moderate", // strict, moderate, off
+  validationAction: "error" // error, warn
+})
+```
+
+### 2.4 数据一致性与事务
+
+#### 2.4.1 原子性操作
+
+MongoDB保证单文档操作的原子性：
+
+```javascript
+// 更新文档中的特定字段（原子性操作）
+db.inventory.updateOne(
+  { _id: "prod1", "quantity": { $gt: 0 } },
+  { 
+    $inc: { quantity: -1 },
+    $push: { orders: { order_id: "12345", date: new Date() } }
+  }
+)
+```
+
+#### 2.4.2 多文档事务
+
+MongoDB 4.0+支持多文档事务：
+
+```javascript
+// 启动会话和事务
+const session = db.getMongo().startSession();
+session.startTransaction();
+
+try {
+  // 扣减库存
+  db.products.updateOne(
+    { _id: productId, stock: { $gte: quantity } },
+    { $inc: { stock: -quantity } },
+    { session }
+  );
+  
+  // 创建订单
+  db.orders.insertOne({
+    user_id: userId,
+    product_id: productId,
+    quantity: quantity,
+    total: price * quantity,
+    status: "created",
+    created_at: new Date()
+  }, { session });
+  
+  // 提交事务
+  session.commitTransaction();
+} catch (error) {
+  // 回滚事务
+  session.abortTransaction();
+  throw error;
+} finally {
+  // 结束会话
+  session.endSession();
+}
+```
+
+#### 2.4.3 双写关注
+
+对于关键数据，可以设置写入关注级别：
+
+```javascript
+db.orders.insertOne(
+  { /* 订单数据 */ },
+  { writeConcern: { w: "majority", j: true, wtimeout: 5000 } }
+)
+```
+
+写入关注选项：
+- `w`：写入确认级别（1、majority、标签名称）
+- `j`：等待写入日志
+- `wtimeout`：写入超时时间
+
+## 3. MongoDB高级特性与企业功能
+
+随着MongoDB的发展，它已从简单的文档数据库演变为功能全面的数据平台，提供了丰富的企业级功能来满足大规模应用的需求。
+
+### 3.1 复制集
+
+复制集是MongoDB实现高可用性的关键机制，通过多个节点的数据冗余确保系统可靠性。
+
+#### 3.1.1 复制集架构
+
+一个典型的MongoDB复制集包含：
+- 一个**主节点**(Primary)：处理所有写操作
+- 多个**从节点**(Secondary)：复制主节点数据，可处理读操作
+- 可选的**仲裁节点**(Arbiter)：参与选举但不存储数据
+
+![MongoDB复制集架构](https://docs.mongodb.com/manual/images/replica-set-read-write-operations-primary.bakedsvg.svg)
+
+#### 3.1.2 复制集配置
+
+**基础配置示例**：
+
+1. 准备配置文件(mongod.conf)：
+```yaml
+replication:
+  replSetName: "rs0"
+net:
+  bindIp: localhost
+  port: 27017
+storage:
+  dbPath: "/var/lib/mongodb"
+```
+
+2. 启动多个MongoDB实例：
+```bash
+mongod --config mongod.conf --port 27017
+mongod --config mongod.conf --port 27018 --dbpath /var/lib/mongodb-2
+mongod --config mongod.conf --port 27019 --dbpath /var/lib/mongodb-3
+```
+
+3. 初始化复制集：
+```javascript
+// 连接到其中一个实例
+mongo --port 27017
+
+// 初始化复制集
+rs.initiate({
+  _id: "rs0",
+  members: [
+    { _id: 0, host: "localhost:27017" },
+    { _id: 1, host: "localhost:27018" },
+    { _id: 2, host: "localhost:27019" }
+  ]
+})
+```
+
+4. 复制集状态检查：
+```javascript
+rs.status()  // 查看复制集状态
+rs.isMaster()  // 检查是否为主节点
+```
+
+#### 3.1.3 复制集读写分离
+
+可以通过读偏好设置实现读写分离：
+
+```javascript
+// 默认从主节点读取
+db.collection.find().readPref("primary")
+
+// 从次要节点读取
+db.collection.find().readPref("secondary")
+
+// 就近原则
+db.collection.find().readPref("nearest")
+```
+
+在驱动程序中配置读偏好：
+
+```javascript
+// MongoDB Node.js驱动示例
+const client = new MongoClient(uri, {
+  readPreference: 'secondary',
+  readPreferenceTags: [
+    { datacenter: 'east' },
+    { datacenter: 'west' }
+  ]
+});
+```
+
+### 3.2 分片集群
+
+当数据量和处理需求超出单台服务器能力时，分片集群允许MongoDB水平扩展以支持大型应用。
+
+#### 3.2.1 分片集群架构
+
+MongoDB分片集群由以下组件组成：
+- **分片**(Shard)：每个分片是一个独立的复制集
+- **配置服务器**(Config Server)：存储集群元数据的复制集
+- **路由服务**(mongos)：将客户端请求路由到相应分片
+
+![MongoDB分片集群架构](https://docs.mongodb.com/manual/images/sharded-cluster-production-architecture.bakedsvg.svg)
+
+#### 3.2.2 分片策略
+
+MongoDB支持两种主要分片策略：
+
+**范围分片**：基于片键值的连续范围划分数据
+```javascript
+sh.shardCollection("mydatabase.orders", { order_date: 1 })
+```
+
+**哈希分片**：基于片键值的哈希结果均匀分布数据
+```javascript
+sh.shardCollection("mydatabase.users", { user_id: "hashed" })
+```
+
+#### 3.2.3 分片键选择
+
+选择良好的分片键对性能至关重要：
+- **高基数**：取值范围广，如UUID或时间戳
+- **分布均匀**：避免数据倾斜
+- **非单调增长**：避免写入热点
+- **常用于查询**：减少跨分片查询
+
+```javascript
+// 复合分片键示例
+sh.shardCollection("mydatabase.products", { category: 1, product_id: 1 })
+```
+
+#### 3.2.4 区域分片
+
+区域分片允许按地理位置或其他条件将数据分布到特定分片：
+
+```javascript
+// 定义区域
+sh.addShardToZone("shard0", "us-east")
+sh.addShardToZone("shard1", "us-west")
+sh.addShardToZone("shard2", "europe")
+
+// 为区域设置范围
+sh.updateZoneKeyRange(
+  "mydatabase.users",
+  { country: "US", state: "NY" },
+  { country: "US", state: "PA" },
+  "us-east"
+)
+```
+
+### 3.3 高级查询功能
+
+MongoDB提供多种高级查询功能，用于复杂的数据处理和分析。
+
+#### 3.3.1 Change Streams
+
+Change Streams允许应用程序监听数据库变更：
+
+```javascript
+const changeStream = db.collection('inventory').watch();
+
+changeStream.on('change', (change) => {
+  console.log('Detected change:', change);
+  // 根据变更类型进行处理
+  if (change.operationType === 'insert') {
+    // 处理新插入的文档
+  } else if (change.operationType === 'update') {
+    // 处理更新操作
+  }
+});
+```
+
+Change Streams可用于实现：
+- 缓存失效
+- 实时分析
+- 事件驱动架构
+- 跨系统数据同步
+
+#### 3.3.2 地理空间查询
+
+MongoDB提供强大的地理空间索引和查询功能：
+
+```javascript
+// 创建2dsphere索引
+db.places.createIndex({ location: "2dsphere" })
+
+// 附近查询
+db.places.find({
+  location: {
+    $near: {
+      $geometry: {
+        type: "Point",
+        coordinates: [121.4737, 31.2304]  // 上海坐标
+      },
+      $maxDistance: 5000  // 5公里内
+    }
+  }
+})
+
+// 地理边界框查询
+db.places.find({
+  location: {
+    $geoWithin: {
+      $geometry: {
+        type: "Polygon",
+        coordinates: [[
+          [120.0, 30.0], [122.0, 30.0],
+          [122.0, 32.0], [120.0, 32.0],
+          [120.0, 30.0]
+        ]]
+      }
+    }
+  }
+})
+```
+
+#### 3.3.3 全文搜索
+
+MongoDB的文本搜索功能支持多语言全文检索：
+
+```javascript
+// 创建文本索引
+db.articles.createIndex({ title: "text", content: "text" })
+
+// 基本全文搜索
+db.articles.find({ $text: { $search: "mongodb nosql 数据库" } })
+
+// 使用权重和评分
+db.articles.find(
+  { $text: { $search: "mongodb nosql 数据库" } },
+  { score: { $meta: "textScore" } }
+).sort({ score: { $meta: "textScore" } })
+```
+
+配置文本索引权重：
+
+```javascript
+// 标题权重高于内容
+db.articles.createIndex(
+  { title: "text", content: "text" },
+  { weights: { title: 10, content: 5 } }
+)
+```
+
+#### 3.3.4 图表查询
+
+MongoDB 4.0+引入了$graphLookup，支持图表数据的递归查询：
+
+```javascript
+// 查询员工的所有上级管理层
+db.employees.aggregate([
+  { $match: { name: "张三" } },
+  {
+    $graphLookup: {
+      from: "employees",
+      startWith: "$manager_id",
+      connectFromField: "manager_id",
+      connectToField: "_id",
+      as: "management_chain",
+      maxDepth: 5,
+      depthField: "level"
+    }
+  }
+])
+```
+
+### 3.4 安全性与审计
+
+MongoDB提供全面的安全控制机制，保护数据免受未授权访问。
+
+#### 3.4.1 认证与授权
+
+**启用认证**：
+```yaml
+# mongod.conf
+security:
+  authorization: enabled
+```
+
+**创建管理员用户**：
+```javascript
+use admin
+db.createUser({
+  user: "adminUser",
+  pwd: "securePassword",
+  roles: [{ role: "userAdminAnyDatabase", db: "admin" }]
+})
+```
+
+**创建应用用户**：
+```javascript
+use mydb
+db.createUser({
+  user: "appUser",
+  pwd: "appPassword",
+  roles: [
+    { role: "readWrite", db: "mydb" },
+    { role: "read", db: "reporting" }
+  ]
+})
+```
+
+**内置角色**：
+- 数据库用户：`read`, `readWrite`
+- 数据库管理：`dbAdmin`, `dbOwner`
+- 集群管理：`clusterAdmin`, `clusterManager`
+- 备份恢复：`backup`, `restore`
+- 超级用户：`root`
+
+**自定义角色**：
+```javascript
+db.createRole({
+  role: "reportingRole",
+  privileges: [
+    {
+      resource: { db: "reporting", collection: "" },
+      actions: ["find"]
+    }
+  ],
+  roles: []
+})
+```
+
+#### 3.4.2 TLS/SSL加密
+
+配置MongoDB使用TLS/SSL加密连接：
+
+```yaml
+# mongod.conf
+net:
+  ssl:
+    mode: requireSSL
+    PEMKeyFile: /path/to/mongodb.pem
+    CAFile: /path/to/ca.pem
+```
+
+#### 3.4.3 字段级加密
+
+MongoDB 4.2+支持客户端字段级加密：
+
+```javascript
+// 创建加密集合
+db.createCollection("patients", {
+  validator: {
+    $jsonSchema: {
+      bsonType: "object",
+      properties: {
+        name: {
+          encrypt: {
+            bsonType: "string",
+            algorithm: "AEAD_AES_256_CBC_HMAC_SHA_512-Deterministic"
+          }
+        },
+        ssn: {
+          encrypt: {
+            bsonType: "string",
+            algorithm: "AEAD_AES_256_CBC_HMAC_SHA_512-Deterministic"
+          }
+        },
+        bloodType: {
+          encrypt: {
+            bsonType: "string",
+            algorithm: "AEAD_AES_256_CBC_HMAC_SHA_512-Random"
+          }
+        },
+        medicalRecords: {
+          encrypt: {
+            bsonType: "object",
+            algorithm: "AEAD_AES_256_CBC_HMAC_SHA_512-Random"
+          }
+        }
+      }
+    }
+  }
+})
+```
+
+#### 3.4.4 审计
+
+MongoDB Enterprise版支持审计功能：
+
+```yaml
+# mongod.conf
+auditLog:
+  destination: file
+  format: JSON
+  path: /var/log/mongodb/audit.json
+  filter: '{ atype: { $in: ["authenticate", "createUser", "dropUser"] } }'
+```
+
+### 3.5 性能优化与监控
+
+高效运维MongoDB需要持续监控和优化系统性能。
+
+#### 3.5.1 查询优化
+
+使用`explain()`分析查询执行计划：
+
+```javascript
+// 基本执行计划
+db.users.find({ age: { $gt: 30 } }).explain()
+
+// 详细执行信息
+db.users.find({ age: { $gt: 30 } }).explain("executionStats")
+
+// 所有执行计划
+db.users.find({ age: { $gt: 30 } }).explain("allPlansExecution")
+```
+
+查询优化技巧：
+- 使用`hint()`强制使用特定索引
+- 适当投影仅返回必要字段
+- 使用适当的索引覆盖查询
+- 避免正则表达式前缀通配符
+
+#### 3.5.2 索引优化
+
+优化索引策略：
+- 创建支持查询的索引
+- 避免创建冗余索引
+- 定期检查索引使用情况
+- 在后台创建大型索引
+
+```javascript
+// 查看索引使用统计
+db.users.aggregate([{ $indexStats: {} }])
+
+// 查找未使用的索引
+db.adminCommand({ serverStatus: 1 }).metrics.commands
+
+// 在后台创建索引
+db.users.createIndex({ email: 1 }, { background: true })
+```
+
+#### 3.5.3 MongoDB Compass
+
+MongoDB Compass是官方GUI工具，提供：
+- 数据可视化
+- 性能分析
+- 索引建议
+- 聚合管道构建
+- 模式可视化
+
+#### 3.5.4 MongoDB Atlas监控
+
+MongoDB Atlas云服务提供：
+- 实时性能监控
+- 自动化警报
+- 查询性能分析
+- 容量规划
+- 实时日志查看
+
+## 4. Spring Boot与MongoDB集成最佳实践
+
+Spring Boot提供了丰富的工具和抽象，使MongoDB集成变得简单而强大。
+
+### 4.1 配置MongoDB连接
+
+#### 4.1.1 添加依赖
+
+在`pom.xml`中添加必要依赖：
+
+```xml
+<!-- Spring Data MongoDB -->
+<dependency>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-data-mongodb</artifactId>
+</dependency>
+
+<!-- 可选：Lombok简化代码 -->
+<dependency>
+    <groupId>org.projectlombok</groupId>
+    <artifactId>lombok</artifactId>
+    <optional>true</optional>
+</dependency>
+```
+
+#### 4.1.2 配置连接
+
+在`application.yml`中配置MongoDB连接：
+
+**单机连接**：
+```yaml
+spring:
+  data:
+    mongodb:
+      uri: mongodb://username:password@localhost:27017/database
+```
+
+**复制集连接**：
+```yaml
+spring:
+  data:
+    mongodb:
+      uri: mongodb://user:password@server1:27017,server2:27017,server3:27017/database?replicaSet=rs0&authSource=admin
+```
+
+**高级配置**：
+```yaml
+spring:
+  data:
+    mongodb:
+      uri: mongodb://user:password@localhost:27017/database
+      auto-index-creation: true
+      field-naming-strategy: org.springframework.data.mapping.model.SnakeCaseFieldNamingStrategy
+      grid-fs-database: files
+      authentication-database: admin
+      uuid-representation: standard
+      connection-pool:
+        max-connection-life-time: 30000
+        max-idle-time: 60000
+        max-size: 100
+        min-size: 10
+```
+
+### 4.2 定义文档映射
+
+#### 4.2.1 基本文档映射
+
+使用`@Document`注解将Java类映射到MongoDB集合：
+
+```java
+import org.springframework.data.mongodb.core.mapping.Document;
+import org.springframework.data.annotation.Id;
+import lombok.Data;
+import java.time.LocalDateTime;
+import java.util.List;
+
+@Data
+@Document(collection = "products")
+public class Product {
+    @Id
+    private String id;
+    
+    private String name;
+    private String description;
+    private double price;
+    private int stock;
+    
+    private List<String> categories;
+    
+    @Field("tech_specs")
+    private Map<String, String> technicalSpecifications;
+    
+    private LocalDateTime createdAt;
+    private LocalDateTime updatedAt;
+}
+```
+
+#### 4.2.2 索引配置
+
+使用`@Indexed`注解定义索引：
+
+```java
+@Document(collection = "users")
+public class User {
+    @Id
+    private String id;
+    
+    @Indexed(unique = true)
+    private String email;
+    
+    @Indexed
+    private String lastName;
+    
+    @TextIndexed
+    private String bio;
+    
+    @Indexed(direction = IndexDirection.DESCENDING)
+    private LocalDateTime createdAt;
+    
+    @CompoundIndex(name = "location_idx", def = "{'address.city': 1, 'address.country': 1}")
+    private Address address;
+}
+```
+
+#### 4.2.3 嵌入式文档
+
+表示嵌入式文档结构：
+
+```java
+@Data
+public class Address {
+    private String street;
+    private String city;
+    private String state;
+    private String zipCode;
+    private String country;
+    
+    @GeoSpatialIndexed(type = GeoSpatialIndexType.GEO_2DSPHERE)
+    private GeoJsonPoint location;
+}
+```
+
+#### 4.2.4 DBRef引用
+
+使用`@DBRef`表示文档引用：
+
+```java
+@Document(collection = "orders")
+public class Order {
+    @Id
+    private String id;
+    
+    @DBRef
+    private User customer;
+    
+    private List<OrderItem> items;
+    
+    private double totalAmount;
+    private String status;
+    private LocalDateTime orderDate;
+}
+
+@Data
+public class OrderItem {
+    @DBRef(lazy = true)
+    private Product product;
+    
+    private int quantity;
+    private double price;
+}
+```
+
+### 4.3 使用Spring Data MongoDB Repository
+
+#### 4.3.1 基本Repository接口
+
+创建继承`MongoRepository`的接口：
+
+```java
+import org.springframework.data.mongodb.repository.MongoRepository;
+
+public interface ProductRepository extends MongoRepository<Product, String> {
+    // 自动实现常用CRUD操作
+}
+```
+
+#### 4.3.2 自定义查询方法
+
+基于方法名定义查询：
+
+```java
+public interface ProductRepository extends MongoRepository<Product, String> {
+    // 查找特定价格范围内的产品
+    List<Product> findByPriceBetween(double minPrice, double maxPrice);
+    
+    // 查找特定类别的产品，并按价格排序
+    List<Product> findByCategoriesContainingOrderByPriceAsc(String category);
+    
+    // 使用正则表达式查找名称匹配的产品
+    List<Product> findByNameRegex(String nameRegex);
+    
+    // 统计库存低于指定值的产品数量
+    long countByStockLessThan(int threshold);
+    
+    // 查找某个日期之后创建的产品
+    List<Product> findByCreatedAtAfter(LocalDateTime date);
+}
+```
+
+#### 4.3.3 使用@Query注解
+
+使用MongoDB原生查询语法：
+
+```java
+public interface UserRepository extends MongoRepository<User, String> {
+    // 使用JSON查询
+    @Query("{ 'age': { $gte: ?0, $lte: ?1 } }")
+    List<User> findUsersInAgeRange(int minAge, int maxAge);
+    
+    // 字段投影
+    @Query(value = "{ 'status': ?0 }", fields = "{ 'name': 1, 'email': 1 }")
+    List<User> findActiveUsersWithProjection(String status);
+    
+    // 更新查询
+    @Query("{ 'email': ?0 }")
+    @Update("{ '$set': { 'status': ?1, 'lastLoginDate': ?2 } }")
+    void updateUserStatus(String email, String status, LocalDateTime lastLogin);
+    
+    // 聚合管道
+    @Aggregation("{ $match: { 'department': ?0 } }, "
+               + "{ $group: { '_id': '$jobTitle', 'avgSalary': { $avg: '$salary' } } }, "
+               + "{ $sort: { 'avgSalary': -1 } }")
+    List<Document> getAverageSalaryByJobTitle(String department);
+}
+```
+
+#### 4.3.4 分页与排序
+
+实现分页查询：
+
+```java
+@GetMapping("/products")
+public Page<Product> getProducts(
+    @RequestParam(defaultValue = "0") int page,
+    @RequestParam(defaultValue = "10") int size,
+    @RequestParam(defaultValue = "name") String sortBy
+) {
+    Pageable pageable = PageRequest.of(page, size, Sort.by(sortBy));
+    return productRepository.findAll(pageable);
+}
+
+// 自定义分页方法
+Page<Product> findByCategoryAndPriceGreaterThan(
+    String category, double price, Pageable pageable);
+```
+
+### 4.4 使用MongoTemplate进行高级操作
+
+对于更复杂的操作，`MongoTemplate`提供了直接访问MongoDB的能力：
+
+```java
+@Service
+public class ProductService {
+    private final MongoTemplate mongoTemplate;
+    
+    public ProductService(MongoTemplate mongoTemplate) {
+        this.mongoTemplate = mongoTemplate;
+    }
+    
+    // 使用criteria构建动态查询
+    public List<Product> findProductsByDynamicCriteria(String name, 
+                                                      List<String> categories, 
+                                                      Double minPrice, 
+                                                      Double maxPrice) {
+        Criteria criteria = new Criteria();
+        
+        List<Criteria> filters = new ArrayList<>();
+        
+        if (name != null) {
+            filters.add(Criteria.where("name").regex(name, "i"));
+        }
+        
+        if (categories != null && !categories.isEmpty()) {
+            filters.add(Criteria.where("categories").in(categories));
+        }
+        
+        if (minPrice != null && maxPrice != null) {
+            filters.add(Criteria.where("price").gte(minPrice).lte(maxPrice));
+        } else if (minPrice != null) {
+            filters.add(Criteria.where("price").gte(minPrice));
+        } else if (maxPrice != null) {
+            filters.add(Criteria.where("price").lte(maxPrice));
+        }
+        
+        if (!filters.isEmpty()) {
+            criteria = new Criteria().andOperator(
+                filters.toArray(new Criteria[0]));
+        }
+        
+        Query query = new Query(criteria);
+        return mongoTemplate.find(query, Product.class);
+    }
+    
+    // 使用更新操作符
+    public long updateProductPrices(String category, double percentage) {
+        Query query = new Query(Criteria.where("categories").is(category));
+        Update update = new Update().multiply("price", 1 + (percentage / 100));
+        UpdateResult result = mongoTemplate.updateMulti(query, update, Product.class);
+        return result.getModifiedCount();
+    }
+    
+    // 执行聚合操作
+    public List<CategoryStat> getProductStatsByCategory() {
+        TypedAggregation<Product> aggregation = Aggregation.newAggregation(
+            Product.class,
+            Aggregation.unwind("categories"),
+            Aggregation.group("categories")
+                .count().as("count")
+                .avg("price").as("averagePrice")
+                .max("price").as("maxPrice"),
+            Aggregation.sort(Sort.Direction.DESC, "count")
+        );
+        
+        AggregationResults<CategoryStat> results = 
+            mongoTemplate.aggregate(aggregation, CategoryStat.class);
+        
+        return results.getMappedResults();
+    }
+    
+    // 地理空间查询
+    public List<Store> findNearbyStores(double latitude, double longitude, double maxDistance) {
+        Point location = new Point(longitude, latitude);
+        Query query = new Query(
+            Criteria.where("location").nearSphere(location)
+                .maxDistance(maxDistance / 6378.1) // 转换为弧度
+        );
+        return mongoTemplate.find(query, Store.class);
+    }
+    
+    // 批量操作
+    public void bulkUpsertProducts(List<Product> products) {
+        BulkOperations bulkOps = mongoTemplate.bulkOps(
+            BulkOperations.BulkMode.UNORDERED, Product.class);
+        
+        for (Product product : products) {
+            Query query = new Query(Criteria.where("sku").is(product.getSku()));
+            Update update = getProductUpdateDefinition(product);
+            bulkOps.upsert(query, update);
+        }
+        
+        BulkWriteResult result = bulkOps.execute();
+        System.out.println("Inserted: " + result.getInsertedCount());
+        System.out.println("Modified: " + result.getModifiedCount());
+    }
+    
+    private Update getProductUpdateDefinition(Product product) {
+        Update update = new Update();
+        // 设置所有产品字段...
+        update.set("name", product.getName());
+        update.set("price", product.getPrice());
+        // ...其他字段
+        update.set("updatedAt", LocalDateTime.now());
+        return update;
+    }
+}
+```
+
+### 4.5 事务管理
+
+MongoDB 4.0+支持多文档事务，Spring Data MongoDB提供了事务支持：
+
+#### 4.5.1 配置事务管理器
+
+```java
+@Configuration
+public class MongoConfig extends AbstractMongoClientConfiguration {
+    
+    @Override
+    protected String getDatabaseName() {
+        return "mydatabase";
+    }
+    
+    @Bean
+    MongoTransactionManager transactionManager(MongoDatabaseFactory dbFactory) {
+        return new MongoTransactionManager(dbFactory);
+    }
+}
+```
+
+#### 4.5.2 使用声明式事务
+
+```java
+@Service
+public class OrderService {
+    
+    private final OrderRepository orderRepository;
+    private final ProductRepository productRepository;
+    private final CustomerRepository customerRepository;
+    
+    // 构造函数注入...
+    
+    @Transactional
+    public Order createOrder(OrderRequest request) {
+        // 检查客户是否存在
+        Customer customer = customerRepository.findById(request.getCustomerId())
+            .orElseThrow(() -> new EntityNotFoundException("Customer not found"));
+            
+        // 检查并更新产品库存
+        List<OrderItem> items = new ArrayList<>();
+        for (OrderItemRequest itemReq : request.getItems()) {
+            Product product = productRepository.findById(itemReq.getProductId())
+                .orElseThrow(() -> new EntityNotFoundException("Product not found"));
+                
+            if (product.getStock() < itemReq.getQuantity()) {
+                throw new InsufficientStockException("Not enough stock for product: " + product.getName());
+            }
+            
+            // 减少库存
+            product.setStock(product.getStock() - itemReq.getQuantity());
+            productRepository.save(product);
+            
+            // 创建订单项
+            OrderItem item = new OrderItem();
+            item.setProduct(product);
+            item.setQuantity(itemReq.getQuantity());
+            item.setPrice(product.getPrice());
+            items.add(item);
+        }
+        
+        // 创建订单
+        Order order = new Order();
+        order.setCustomer(customer);
+        order.setItems(items);
+        order.setStatus("CREATED");
+        order.setOrderDate(LocalDateTime.now());
+        order.setTotalAmount(calculateTotalAmount(items));
+        
+        return orderRepository.save(order);
+    }
+    
+    private double calculateTotalAmount(List<OrderItem> items) {
+        return items.stream()
+            .mapToDouble(item -> item.getPrice() * item.getQuantity())
+            .sum();
+    }
+}
+```
+
+#### 4.5.3 编程式事务
+
+```java
+@Service
+public class InventoryService {
+    
+    private final MongoTemplate mongoTemplate;
+    private final TransactionTemplate transactionTemplate;
+    
+    public InventoryService(MongoTemplate mongoTemplate, 
+                           PlatformTransactionManager transactionManager) {
+        this.mongoTemplate = mongoTemplate;
+        this.transactionTemplate = new TransactionTemplate(transactionManager);
+    }
+    
+    public boolean transferStock(String fromProductId, String toProductId, int quantity) {
+        return transactionTemplate.execute(status -> {
+            try {
+                // 从源产品减少库存
+                Query fromQuery = new Query(Criteria.where("_id").is(fromProductId)
+                    .and("stock").gte(quantity));
+                Update fromUpdate = new Update().inc("stock", -quantity);
+                UpdateResult fromResult = mongoTemplate.updateFirst(
+                    fromQuery, fromUpdate, Product.class);
+                
+                if (fromResult.getModifiedCount() == 0) {
+                    status.setRollbackOnly();
+                    return false;
+                }
+                
+                // 向目标产品增加库存
+                Query toQuery = new Query(Criteria.where("_id").is(toProductId));
+                Update toUpdate = new Update().inc("stock", quantity);
+                mongoTemplate.updateFirst(toQuery, toUpdate, Product.class);
+                
+                return true;
+            } catch (Exception e) {
+                status.setRollbackOnly();
+                throw e;
+            }
+        });
+    }
+}
+``` 
+
+## 5. MongoDB性能优化
+
+MongoDB性能优化是一个多层次的工程，涉及从硬件配置到应用设计的各个环节。本节将全面介绍MongoDB性能优化的关键策略和最佳实践。
+
+### 5.1 硬件与系统优化
+
+MongoDB性能在很大程度上受到底层硬件和操作系统的影响。
+
+#### 5.1.1 硬件选择
+
+- **存储类型**：使用SSD/NVMe替代HDD，尤其是对于频繁写入和随机读取场景
+- **内存容量**：MongoDB利用内存映射文件机制，理想情况下工作集应完全适合RAM
+- **CPU**：多核CPU有利于并发操作和聚合框架的并行执行
+- **网络**：使用至少千兆网络，对分片集群尤为重要
+
+#### 5.1.2 操作系统配置
+
+**Linux系统优化**：
+
+```bash
+# 文件描述符限制（对连接数量很重要）
+sudo sysctl -w fs.file-max=100000
+sudo sysctl -w fs.nr_open=100000
+
+# 禁用透明大页面（极其重要）
+echo never > /sys/kernel/mm/transparent_hugepage/enabled
+echo never > /sys/kernel/mm/transparent_hugepage/defrag
+
+# readahead设置（适用于SSD）
+sudo blockdev --setra 32 /dev/sda
+
+# 增加vm.swappiness（减少swap使用）
+sudo sysctl -w vm.swappiness=1
+```
+
+将这些设置添加到`/etc/sysctl.conf`中使其永久生效。
+
+### 5.2 MongoDB实例优化
+
+#### 5.2.1 关键配置参数
+
+**WiredTiger存储引擎优化**：
+
+```yaml
+storage:
+  wiredTiger:
+    engineConfig:
+      cacheSizeGB: 4  # 默认是物理内存的一半
+      journalCompressor: snappy  # 日志压缩算法
+    collectionConfig:
+      blockCompressor: snappy  # 数据压缩算法
+    indexConfig:
+      prefixCompression: true  # 索引前缀压缩
+```
+
+**连接与网络设置**：
+
+```yaml
+net:
+  maxIncomingConnections: 2000  # 最大连接数
+  port: 27017
+  bindIp: localhost,192.168.1.100  # 绑定多个IP
+```
+
+**操作限制**：
+
+```yaml
+operationProfiling:
+  mode: slowOp  # 慢查询记录模式
+  slowOpThresholdMs: 100  # 慢查询阈值(毫秒)
+```
+
+#### 5.2.2 分析与调优工具
+
+- **mongostat**：监控实例整体性能
+- **mongotop**：识别集合级别的读写活动
+- **MongoDB Compass**：可视化分析工具
+- **Database Profiler**：详细分析慢查询
+
+```javascript
+// 启用数据库分析器
+db.setProfilingLevel(1, { slowms: 100 })
+
+// 查询慢操作
+db.system.profile.find({ millis: { $gt: 100 } }).sort({ ts: -1 })
+```
+
+### 5.3 数据模型与索引优化
+
+MongoDB的性能很大程度上取决于数据模型设计和索引策略。
+
+#### 5.3.1 数据模型优化
+
+**文档结构优化**：
+
+- **按访问模式设计**：常一起访问的数据应放在一起
+- **避免过大文档**：接近16MB限制的文档会影响性能
+- **避免不断增长的数组**：大型数组可能导致文档大小不断增长
+- **控制嵌套深度**：深度嵌套文档增加查询复杂度
+
+```javascript
+// 有效的嵌入式文档设计
+{
+  "_id": ObjectId("..."),
+  "order_id": "ORD123456",
+  "customer": {  // 嵌入常用信息
+    "id": "CUST789",
+    "name": "李四",
+    "contact": "+86123456789"
+  },
+  "items": [  // 控制数组大小
+    {
+      "product_id": "PROD001",
+      "name": "商品A",
+      "quantity": 2,
+      "price": 299
+    },
+    // 通常不超过100个元素
+  ]
+}
+```
+
+#### 5.3.2 高效索引策略
+
+**索引优化原则**：
+
+1. **覆盖查询索引**：使用包含所有查询字段的索引
+2. **高选择性前缀**：在复合索引中，将高选择性字段放在前面
+3. **适当的索引基数**：避免在低基数字段上创建单字段索引
+4. **索引交集**：利用MongoDB的索引交集功能
+5. **避免过多索引**：每个索引都增加写入开销
+
+```javascript
+// 创建支持多种查询的复合索引
+db.orders.createIndex({ customer_id: 1, order_date: -1, status: 1 })
+
+// 高效处理排序的索引
+db.products.createIndex({ category: 1, price: -1 })
+
+// 使用hint强制使用特定索引（测试性能时使用）
+db.orders.find({ customer_id: "C1001", status: "PENDING" })
+  .hint({ customer_id: 1, order_date: -1, status: 1 })
+```
+
+#### 5.3.3 定期索引维护
+
+```javascript
+// 检查索引使用情况
+db.collection.aggregate([{ $indexStats: {} }])
+
+// 查找未使用的索引
+db.collection.aggregate([
+  { $indexStats: {} },
+  { $match: { accesses: { $elemMatch: { count: 0 } } } }
+])
+
+// 删除未使用的索引
+db.collection.dropIndex("unused_index_name")
+```
+
+### 5.4 查询优化技术
+
+#### 5.4.1 查询分析与优化
+
+使用`explain()`是优化查询的关键工具：
+
+```javascript
+// 分析查询计划
+db.orders.find({ status: "COMPLETED", order_date: { $gt: ISODate("2023-01-01") } })
+  .sort({ total_amount: -1 })
+  .explain("executionStats")
+```
+
+关注以下执行计划信息：
+- **COLLSCAN vs. IXSCAN**：全表扫描vs索引扫描
+- **indexBounds**：索引使用范围
+- **nReturned vs. totalKeysExamined**：返回文档数vs检查的索引键数
+- **executionTimeMillis**：执行时间
+
+#### 5.4.2 投影优化
+
+仅查询需要的字段可以显著提高性能：
+
+```javascript
+// 不好的做法：返回所有字段
+db.products.find({ category: "electronics" })
+
+// 好的做法：只返回需要的字段
+db.products.find(
+  { category: "electronics" }, 
+  { name: 1, price: 1, stock: 1, _id: 0 }
+)
+```
+
+#### 5.4.3 批量操作优化
+
+```javascript
+// 单条插入（效率低）
+for (let i = 0; i < 10000; i++) {
+  db.items.insertOne({ value: i });
+}
+
+// 批量插入（效率高）
+const items = [];
+for (let i = 0; i < 10000; i++) {
+  items.push({ value: i });
+}
+db.items.insertMany(items, { ordered: false });
+```
+
+#### 5.4.4 读取分离与查询路由
+
+使用读偏好设置可以优化读取性能：
+
+```javascript
+// 在Node.js驱动中配置
+const client = new MongoClient(uri, {
+  readPreference: 'secondaryPreferred',
+  // 其他选项...
+});
+
+// 针对具体操作设置
+db.collection('orders').find().readPref('secondary');
+```
+
+### 5.5 高级性能优化策略
+
+#### 5.5.1 数据分片策略
+
+有效的分片策略对大规模部署至关重要：
+
+```javascript
+// 选择正确的分片键
+// 1. 对于写入密集型工作负载:
+sh.shardCollection("database.logs", { timestamp: 1 }) // 时间戳分片
+
+// 2. 对于读取密集型工作负载:
+sh.shardCollection("database.users", { country: 1, user_id: 1 }) // 复合分片键
+
+// 3. 均匀分布的哈希分片
+sh.shardCollection("database.messages", { _id: "hashed" }) // 避免热点
+```
+
+#### 5.5.2 数据压缩与归档
+
+处理历史数据的策略：
+
+```javascript
+// 时间序列数据归档示例
+// 1. 创建按月归档集合
+db.createCollection("logs_archive_202301")
+
+// 2. 复制一月数据到归档集合
+db.logs.aggregate([
+  { $match: { timestamp: { $gte: ISODate("2023-01-01"), $lt: ISODate("2023-02-01") } } },
+  { $out: "logs_archive_202301" }
+])
+
+// 3. 删除原集合中的归档数据
+db.logs.deleteMany({ timestamp: { $gte: ISODate("2023-01-01"), $lt: ISODate("2023-02-01") } })
+```
+
+#### 5.5.3 缓存策略
+
+```javascript
+// 创建TTL索引用于缓存集合
+db.cache.createIndex({ "createdAt": 1 }, { expireAfterSeconds: 3600 }) // 一小时后过期
+
+// 物化视图实现
+db.createView("active_users_view", "users", [
+  { $match: { status: "active" } },
+  { $project: { name: 1, email: 1, last_login: 1 } }
+])
+```
+
+#### 5.5.4 Change Streams与实时监控
+
+```javascript
+// 监控集合变化进行缓存失效
+const changeStream = db.products.watch();
+changeStream.on('change', (change) => {
+  if (change.operationType === 'update' || change.operationType === 'replace') {
+    // 清除缓存
+    cache.del(`product:${change.documentKey._id}`);
+  }
+});
+```
+
+### 5.6 性能测试与基准
+
+以下是一些常见操作的性能基准比较：
+
+| 操作类型 | 优化前(ms) | 优化后(ms) | 改进 |
+|---------|-----------|-----------|------|
+| 大型集合点查询 | 120 | 5 | 创建了精确索引 |
+| 分页查询(跳过1000条) | 350 | 30 | 使用游标分页代替skip |
+| 复杂聚合操作 | 1200 | 300 | 创建物化视图预计算 |
+| 批量插入(10000条) | 5000 | 800 | 使用批处理和unordered插入 |
+
+### 5.7 监控与预警
+
+有效的监控是性能优化的重要组成部分：
+
+1. **关键指标监控**：
+   - 操作延迟
+   - 连接数
+   - 锁等待
+   - 内存使用
+   - 查询率
+
+2. **监控工具**：
+   - MongoDB Atlas监控
+   - Prometheus + Grafana
+   - mongostat和mongotop
+   - 日志分析
+
+3. **预警机制**：
+   - 响应时间超阈值警报
+   - 连接数接近最大值警报
+   - 磁盘空间不足警报
+   - 复制集延迟警报
+
+## 6. 最佳实践与设计模式
+
+### 6.1 MongoDB架构设计最佳实践
+
+#### 6.1.1 高可用性设计
+
+**复制集最佳实践**：
+- 使用至少3个节点的复制集（2个数据节点+1个仲裁节点）
+- 在不同服务器/机架/数据中心部署节点
+- 配置适当的写入关注级别(w: "majority")
+- 实施适当的心跳超时设置
+
+```javascript
+// 创建复制集示例配置
+rs.initiate({
+  _id: "rs0",
+  members: [
+    { _id: 0, host: "server1:27017", priority: 2 },  // 优先成为主节点
+    { _id: 1, host: "server2:27017", priority: 1 },
+    { _id: 2, host: "server3:27017", priority: 1 }
+  ],
+  settings: {
+    heartbeatTimeoutSecs: 10,
+    electionTimeoutMillis: 10000
+  }
+})
+```
+
+**分片集群最佳实践**：
+- 每个分片使用独立复制集
+- 配置服务器使用独立复制集
+- 部署多个mongos实例作为路由服务
+- 选择合适的分片键
+- 定期均衡数据分布
+
+#### 6.1.2 备份与恢复策略
+
+**备份选项**：
+
+1. **mongodump/mongorestore**：
+```bash
+# 全量备份
+mongodump --uri="mongodb://user:password@localhost:27017/mydatabase" --out=/backup/mongodb/$(date +"%Y-%m-%d")
+
+# 恢复
+mongorestore --uri="mongodb://user:password@localhost:27017/" --dir=/backup/mongodb/2023-05-15
+```
+
+2. **文件系统快照**：
+   - 配置存储系统支持一致性快照
+   - 使用文件系统或云服务提供的快照功能
+
+3. **oplog备份**：
+```bash
+# 备份oplog用于时间点恢复
+mongodump --uri="mongodb://user:password@localhost:27017/local" --collection=oplog.rs --out=/backup/oplog/$(date +"%Y-%m-%d")
+```
+
+**恢复计划**：
+- 制定明确的RTO(恢复时间目标)和RPO(恢复点目标)
+- 定期测试备份有效性
+- 记录恢复步骤并进行演练
+
+#### 6.1.3 安全最佳实践
+
+**安全基础**：
+- 启用身份验证和授权
+- 使用强密码和最小权限原则
+- 启用TLS/SSL加密
+- 实施网络隔离和防火墙保护
+
+**高级安全措施**：
+- 实施LDAP或Kerberos集成
+- 配置字段级加密保护敏感数据
+- 启用审计功能记录关键操作
+- 定期安全扫描和更新
+
+```javascript
+// 创建只读用户示例
+use reporting
+db.createUser({
+  user: "reporting_user",
+  pwd: "strong_password_here",
+  roles: [
+    { role: "read", db: "reporting" },
+    { role: "readAnyDatabase", db: "admin" }
+  ],
+  authenticationRestrictions: [
+    { clientSource: ["192.168.1.0/24"] }  // IP限制
+  ]
+})
+```
+
+### 6.2 常见应用场景模式
+
+#### 6.2.1 物联网数据管理
+
+IoT应用通常产生大量时序数据：
+
+```javascript
+// 使用时间序列集合（MongoDB 5.0+）
+db.createCollection("device_readings", {
+  timeseries: {
+    timeField: "timestamp",
+    metaField: "device_id",
+    granularity: "minutes"
+  }
+})
+
+// 插入传感器数据
+db.device_readings.insertOne({
+  timestamp: ISODate("2023-06-01T10:15:30Z"),
+  device_id: "thermostat-1",
+  temperature: 22.5,
+  humidity: 45,
+  battery: 87
+})
+```
+
+**IoT数据管理最佳实践**：
+- 使用分片按设备ID或时间范围分布数据
+- 实施TTL索引或归档策略管理数据生命周期
+- 使用预聚合降低实时分析成本
+- 考虑压缩存储减少空间占用
+
+#### 6.2.2 实时分析系统
+
+使用MongoDB进行实时分析：
+
+```javascript
+// 使用Change Streams跟踪实时变化
+const pipeline = [
+  { $match: { "operationType": { $in: ["insert", "update", "replace"] } } },
+  { $match: { "fullDocument.important_flag": true } }
+];
+
+const changeStream = db.collection('events').watch(pipeline);
+changeStream.on('change', (change) => {
+  // 处理重要事件，更新仪表板等
+  updateDashboard(change.fullDocument);
+});
+```
+
+**实时分析最佳实践**：
+- 创建针对分析查询的专用视图和索引
+- 使用物化视图预计算常用聚合
+- 利用读取偏好从次要节点读取降低主节点负担
+- 结合内存数据库或流处理系统处理极端实时需求
+
+#### 6.2.3 内容管理系统
+
+MongoDB适合存储和管理各种内容：
+
+```javascript
+// 内容文档示例
+db.articles.insertOne({
+  title: "MongoDB最佳实践",
+  slug: "mongodb-best-practices",
+  content: "正文内容...",
+  author: ObjectId("author_id"),
+  status: "published",
+  categories: ["database", "nosql", "performance"],
+  tags: ["mongodb", "optimization", "schema-design"],
+  created_at: ISODate("2023-06-01T09:00:00Z"),
+  updated_at: ISODate("2023-06-05T14:30:00Z"),
+  comments: [
+    {
+      user: ObjectId("user_id"),
+      text: "非常有帮助的文章!",
+      created_at: ISODate("2023-06-02T10:15:00Z")
+    }
+  ],
+  metadata: {
+    views: 1250,
+    likes: 42,
+    reading_time: 8  // 分钟
+  }
+})
+
+// 创建全文索引支持搜索
+db.articles.createIndex(
+  { title: "text", content: "text", tags: "text" },
+  { weights: { title: 10, content: 5, tags: 3 } }
+)
+```
+
+**CMS最佳实践**：
+- 使用GridFS存储大型文件和媒体
+- 实施版本控制模式跟踪内容修改
+- 创建复合索引支持常见过滤和排序
+- 使用投影限制返回特定字段提高性能
+
+#### 6.2.4 移动应用后端
+
+为移动应用设计MongoDB后端：
+
+```javascript
+// 用户模式示例
+const userSchema = {
+  username: String,
+  email: String,
+  profile: {
+    name: String,
+    avatar: String,
+    preferences: Object
+  },
+  devices: [
+    {
+      device_id: String,
+      platform: String,  // "ios", "android"
+      push_token: String,
+      last_login: Date
+    }
+  ],
+  status: String,
+  created_at: Date
+};
+
+// 数据同步设计
+db.user_data.updateOne(
+  { user_id: "user123", last_sync: { $lt: ISODate("2023-06-01T10:00:00Z") } },
+  { 
+    $set: { 
+      "sync_status": "pending",
+      "last_sync_attempt": new Date()
+    } 
+  }
+);
+```
+
+**移动应用最佳实践**：
+- 实施有效的同步机制处理离线操作
+- 使用TTL索引管理临时数据（如会话）
+- 创建针对地理位置的索引支持基于位置的功能
+- 优化查询减少网络流量和电池消耗
+
+### 6.3 常见问题与解决方案
+
+#### 6.3.1 数据一致性挑战
+
+**问题**：MongoDB的分布式特性带来一致性挑战。
+
+**解决方案**：
+- 使用适当的写入关注和读取偏好
+- 实施乐观并发控制
+- 使用多文档事务处理关键操作
+- 考虑在应用层实现补偿机制
+
+```javascript
+// 高一致性操作配置
+db.accounts.updateOne(
+  { _id: accountId, balance: { $gte: amount } },
+  { $inc: { balance: -amount } },
+  { writeConcern: { w: "majority", j: true } }
+);
+```
+
+#### 6.3.2 性能下降排查
+
+**问题**：随着数据增长，查询性能可能下降。
+
+**排查步骤**：
+1. 使用`explain()`分析慢查询
+2. 检查索引使用情况和覆盖范围
+3. 评估工作集大小与可用内存
+4. 分析系统资源使用情况
+5. 检查网络延迟和连接问题
+
+**解决方案**：
+- 创建或调整索引
+- 优化查询模式
+- 增加系统资源
+- 考虑分片或归档数据
+
+#### 6.3.3 扩展性问题
+
+**问题**：应用增长导致数据库压力增加。
+
+**解决方案**：
+- **垂直扩展**：增加单机资源（内存、CPU、存储）
+- **水平扩展**：实施分片集群
+- **功能分解**：将不同数据集分散到不同实例
+- **读写分离**：配置读取偏好从次要节点读取
+
+```javascript
+// 实施读写分离
+// 写操作使用默认配置
+db.orders.insertOne({ ... });
+
+// 读操作使用secondaryPreferred
+db.orders.find({ status: "pending" }).readPref("secondaryPreferred");
+```
+
+#### 6.3.4 迁移与版本升级
+
+**问题**：数据库迁移和版本升级存在风险。
+
+**最佳实践**：
+- 制定详细的迁移计划和回滚策略
+- 在测试环境完整验证升级流程
+- 使用滚动升级减少停机时间
+- 监控整个过程的系统健康状态
+- 保留足够的备份以防意外
+
+```bash
+# 滚动升级复制集示例（每次一个节点）
+# 1. 升级次要节点
+ssh secondary1
+sudo systemctl stop mongod
+sudo apt update && sudo apt install -y mongodb-org
+sudo systemctl start mongod
+
+# 2. 等待同步完成后继续其他节点...
+```
+
+### 6.4 MongoDB与其他技术的集成
+
+#### 6.4.1 MongoDB与消息队列集成
+
+将MongoDB与Kafka或RabbitMQ集成可以创建强大的数据管道：
+
+```javascript
+// Kafka Consumer将消息写入MongoDB
+kafkaConsumer.on('message', async (message) => {
+  try {
+    const data = JSON.parse(message.value);
+    // 数据验证和转换
+    const result = await db.collection('incoming_data').insertOne({
+      ...data,
+      kafka_offset: message.offset,
+      processed_at: new Date()
+    });
+    // 提交偏移量
+    kafkaConsumer.commitMessage(message);
+  } catch (error) {
+    // 错误处理
+    errorLogger.error(`Failed to process message: ${error.message}`);
+  }
+});
+```
+
+**最佳实践**：
+- 实施幂等性操作避免重复处理
+- 使用批量写入提高性能
+- 创建适当的索引支持查询模式
+- 考虑使用Change Streams触发下游处理
+
+#### 6.4.2 MongoDB与搜索引擎集成
+
+MongoDB可以与Elasticsearch等搜索引擎协同工作：
+
+```javascript
+// MongoDB Change Stream触发Elasticsearch索引更新
+const changeStream = db.collection('products').watch();
+
+changeStream.on('change', async (change) => {
+  if (change.operationType === 'insert' || change.operationType === 'update') {
+    // 转换为搜索引擎文档
+    const searchDoc = transformToSearchDocument(change.fullDocument);
+    
+    // 更新搜索引擎
+    await elasticClient.index({
+      index: 'products',
+      id: change.fullDocument._id.toString(),
+      body: searchDoc
+    });
+  } else if (change.operationType === 'delete') {
+    // 从搜索引擎中删除
+    await elasticClient.delete({
+      index: 'products',
+      id: change.documentKey._id.toString()
+    });
+  }
+});
+```
+
+#### 6.4.3 MongoDB与缓存系统集成
+
+将MongoDB与Redis等缓存系统结合使用：
+
+```javascript
+// 使用缓存-穿透策略
+async function getProductById(id) {
+  // 检查缓存
+  const cachedProduct = await redisClient.get(`product:${id}`);
+  if (cachedProduct) {
+    return JSON.parse(cachedProduct);
+  }
+  
+  // 缓存未命中，从MongoDB获取
+  const product = await db.collection('products').findOne({ _id: ObjectId(id) });
+  
+  if (product) {
+    // 存储到缓存（设置30分钟过期）
+    await redisClient.setex(`product:${id}`, 1800, JSON.stringify(product));
+  }
+  
+  return product;
+}
+```
+
+### 6.5 未来趋势与技术展望
+
+MongoDB持续发展，以下是值得关注的趋势：
+
+#### 6.5.1 分布式多文档ACID事务
+
+MongoDB 4.0+支持多文档事务，使其能够处理更复杂的事务性工作负载：
+
+```javascript
+// 使用事务实现账户转账
+const session = client.startSession();
+session.startTransaction();
+
+try {
+  await db.collection('accounts').updateOne(
+    { _id: fromAccount, balance: { $gte: amount } },
+    { $inc: { balance: -amount } },
+    { session }
+  );
+  
+  await db.collection('accounts').updateOne(
+    { _id: toAccount },
+    { $inc: { balance: amount } },
+    { session }
+  );
+  
+  await db.collection('transfers').insertOne(
+    {
+      from: fromAccount,
+      to: toAccount,
+      amount: amount,
+      date: new Date()
+    },
+    { session }
+  );
+  
+  await session.commitTransaction();
+} catch (error) {
+  await session.abortTransaction();
+  throw error;
+} finally {
+  session.endSession();
+}
+```
+
+#### 6.5.2 云原生和无服务器数据库
+
+MongoDB Atlas serverless提供了自动缩放的云原生数据库体验，无需管理基础设施。
+
+#### 6.5.3 AI/ML与MongoDB
+
+MongoDB与机器学习集成日益紧密：
+
+- 使用MongoDB存储训练数据和模型结果
+- 利用聚合框架进行特征工程
+- 使用Atlas Data Lake分析大规模数据
+- 结合向量搜索支持AI应用场景
+
+#### 6.5.4 实时协作应用
+
+MongoDB结合Change Streams非常适合构建实时协作应用：
+
+```javascript
+// 服务器端监控文档变化并广播
+const changeStream = db.collection('shared_documents').watch();
+
+changeStream.on('change', (change) => {
+  // 通过WebSocket广播变化
+  const roomId = change.fullDocument.room_id;
+  io.to(roomId).emit('document_updated', {
+    documentId: change.fullDocument._id,
+    updatedFields: change.updateDescription?.updatedFields,
+    operationType: change.operationType
+  });
+});
+```
+
+通过掌握这些最佳实践和设计模式，您可以充分发挥MongoDB的潜力，构建高性能、可扩展且可靠的应用系统。 

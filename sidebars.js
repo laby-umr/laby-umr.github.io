@@ -20,6 +20,23 @@ const sidebars = {
     'intro',
     {
       type: 'category',
+      label: '面试题库',
+      link: {
+        type: 'generated-index',
+        description: '各类技术面试题和最佳答案，包含Java基础、Spring框架、数据库、Redis等',
+        slug: 'interview'
+      },
+      items: [
+        'interview/java-基础',
+        'interview/java-spring',
+        'interview/java-mybatis',
+        'interview/mysql-interview',
+        'interview/Redis-interview',
+        'interview/Java-serialization',
+      ]
+    },
+    {
+      type: 'category',
       label: '前端开发',
       link: {
         type: 'generated-index',
@@ -180,13 +197,16 @@ const sidebars = {
         {
           type: 'category',
           label: '数据库与ORM',
+          collapsed: true,
           items: [
             'backend/database-orm/database-intro',
-            'backend/database-orm/mysql',
-            'backend/database-orm/mybatis',
-            'backend/database-orm/redis',
+            'backend/database-orm/database-orm-summary',
             'backend/database-orm/mybatis-plus',
-          ]
+            'backend/database-orm/hibernate',
+            'backend/database-orm/jpa',
+            'backend/database-orm/mongodb',
+            'backend/database-orm/postgresql',
+          ],
         },
         {
           type: 'category',
@@ -262,6 +282,38 @@ const sidebars = {
             'backend/system-design/circuit-breaking',
             'backend/system-design/fallback',
             'backend/system-design/rate-limiting',
+          ]
+        }
+      ]
+    },
+    {
+      type: 'category',
+      label: '技术博客',
+      link: {
+        type: 'generated-index',
+        description: '技术博客文章，包括数字孪生、AI实施等前沿技术',
+        slug: 'blog-content'
+      },
+      items: [
+        {
+          type: 'category',
+          label: '数字孪生',
+          items: [
+            'blog/2024-12-24-digital-twin-fundamentals',
+            'blog/2024-12-25-industrial-digital-twin-cases',
+            'blog/2024-12-26-digital-twin-tech-architecture',
+            'blog/2024-12-27-digital-twin-future-trends'
+          ]
+        },
+        {
+          type: 'category',
+          label: 'AI实施',
+          items: [
+            'blog/2025-08-17-welcome-to-ai-implementation',
+            'blog/2025-08-18-enterprise-ai-implementation',
+            'blog/2025-08-19-ai-industry-applications',
+            'blog/2025-08-20-ai-architecture-deployment',
+            'blog/2025-08-21-ai-roi-value'
           ]
         }
       ]
