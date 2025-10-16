@@ -1,0 +1,1034 @@
+---
+sidebar_position: 8
+title: OpenTwins Linux 离线环境部署指南
+description: 基于官方文档的 OpenTwins Linux 离线环境完整部署指南
+tags: [数字孪生, OpenTwins, Linux部署, 离线部署, Kubernetes]
+---
+
+# OpenTwins Linux 离线环境部署指南
+
+本文档参考 [OpenTwins 官方文档](https://ertis-research.github.io/opentwins/docs/quickstart)，提供 Linux 离线环境下的完整部署指南。
+
+## 一、部署概述
+
+### 1.1 离线部署挑战
+
+离线环境部署需要提前准备：
+- 所有必需的 Docker 镜像
+- Helm Charts 及其依赖
+- 二进制安装包（kubectl、helm、docker 等）
+- 相关配置文件和脚本
+
+### 1.2 部署架构
+
+```
+离线服务器
+├── Docker 容器运行时
+├── Kubernetes 集群（单节点或多节点）
+├── Helm 包管理器
+└── OpenTwins 平台组件
+    ├── Eclipse Ditto（数字孪生核心）
+    ├── Mosquitto（MQTT 消息代理）
+    ├── InfluxDB（时序数据库）
+    ├── Grafana（数据可视化）
+    └── OpenTwins Frontend（Web 界面）
+```
+
+### 1.3 系统要求
+
+#### 硬件要求
+- **CPU**: 4 核心或以上
+- **内存**: 8GB RAM（最低），推荐 16GB
+- **磁盘**: 至少 40GB 可用空间
+- **网络**: 离线环境，需要内网连接
+
+#### 软件要求
+- **操作系统**: CentOS 7/8、RHEL 7/8、Ubuntu 18.04/20.04/22.04、Debian 10/11
+- **内核版本**: 3.10+
+- **SELinux**: 可选关闭或配置
+
+## 二、准备阶段（联网环境）
+
+:::warning 重要
+此阶段需要在有互联网连接的机器上完成，准备好所有资源后传输到离线环境。
+:::
+
+### 2.1 创建资源目录结构
+
+```bash
+mkdir -p /opt/opentwins-offline/{binaries,images,charts,scripts}
+cd /opt/opentwins-offline
+```
+
+### 2.2 下载二进制文件
+
+#### 下载 Docker
+
+```bash
+# CentOS/RHEL
+wget https://download.docker.com/linux/centos/7/x86_64/stable/Packages/docker-ce-20.10.24-3.el7.x86_64.rpm
+wget https://download.docker.com/linux/centos/7/x86_64/stable/Packages/docker-ce-cli-20.10.24-3.el7.x86_64.rpm
+wget https://download.docker.com/linux/centos/7/x86_64/stable/Packages/containerd.io-1.6.21-3.1.el7.x86_64.rpm
+
+# Ubuntu/Debian
+wget https://download.docker.com/linux/ubuntu/dists/focal/pool/stable/amd64/docker-ce_20.10.24~3-0~ubuntu-focal_amd64.deb
+wget https://download.docker.com/linux/ubuntu/dists/focal/pool/stable/amd64/docker-ce-cli_20.10.24~3-0~ubuntu-focal_amd64.deb
+wget https://download.docker.com/linux/ubuntu/dists/focal/pool/stable/amd64/containerd.io_1.6.21-1_amd64.deb
+
+# 移动到 binaries 目录
+mv *.rpm *.deb binaries/
+```
+
+#### 下载 kubectl
+
+```bash
+cd binaries
+# 下载 kubectl（选择合适的版本）
+curl -LO "https://dl.k8s.io/release/v1.28.0/bin/linux/amd64/kubectl"
+chmod +x kubectl
+```
+
+#### 下载 Helm
+
+```bash
+cd binaries
+# 下载 Helm v3
+wget https://get.helm.sh/helm-v3.13.0-linux-amd64.tar.gz
+tar -xzf helm-v3.13.0-linux-amd64.tar.gz
+mv linux-amd64/helm ./
+rm -rf linux-amd64 helm-v3.13.0-linux-amd64.tar.gz
+chmod +x helm
+```
+
+#### 下载 Minikube（用于单节点部署）
+
+```bash
+cd binaries
+curl -LO https://storage.googleapis.com/minikube/releases/latest/minikube-linux-amd64
+mv minikube-linux-amd64 minikube
+chmod +x minikube
+```
+
+### 2.3 下载 Helm Charts
+
+```bash
+cd /opt/opentwins-offline/charts
+
+# 添加 Helm 仓库
+helm repo add ertis https://ertis-research.github.io/Helm-charts/
+helm repo update
+
+# 下载 OpenTwins Chart 及其依赖
+helm pull ertis/OpenTwins --untar
+helm dependency update OpenTwins/
+
+# 打包所有 charts
+helm package OpenTwins/
+
+# 下载依赖的 charts（如果需要）
+# 根据 OpenTwins/Chart.yaml 中的依赖列表下载
+```
+
+### 2.4 导出 Docker 镜像
+
+创建镜像列表文件 `images-list.txt`：
+
+```bash
+cd /opt/opentwins-offline/images
+cat > images-list.txt << 'EOF'
+# Eclipse Ditto 组件
+eclipse/ditto-policies:latest
+eclipse/ditto-things:latest
+eclipse/ditto-things-search:latest
+eclipse/ditto-gateway:latest
+eclipse/ditto-connectivity:latest
+eclipse/ditto-concierge:latest
+nginx:alpine
+
+# MongoDB（Ditto 使用）
+mongo:4.4
+
+# Mosquitto MQTT
+eclipse-mosquitto:2.0
+
+# InfluxDB
+influxdb:2.7
+
+# Grafana
+grafana/grafana:latest
+
+# OpenTwins Frontend
+# 需要查看 Helm Chart values.yaml 确认具体镜像
+
+# Kubernetes 基础组件（如果使用 minikube）
+registry.k8s.io/pause:3.9
+registry.k8s.io/kube-apiserver:v1.28.0
+registry.k8s.io/kube-controller-manager:v1.28.0
+registry.k8s.io/kube-scheduler:v1.28.0
+registry.k8s.io/kube-proxy:v1.28.0
+registry.k8s.io/etcd:3.5.9-0
+registry.k8s.io/coredns/coredns:v1.10.1
+
+# Storage provisioner（如果使用）
+k8s.gcr.io/storage-provisioner:v5
+EOF
+```
+
+下载并保存镜像：
+
+```bash
+cd /opt/opentwins-offline/images
+
+# 创建镜像下载脚本
+cat > pull-images.sh << 'EOF'
+#!/bin/bash
+while IFS= read -r image; do
+    # 跳过注释和空行
+    [[ "$image" =~ ^#.*$ ]] && continue
+    [[ -z "$image" ]] && continue
+    
+    echo "正在拉取镜像: $image"
+    docker pull "$image"
+    
+    # 保存镜像
+    image_file=$(echo "$image" | sed 's/[\/:]/_/g').tar
+    echo "正在保存镜像到: $image_file"
+    docker save -o "$image_file" "$image"
+done < images-list.txt
+
+echo "所有镜像已下载并保存完成"
+EOF
+
+chmod +x pull-images.sh
+./pull-images.sh
+```
+
+### 2.5 创建部署脚本
+
+#### 离线安装脚本
+
+```bash
+cd /opt/opentwins-offline/scripts
+
+cat > 01-install-docker.sh << 'EOF'
+#!/bin/bash
+set -e
+
+echo "========================================"
+echo "开始安装 Docker"
+echo "========================================"
+
+# 检测操作系统
+if [ -f /etc/os-release ]; then
+    . /etc/os-release
+    OS=$ID
+else
+    echo "无法检测操作系统"
+    exit 1
+fi
+
+cd /opt/opentwins-offline/binaries
+
+case $OS in
+    centos|rhel)
+        echo "在 CentOS/RHEL 上安装 Docker"
+        sudo yum install -y *.rpm
+        ;;
+    ubuntu|debian)
+        echo "在 Ubuntu/Debian 上安装 Docker"
+        sudo dpkg -i *.deb
+        sudo apt-get install -f -y
+        ;;
+    *)
+        echo "不支持的操作系统: $OS"
+        exit 1
+        ;;
+esac
+
+# 启动 Docker
+sudo systemctl start docker
+sudo systemctl enable docker
+
+# 验证安装
+docker --version
+
+echo "Docker 安装完成"
+EOF
+
+chmod +x 01-install-docker.sh
+```
+
+```bash
+cat > 02-load-images.sh << 'EOF'
+#!/bin/bash
+set -e
+
+echo "========================================"
+echo "开始加载 Docker 镜像"
+echo "========================================"
+
+cd /opt/opentwins-offline/images
+
+for tar_file in *.tar; do
+    echo "正在加载: $tar_file"
+    docker load -i "$tar_file"
+done
+
+echo "镜像加载完成"
+docker images
+EOF
+
+chmod +x 02-load-images.sh
+```
+
+```bash
+cat > 03-install-kubectl-helm.sh << 'EOF'
+#!/bin/bash
+set -e
+
+echo "========================================"
+echo "安装 kubectl 和 Helm"
+echo "========================================"
+
+cd /opt/opentwins-offline/binaries
+
+# 安装 kubectl
+sudo cp kubectl /usr/local/bin/
+sudo chmod +x /usr/local/bin/kubectl
+
+# 安装 helm
+sudo cp helm /usr/local/bin/
+sudo chmod +x /usr/local/bin/helm
+
+# 验证安装
+kubectl version --client
+helm version
+
+echo "kubectl 和 Helm 安装完成"
+EOF
+
+chmod +x 03-install-kubectl-helm.sh
+```
+
+```bash
+cat > 04-setup-minikube.sh << 'EOF'
+#!/bin/bash
+set -e
+
+echo "========================================"
+echo "设置 Minikube Kubernetes 集群"
+echo "========================================"
+
+cd /opt/opentwins-offline/binaries
+
+# 安装 minikube
+sudo cp minikube /usr/local/bin/
+sudo chmod +x /usr/local/bin/minikube
+
+# 启动 minikube（使用 Docker 驱动，离线模式）
+minikube start \
+    --cpus 4 \
+    --memory 8192 \
+    --disk-size 40gb \
+    --driver=docker \
+    --image-mirror-country=cn \
+    --base-image="gcr.io/k8s-minikube/kicbase:v0.0.42"
+
+# 配置 kubectl
+kubectl config use-context minikube
+
+# 验证集群
+kubectl cluster-info
+kubectl get nodes
+
+echo "Minikube 集群设置完成"
+EOF
+
+chmod +x 04-setup-minikube.sh
+```
+
+```bash
+cat > 05-deploy-opentwins.sh << 'EOF'
+#!/bin/bash
+set -e
+
+echo "========================================"
+echo "部署 OpenTwins 平台"
+echo "========================================"
+
+cd /opt/opentwins-offline/charts
+
+# 创建本地 Helm 仓库
+helm repo add local file://$(pwd)
+helm repo update
+
+# 安装 OpenTwins
+helm upgrade --install opentwins ./OpenTwins-*.tgz \
+    --wait \
+    --timeout 20m \
+    --set global.imageRegistry="" \
+    --set global.imagePullPolicy=IfNotPresent
+
+# 等待所有 Pod 就绪
+echo "等待所有 Pod 启动..."
+kubectl wait --for=condition=ready pod --all --timeout=600s
+
+# 显示部署状态
+kubectl get pods
+kubectl get services
+
+echo "========================================"
+echo "OpenTwins 部署完成！"
+echo "========================================"
+EOF
+
+chmod +x 05-deploy-opentwins.sh
+```
+
+```bash
+cat > 06-port-forward.sh << 'EOF'
+#!/bin/bash
+
+echo "========================================"
+echo "设置端口转发"
+echo "========================================"
+
+# 获取 Pod 名称
+FRONTEND_POD=$(kubectl get pods -l app=opentwins-frontend -o jsonpath='{.items[0].metadata.name}')
+GRAFANA_POD=$(kubectl get pods -l app=grafana -o jsonpath='{.items[0].metadata.name}')
+
+# 在后台启动端口转发
+echo "启动端口转发..."
+
+# OpenTwins 前端 - 端口 3000
+kubectl port-forward svc/opentwins-frontend 3000:80 > /dev/null 2>&1 &
+echo "OpenTwins 前端: http://localhost:3000"
+
+# Ditto nginx - 端口 8080
+kubectl port-forward svc/ditto-nginx 8080:8080 > /dev/null 2>&1 &
+echo "Ditto API: http://localhost:8080"
+
+# Mosquitto MQTT - 端口 1883
+kubectl port-forward svc/mosquitto 1883:1883 > /dev/null 2>&1 &
+echo "Mosquitto MQTT: localhost:1883"
+
+# Grafana - 端口 3001
+kubectl port-forward svc/grafana 3001:3000 > /dev/null 2>&1 &
+echo "Grafana: http://localhost:3001"
+
+echo "========================================"
+echo "端口转发已启动"
+echo "使用 'pkill -f port-forward' 停止所有转发"
+echo "========================================"
+EOF
+
+chmod +x 06-port-forward.sh
+```
+
+### 2.6 打包资源
+
+```bash
+cd /opt
+tar -czf opentwins-offline-package.tar.gz opentwins-offline/
+```
+
+将 `opentwins-offline-package.tar.gz` 传输到离线服务器。
+
+## 三、离线环境部署
+
+### 3.1 传输资源包
+
+使用 USB 驱动器、内网文件传输或其他方式将资源包传输到离线服务器：
+
+```bash
+# 在离线服务器上
+cd /opt
+# 假设已经将 opentwins-offline-package.tar.gz 复制到此目录
+
+# 解压资源包
+tar -xzf opentwins-offline-package.tar.gz
+```
+
+### 3.2 执行安装
+
+```bash
+cd /opt/opentwins-offline/scripts
+
+# 步骤 1: 安装 Docker
+sudo ./01-install-docker.sh
+
+# 步骤 2: 加载 Docker 镜像
+sudo ./02-load-images.sh
+
+# 步骤 3: 安装 kubectl 和 Helm
+sudo ./03-install-kubectl-helm.sh
+
+# 步骤 4: 设置 Kubernetes 集群
+sudo ./04-setup-minikube.sh
+
+# 步骤 5: 部署 OpenTwins
+./05-deploy-opentwins.sh
+```
+
+### 3.3 验证部署
+
+```bash
+# 检查所有 Pod 状态
+kubectl get pods --all-namespaces
+
+# 检查服务
+kubectl get services
+
+# 查看 OpenTwins 组件
+kubectl get pods -l app.kubernetes.io/name=opentwins
+```
+
+### 3.4 设置访问
+
+```bash
+# 启动端口转发
+cd /opt/opentwins-offline/scripts
+./06-port-forward.sh
+
+# 或者使用 NodePort 服务（持久访问）
+kubectl patch svc opentwins-frontend -p '{"spec":{"type":"NodePort"}}'
+kubectl patch svc grafana -p '{"spec":{"type":"NodePort"}}'
+
+# 获取 NodePort
+kubectl get svc opentwins-frontend
+kubectl get svc grafana
+```
+
+## 四、配置 OpenTwins
+
+### 4.1 访问 Web 界面
+
+```bash
+# 如果使用端口转发
+http://localhost:3000
+
+# 如果使用 NodePort
+http://<节点IP>:<NodePort>
+```
+
+### 4.2 配置 Ditto 连接
+
+1. 在 OpenTwins 界面中配置：
+   - Ditto nginx 地址: `http://ditto-nginx:8080`（集群内）或 `http://localhost:8080`（端口转发）
+   - Ditto Extended API: `http://ditto-nginx:8080/api/ditto-extended`
+
+### 4.3 创建数字孪生
+
+参考官方文档创建数字孪生的步骤与在线环境相同：
+
+#### 创建 Car 类型
+
+```json
+{
+    "thingId": "example:car",
+    "policyId": "default:basic_policy",
+    "attributes": {
+        "name": "Car",
+        "description": "数字孪生汽车示例",
+        "image": "https://images.pexels.com/photos/119435/pexels-photo-119435.jpeg"
+    },
+    "features": {
+        "gps": {
+            "properties": {
+                "latitude": null,
+                "longitude": null
+            }
+        }
+    }
+}
+```
+
+#### 创建 Wheel 类型
+
+```json
+{
+    "thingId": "example:wheel",
+    "policyId": "default:basic_policy",
+    "attributes": {
+        "name": "Wheel",
+        "description": "车轮数字孪生",
+        "image": "https://images.pexels.com/photos/111766/pexels-photo-111766.jpeg"
+    },
+    "features": {
+        "velocity": {
+            "properties": {
+                "value": null
+            }
+        },
+        "direction": {
+            "properties": {
+                "value": null
+            }
+        }
+    }
+}
+```
+
+## 五、数据接入
+
+### 5.1 准备 Python 环境
+
+```bash
+# 如果离线环境没有 Python，需要提前准备
+# 在联网环境下载 Python 和依赖包
+
+# 下载 paho-mqtt（联网环境）
+pip download paho-mqtt -d /opt/opentwins-offline/python-packages/
+
+# 在离线环境安装
+pip install --no-index --find-links=/opt/opentwins-offline/python-packages/ paho-mqtt
+```
+
+### 5.2 创建数据模拟器
+
+创建 `car_simulator.py`：
+
+```python
+#!/usr/bin/env python3
+import paho.mqtt.client as mqtt
+import json
+import time
+import random
+
+# 配置参数
+MQTT_BROKER = "localhost"  # 或者 Kubernetes 节点 IP
+MQTT_PORT = 1883
+TOPIC_PREFIX = "ditto/"
+NAMESPACE = "example"
+CAR_NAME = "mycar"
+WHEEL_PREFIX = "mycar:wheel_"
+
+def on_connect(client, userdata, flags, rc):
+    if rc == 0:
+        print(f"已成功连接到 MQTT Broker: {MQTT_BROKER}:{MQTT_PORT}")
+    else:
+        print(f"连接失败，返回码: {rc}")
+
+def on_publish(client, userdata, mid):
+    print(f"消息 {mid} 已发布")
+
+# 初始化 MQTT 客户端
+client = mqtt.Client()
+client.on_connect = on_connect
+client.on_publish = on_publish
+
+try:
+    client.connect(MQTT_BROKER, MQTT_PORT, 60)
+    client.loop_start()
+except Exception as e:
+    print(f"MQTT 连接错误: {e}")
+    exit(1)
+
+def generate_wheel_data():
+    """生成车轮模拟数据"""
+    velocity = random.uniform(0.0, 120.0)
+    direction = random.uniform(-45.0, 45.0)
+    return velocity, direction
+
+def generate_gps_data():
+    """生成 GPS 模拟数据"""
+    # 模拟在某个区域内移动
+    base_lat, base_lon = 39.9042, 116.4074  # 北京天安门
+    latitude = base_lat + random.uniform(-0.01, 0.01)
+    longitude = base_lon + random.uniform(-0.01, 0.01)
+    return latitude, longitude
+
+def create_ditto_message(thing_id, features_update):
+    """创建 Ditto 协议消息"""
+    return {
+        "topic": f"{NAMESPACE}/{thing_id}/things/twin/commands/merge",
+        "headers": {
+            "content-type": "application/merge-patch+json"
+        },
+        "path": "/features",
+        "value": features_update
+    }
+
+def publish_car_data(timestamp, latitude, longitude):
+    """发布汽车数据"""
+    features = {
+        "gps": {
+            "properties": {
+                "latitude": latitude,
+                "longitude": longitude,
+                "timestamp": timestamp
+            }
+        }
+    }
+    message = create_ditto_message(CAR_NAME, features)
+    topic = f"{TOPIC_PREFIX}{NAMESPACE}/{CAR_NAME}"
+    client.publish(topic, json.dumps(message))
+    print(f"✓ {CAR_NAME}: GPS ({latitude:.6f}, {longitude:.6f})")
+
+def publish_wheel_data(wheel_num, timestamp, velocity, direction):
+    """发布车轮数据"""
+    thing_id = f"{WHEEL_PREFIX}{wheel_num}"
+    features = {
+        "velocity": {
+            "properties": {
+                "value": velocity,
+                "timestamp": timestamp
+            }
+        },
+        "direction": {
+            "properties": {
+                "value": direction,
+                "timestamp": timestamp
+            }
+        }
+    }
+    message = create_ditto_message(thing_id, features)
+    topic = f"{TOPIC_PREFIX}{NAMESPACE}/{thing_id}"
+    client.publish(topic, json.dumps(message))
+    print(f"✓ {thing_id}: 速度={velocity:.2f} km/h, 方向={direction:.2f}°")
+
+# 主循环
+print("="*60)
+print("数字孪生数据模拟器已启动")
+print("="*60)
+
+try:
+    iteration = 0
+    while True:
+        iteration += 1
+        timestamp = int(time.time() * 1000)
+        
+        print(f"\n--- 第 {iteration} 次数据更新 (时间戳: {timestamp}) ---")
+        
+        # 发布汽车数据
+        latitude, longitude = generate_gps_data()
+        publish_car_data(timestamp, latitude, longitude)
+        
+        # 发布四个车轮数据
+        for i in range(1, 5):
+            velocity, direction = generate_wheel_data()
+            publish_wheel_data(i, timestamp, velocity, direction)
+        
+        print(f"--- 完成，等待 5 秒... ---")
+        time.sleep(5)
+        
+except KeyboardInterrupt:
+    print("\n\n程序被用户中断")
+finally:
+    client.loop_stop()
+    client.disconnect()
+    print("已断开 MQTT 连接")
+```
+
+### 5.3 运行模拟器
+
+```bash
+chmod +x car_simulator.py
+python3 car_simulator.py
+```
+
+## 六、数据可视化
+
+### 6.1 访问 Grafana
+
+```bash
+# 获取 Grafana 访问信息
+kubectl get svc grafana
+
+# 获取默认密码（如果使用了 secret）
+kubectl get secret grafana-admin-password -o jsonpath="{.data.password}" | base64 --decode
+```
+
+访问: `http://localhost:3001` 或 `http://<节点IP>:<NodePort>`
+
+默认凭据:
+- 用户名: `admin`
+- 密码: 查看上述命令输出或 Helm values
+
+### 6.2 配置 InfluxDB 数据源
+
+1. 登录 Grafana
+2. 导航到 Configuration → Data Sources
+3. 添加 InfluxDB 数据源：
+   - **URL**: `http://influxdb:8086`（集群内地址）
+   - **Database**: `opentwins`
+   - **Query Language**: `Flux`
+
+### 6.3 创建仪表板
+
+创建四个面板监控数字孪生数据：
+
+**面板 1: 当前 GPS 位置**
+```flux
+import "strings"
+from(bucket: "opentwins")
+  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)
+  |> filter(fn: (r) => r["_measurement"] == "mqtt_consumer")
+  |> filter(fn: (r) => r["thingId"] == "example:mycar")
+  |> filter(fn: (r) => r["_field"] == "value_gps_properties_latitude" or 
+                       r["_field"] == "value_gps_properties_longitude")
+  |> map(fn: (r) => ({ r with _field: strings.replace(v: r["_field"], 
+                                                        t: "value_gps_properties_", 
+                                                        u: "", i: 2) }))
+  |> keep(columns: ["_value", "_field", "_time"])
+  |> sort(columns: ["_time"], desc: false)  
+  |> last()
+```
+
+**面板 2: GPS 轨迹**
+```flux
+import "strings"
+from(bucket: "opentwins")
+  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)
+  |> filter(fn: (r) => r["_measurement"] == "mqtt_consumer")
+  |> filter(fn: (r) => r["thingId"] == "example:mycar")
+  |> filter(fn: (r) => r["_field"] == "value_gps_properties_latitude" or 
+                       r["_field"] == "value_gps_properties_longitude")
+  |> map(fn: (r) => ({ r with _field: strings.replace(v: r["_field"], 
+                                                        t: "value_gps_properties_", 
+                                                        u: "", i: 2) }))
+  |> keep(columns: ["_value", "_field", "_time"])
+```
+
+**面板 3: 车轮方向**
+```flux
+import "strings"
+from(bucket: "opentwins")
+  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)
+  |> filter(fn: (r) => r["_measurement"] == "mqtt_consumer")
+  |> filter(fn: (r) => strings.hasPrefix(v: r["thingId"], prefix: "example:mycar:wheel_"))
+  |> filter(fn: (r) => r["_field"] == "value_direction_properties_value")
+  |> map(fn: (r) => ({ r with thingId: strings.replace(v: r["thingId"], 
+                                                         t: "example:mycar:", 
+                                                         u: "", i: 2) }))
+  |> keep(columns: ["thingId", "_value", "_time"])
+  |> sort(columns: ["_time"], desc: false)  
+  |> last()
+```
+
+**面板 4: 车轮速度对比**
+```flux
+import "strings"
+from(bucket: "opentwins")
+  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)
+  |> filter(fn: (r) => r["_measurement"] == "mqtt_consumer")
+  |> filter(fn: (r) => strings.hasPrefix(v: r["thingId"], prefix: "example:mycar:wheel_"))
+  |> filter(fn: (r) => r["_field"] == "value_velocity_properties_value")
+  |> map(fn: (r) => ({ r with thingId: strings.replace(v: r["thingId"], 
+                                                         t: "example:mycar:", 
+                                                         u: "", i: 2) }))
+  |> keep(columns: ["thingId", "_value", "_time"])
+```
+
+## 七、多节点集群部署（可选）
+
+如果需要在多节点集群上部署（而非 minikube）：
+
+### 7.1 准备集群节点
+
+在所有节点上：
+
+```bash
+# 加载 Docker 镜像
+cd /opt/opentwins-offline/images
+for tar_file in *.tar; do
+    docker load -i "$tar_file"
+done
+```
+
+### 7.2 使用 kubeadm 部署集群
+
+参考 Kubernetes 官方离线部署文档，或使用以下简化步骤：
+
+```bash
+# 主节点
+kubeadm init --pod-network-cidr=10.244.0.0/16
+
+# 配置 kubectl
+mkdir -p $HOME/.kube
+sudo cp -i /etc/kubernetes/admin.conf $HOME/.kube/config
+sudo chown $(id -u):$(id -g) $HOME/.kube/config
+
+# 工作节点加入
+# 在工作节点上执行主节点 init 输出的 join 命令
+kubeadm join <主节点IP>:6443 --token <token> --discovery-token-ca-cert-hash <hash>
+```
+
+### 7.3 部署网络插件（离线）
+
+需要提前准备 CNI 插件镜像（如 Calico、Flannel）并加载到所有节点。
+
+## 八、故障排除
+
+### 8.1 镜像拉取失败
+
+```bash
+# 检查镜像是否已加载
+docker images
+
+# 手动加载缺失的镜像
+docker load -i /opt/opentwins-offline/images/<镜像文件>.tar
+```
+
+### 8.2 Pod 无法启动
+
+```bash
+# 查看 Pod 详情
+kubectl describe pod <pod-name>
+
+# 查看日志
+kubectl logs <pod-name>
+
+# 检查事件
+kubectl get events --sort-by='.lastTimestamp'
+```
+
+### 8.3 Helm 安装失败
+
+```bash
+# 查看详细日志
+helm upgrade --install opentwins ./OpenTwins-*.tgz --debug
+
+# 检查 values
+helm get values opentwins
+
+# 回滚
+helm rollback opentwins
+```
+
+### 8.4 MQTT 连接问题
+
+```bash
+# 检查 Mosquitto 服务
+kubectl get svc mosquitto
+kubectl logs <mosquitto-pod>
+
+# 测试 MQTT 连接（需要 mosquitto-clients）
+mosquitto_pub -h localhost -p 1883 -t "test" -m "hello"
+```
+
+### 8.5 数据未存储到 InfluxDB
+
+```bash
+# 检查 Ditto 连接状态
+kubectl logs <ditto-connectivity-pod>
+
+# 检查 InfluxDB
+kubectl exec -it <influxdb-pod> -- influx
+# 在 influx CLI 中
+> use opentwins
+> show measurements
+> select * from mqtt_consumer limit 10
+```
+
+## 九、性能优化
+
+### 9.1 资源限制
+
+编辑 Helm values 文件设置资源限制：
+
+```yaml
+resources:
+  limits:
+    cpu: 2000m
+    memory: 4Gi
+  requests:
+    cpu: 1000m
+    memory: 2Gi
+```
+
+### 9.2 持久化存储
+
+配置 PersistentVolume 用于数据持久化：
+
+```yaml
+persistence:
+  enabled: true
+  storageClass: "local-storage"
+  size: 20Gi
+```
+
+### 9.3 高可用配置
+
+增加副本数：
+
+```yaml
+replicaCount: 3
+```
+
+## 十、备份与恢复
+
+### 10.1 备份数据
+
+```bash
+# 备份 InfluxDB
+kubectl exec <influxdb-pod> -- influxd backup /backup
+kubectl cp <influxdb-pod>:/backup ./influxdb-backup
+
+# 备份 MongoDB (Ditto 数据)
+kubectl exec <mongodb-pod> -- mongodump --out /backup
+kubectl cp <mongodb-pod>:/backup ./mongodb-backup
+
+# 备份 Kubernetes 配置
+kubectl get all --all-namespaces -o yaml > k8s-backup.yaml
+```
+
+### 10.2 恢复数据
+
+```bash
+# 恢复 InfluxDB
+kubectl cp ./influxdb-backup <influxdb-pod>:/backup
+kubectl exec <influxdb-pod> -- influxd restore /backup
+
+# 恢复 MongoDB
+kubectl cp ./mongodb-backup <mongodb-pod>:/backup
+kubectl exec <mongodb-pod> -- mongorestore /backup
+```
+
+## 十一、卸载
+
+```bash
+# 卸载 OpenTwins
+helm uninstall opentwins
+
+# 删除持久卷声明
+kubectl delete pvc --all
+
+# 停止 minikube
+minikube stop
+minikube delete
+
+# 清理 Docker 资源
+docker system prune -a
+```
+
+## 十二、参考资源
+
+- [OpenTwins 官方文档](https://ertis-research.github.io/opentwins/docs/quickstart)
+- [Eclipse Ditto 文档](https://www.eclipse.org/ditto/)
+- [Kubernetes 离线部署](https://kubernetes.io/docs/setup/)
+- [Helm 文档](https://helm.sh/docs/)
+- [Docker 离线安装](https://docs.docker.com/engine/install/)
+
+## 十三、高级功能
+
+部署完成后，可以探索以下高级功能：
+
+- **AI/ML 模型集成**: 在数字孪生中集成机器学习模型
+- **3D 可视化**: 添加 3D 模型展示
+- **FMI 仿真**: 集成 FMU 功能模拟单元
+- **边缘计算**: 部署边缘节点进行分布式计算
+- **访问控制**: 配置 Eclipse Ditto 策略进行细粒度权限管理
+
+---
+
+:::info 文档说明
+本文档基于 OpenTwins 官方快速入门指南编写，针对 Linux 离线环境进行了优化和扩展。
+最后更新：2025-10
+:::
+
+:::warning 重要提示
+离线部署需要仔细规划和充分准备。建议先在联网环境测试完整流程，确保所有资源准备齐全后再进行离线部署。
+:::
+
+

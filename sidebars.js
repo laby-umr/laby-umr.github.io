@@ -18,7 +18,7 @@ const sidebars = {
   // 自定义侧边栏配置，使用中文显示但对应英文URL路径
   tutorialSidebar: [
     'intro',
-    {
+/*    {
       type: 'category',
       label: '面试题库',
       link: {
@@ -30,11 +30,20 @@ const sidebars = {
         'interview/java-基础',
         'interview/java-spring',
         'interview/java-mybatis',
+        'interview/java-SpringBoot',
+        'interview/java-SpringCloud',
+        'interview/java-并发',
+        'interview/java-虚拟机',
+        'interview/java-集合',
+        'interview/java-设计模式',
+        'interview/java-消息队列',
         'interview/mysql-interview',
         'interview/Redis-interview',
         'interview/Java-serialization',
+        'interview/后端场景',
+        'interview/后端系统设计'
       ]
-    },
+    },*/
     {
       type: 'category',
       label: '前端开发',
@@ -201,11 +210,14 @@ const sidebars = {
           items: [
             'backend/database-orm/database-intro',
             'backend/database-orm/database-orm-summary',
-            'backend/database-orm/mybatis-plus',
             'backend/database-orm/hibernate',
             'backend/database-orm/jpa',
             'backend/database-orm/mongodb',
+            'backend/database-orm/mybatis',
+            'backend/database-orm/mybatis-plus',
+            'backend/database-orm/mysql',
             'backend/database-orm/postgresql',
+            'backend/database-orm/redis',
           ],
         },
         {
@@ -288,34 +300,29 @@ const sidebars = {
     },
     {
       type: 'category',
-      label: '技术博客',
+      label: '数字孪生',
       link: {
-        type: 'generated-index',
-        description: '技术博客文章，包括数字孪生、AI实施等前沿技术',
-        slug: 'blog-content'
+        type: 'doc',
+        id: 'digital-twin/digital-twin-intro'
       },
       items: [
-        {
-          type: 'category',
-          label: '数字孪生',
-          items: [
-            'blog/2024-12-24-digital-twin-fundamentals',
-            'blog/2024-12-25-industrial-digital-twin-cases',
-            'blog/2024-12-26-digital-twin-tech-architecture',
-            'blog/2024-12-27-digital-twin-future-trends'
-          ]
-        },
-        {
-          type: 'category',
-          label: 'AI实施',
-          items: [
-            'blog/2025-08-17-welcome-to-ai-implementation',
-            'blog/2025-08-18-enterprise-ai-implementation',
-            'blog/2025-08-19-ai-industry-applications',
-            'blog/2025-08-20-ai-architecture-deployment',
-            'blog/2025-08-21-ai-roi-value'
-          ]
-        }
+        'digital-twin/opentwins-windows-deployment',
+        'digital-twin/opentwins-linux-offline-deployment',
+      ]
+    },
+    {
+      type: 'category',
+      label: '项目设计',
+      link: {
+        type: 'doc',
+        id: 'projectDesign/project-design-intro'
+      },
+      items: [
+        'projectDesign/wms-system-design',
+        'projectDesign/crm-system-design',
+        'projectDesign/erp-system-design',
+        'projectDesign/oms-system-design',
+        'projectDesign/digital-twin-system-design',
       ]
     }
   ]

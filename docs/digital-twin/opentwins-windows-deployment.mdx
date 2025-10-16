@@ -1,0 +1,825 @@
+---
+sidebar_position: 7
+title: OpenTwins Windows 本地部署实战指南
+description: OpenTwins 数字孪生平台 Windows 本地环境完整部署实战记录
+tags: [数字孪生, OpenTwins, Windows部署, 本地部署, Kubernetes, Minikube, Docker]
+---
+
+# OpenTwins Windows 本地部署实战指南
+
+本文档记录了在 Windows 环境下成功部署 OpenTwins 数字孪生平台的完整过程，包括所有必要的工具安装、配置和故障排查。
+
+## 一、部署概述
+
+### 1.1 OpenTwins 简介
+
+OpenTwins 是一个开源的数字孪生平台，基于 Eclipse Ditto 构建，提供了完整的数字孪生管理、数据采集、存储和可视化功能。
+
+### 1.2 部署架构
+
+```
+Windows 本地环境
+├── Docker Desktop（容器运行时）
+├── Minikube（本地 Kubernetes 集群）
+├── Helm 3（包管理器）
+└── OpenTwins 平台组件
+    ├── Eclipse Ditto（数字孪生核心引擎）
+    ├── Mosquitto（MQTT 消息代理）
+    ├── InfluxDB（时序数据库）
+    ├── Grafana（数据可视化）
+    └── MongoDB（数据存储）
+```
+
+### 1.3 系统要求
+
+#### 硬件要求
+- **CPU**: 4 核心或以上（推荐 8 核心）
+- **内存**: 8GB RAM（最低），推荐 16GB
+- **磁盘**: 至少 40GB 可用空间
+- **操作系统**: Windows 10/11 Pro、Enterprise 或 Education
+
+#### 软件要求
+- **操作系统**: Windows 10 (1903+) 或 Windows 11
+- **PowerShell**: 5.1 或以上
+- **虚拟化**: 启用 Hyper-V 或 WSL 2
+
+:::warning 重要提示
+本次部署使用 Docker Desktop + WSL 2 作为容器运行时，Minikube 作为 Kubernetes 集群。
+:::
+
+## 二、环境准备
+
+### 2.1 安装 Docker Desktop
+
+#### 下载安装
+
+1. 访问 [Docker Desktop 官网](https://www.docker.com/products/docker-desktop/)
+2. 下载 Windows 版本安装程序
+3. 运行安装程序并按照向导完成安装
+4. 重启计算机
+
+#### 配置 Docker Desktop
+
+启动 Docker Desktop 后，进行以下配置：
+
+1. **选择后端**：
+   - 设置 → General → Use WSL 2 based engine（推荐）
+
+2. **资源配置**：
+   - 设置 → Resources → Advanced
+   - **CPUs**: 至少 4 核心
+   - **Memory**: 至少 8GB
+   - **Disk image size**: 至少 60GB
+
+#### 验证 Docker 安装
+
+打开 PowerShell：
+
+```powershell
+# 检查 Docker 版本
+docker --version
+# 输出示例: Docker version 28.5.1, build e180ab8
+
+# 运行测试容器
+docker run hello-world
+
+# 查看运行中的容器
+docker ps
+```
+
+### 2.2 安装 kubectl
+
+kubectl 已经随 Docker Desktop 安装，验证版本：
+
+```powershell
+kubectl version --client
+# 输出示例: Client Version: v1.34.1
+```
+
+### 2.3 安装 Chocolatey（可选但推荐）
+
+Chocolatey 是 Windows 的包管理器，可以简化后续工具的安装。
+
+以管理员身份运行 PowerShell：
+
+```powershell
+Set-ExecutionPolicy Bypass -Scope Process -Force
+[System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072
+iex ((New-Object System.Net.WebClient).DownloadString('https://community.chocolatey.org/install.ps1'))
+```
+
+验证安装：
+
+```powershell
+choco --version
+# 输出示例: 2.5.1
+```
+
+### 2.4 安装 Helm
+
+使用 Chocolatey 安装：
+
+```powershell
+choco install kubernetes-helm -y
+```
+
+验证安装：
+
+```powershell
+helm version
+# 输出示例: version.BuildInfo{Version:"v3.18.6"...}
+```
+
+### 2.5 安装 Minikube
+
+使用 Chocolatey 安装：
+
+```powershell
+choco install minikube -y
+```
+
+验证安装：
+
+```powershell
+minikube version
+# 输出示例: minikube version: v1.37.0
+```
+
+## 三、部署 Kubernetes 集群
+
+### 3.1 启动 Minikube
+
+打开 PowerShell（建议以管理员身份运行）：
+
+```powershell
+# 启动 Minikube 集群（使用 Docker 驱动）
+minikube start `
+  --cpus 4 `
+  --memory 8192 `
+  --disk-size 40gb `
+  --driver=docker
+```
+
+:::tip 启动时间
+首次启动 Minikube 需要下载 Kubernetes 镜像，可能需要 5-10 分钟，请耐心等待。
+:::
+
+预期输出：
+
+```
+* Microsoft Windows 11 Pro 10.0.26100 上的 minikube v1.37.0
+* 根据用户配置使用 docker 驱动程序
+* 正在拉取基础镜像 v0.0.48 ...
+* 正在下载 Kubernetes v1.34.0 的预加载文件...
+* 启用插件： storage-provisioner, default-storageclass
+* 完成！kubectl 现在已配置，默认使用"minikube"集群和"default"命名空间
+```
+
+### 3.2 验证集群状态
+
+```powershell
+# 配置 kubectl 使用 minikube 上下文
+kubectl config use-context minikube
+
+# 验证集群连接
+kubectl cluster-info
+# 输出: Kubernetes control plane is running at https://127.0.0.1:xxxxx
+
+# 查看节点状态
+kubectl get nodes
+# 输出:
+# NAME       STATUS   ROLES           AGE   VERSION
+# minikube   Ready    control-plane   2m    v1.34.0
+```
+
+### 3.3 验证集群功能
+
+```powershell
+# 查看所有命名空间
+kubectl get namespaces
+
+# 查看系统 Pod
+kubectl get pods -n kube-system
+
+# 查看服务
+kubectl get services
+```
+
+## 四、部署 OpenTwins
+
+### 4.1 添加 Helm 仓库
+
+```powershell
+# 添加 ERTIS Helm 仓库
+helm repo add ertis https://ertis-research.github.io/Helm-charts/
+
+# 更新仓库
+helm repo update
+
+# 查看 OpenTwins Chart 信息
+helm search repo opentwins
+```
+
+预期输出：
+
+```
+NAME                       	CHART VERSION	APP VERSION	DESCRIPTION
+ertis/OpenTwins            	0.5.23       	0.5.0      	Esta es una plataforma de codigo abierto...
+```
+
+### 4.2 安装 OpenTwins
+
+```powershell
+# 安装 OpenTwins（推荐配置）
+helm upgrade --install opentwins ertis/OpenTwins `
+  --wait `
+  --timeout 20m `
+  --dependency-update
+```
+
+:::info 安装说明
+- `--wait`: 等待所有 Pod 就绪
+- `--timeout 20m`: 设置超时时间为 20 分钟（首次安装需要拉取镜像）
+- `--dependency-update`: 自动更新依赖的 Chart
+:::
+
+### 4.3 监控部署进度
+
+在另一个 PowerShell 窗口中运行：
+
+```powershell
+# 实时查看所有 Pod 状态
+kubectl get pods -w
+```
+
+或者定期检查：
+
+```powershell
+# 查看所有 Pod 状态
+kubectl get pods
+
+# 查看特定 Pod 的详细信息
+kubectl describe pod <pod-name>
+
+# 查看 Pod 日志
+kubectl logs <pod-name>
+```
+
+### 4.4 部署过程说明
+
+OpenTwins 包含 12 个组件，部署过程大约需要 15-25 分钟：
+
+1. **初始阶段（0-5分钟）**
+   - 下载 Helm Chart
+   - 创建 Kubernetes 资源
+   - 开始拉取容器镜像
+
+2. **镜像拉取阶段（5-15分钟）**
+   - 下载各组件的 Docker 镜像
+   - 镜像大小总计约 2-3GB
+   - 状态显示为 `ContainerCreating` 或 `Init`
+
+3. **启动阶段（15-20分钟）**
+   - 容器依次启动
+   - MongoDB、InfluxDB 等基础服务先启动
+   - Ditto 组件依次启动
+   - Grafana 最后启动
+
+4. **就绪阶段（20-25分钟）**
+   - 所有 Pod 状态变为 `Running`
+   - `READY` 列显示 `1/1` 或 `2/2`
+
+:::tip 常见状态说明
+- `ContainerCreating`: 正在拉取镜像或创建容器
+- `Init:0/1`: 正在运行初始化容器
+- `PodInitializing`: Pod 正在初始化
+- `Running`: 容器正在运行
+- `CrashLoopBackOff`: 容器启动失败，正在重试（Telegraf 在等待 InfluxDB 时会出现，这是正常的）
+:::
+
+### 4.5 验证部署
+
+等待所有 Pod 就绪：
+
+```powershell
+# 检查所有 Pod 状态
+kubectl get pods
+```
+
+预期输出（所有 Pod 都应该是 Running 状态）：
+
+```
+NAME                                            READY   STATUS    RESTARTS   AGE
+opentwins-ditto-connectivity-xxx                1/1     Running   0          23m
+opentwins-ditto-extended-api-xxx                1/1     Running   0          23m
+opentwins-ditto-gateway-xxx                     1/1     Running   0          23m
+opentwins-ditto-nginx-xxx                       1/1     Running   0          23m
+opentwins-ditto-policies-xxx                    1/1     Running   0          23m
+opentwins-ditto-things-xxx                      1/1     Running   0          23m
+opentwins-ditto-thingssearch-xxx                1/1     Running   0          23m
+opentwins-grafana-xxx                           2/2     Running   0          23m
+opentwins-influxdb2-0                           1/1     Running   0          23m
+opentwins-mongodb-xxx                           1/1     Running   0          23m
+opentwins-mosquitto-xxx                         1/1     Running   0          23m
+opentwins-telegraf-xxx                          1/1     Running   9          23m
+```
+
+查看服务：
+
+```powershell
+kubectl get services
+```
+
+预期输出：
+
+```
+NAME                           TYPE        CLUSTER-IP       EXTERNAL-IP   PORT(S)
+opentwins-ditto-extended-api   NodePort    10.105.182.81    <none>        8080:30526/TCP
+opentwins-ditto-nginx          NodePort    10.102.210.73    <none>        8080:30525/TCP
+opentwins-grafana              NodePort    10.109.196.142   <none>        80:30718/TCP
+opentwins-influxdb2            NodePort    10.108.92.37     <none>        80:30716/TCP
+opentwins-mongodb              NodePort    10.109.115.172   <none>        27017:30717/TCP
+opentwins-mosquitto            NodePort    10.103.102.84    <none>        1883:30511/TCP,9001:32453/TCP
+```
+
+## 五、访问 OpenTwins
+
+### 5.1 网络访问说明
+
+由于 Windows 上 Minikube 的网络限制，无法直接通过 Minikube IP 访问服务。我们需要使用**端口转发**的方式。
+
+:::warning 重要
+不要尝试通过 `minikube ip` 获取的 IP 地址访问服务，这在 Windows 上通常不起作用。
+:::
+
+### 5.2 手动端口转发
+
+#### 方式 1: 单个服务端口转发
+
+```powershell
+# Grafana（数据可视化）
+kubectl port-forward svc/opentwins-grafana 3000:80
+
+# Ditto API（数字孪生核心）
+kubectl port-forward svc/opentwins-ditto-nginx 8080:8080
+
+# OpenTwins Extended API
+kubectl port-forward svc/opentwins-ditto-extended-api 8081:8080
+
+# InfluxDB（时序数据库）
+kubectl port-forward svc/opentwins-influxdb2 8086:80
+
+# Mosquitto MQTT（消息代理）
+kubectl port-forward svc/opentwins-mosquitto 1883:1883
+```
+
+:::tip 提示
+端口转发命令会占用当前终端窗口，需要保持窗口打开。建议为每个服务开启一个新的 PowerShell 窗口。
+:::
+
+#### 方式 2: 使用自动化脚本
+
+创建 `start-opentwins-portforward.ps1` 文件：
+
+```powershell title="start-opentwins-portforward.ps1"
+# OpenTwins 端口转发启动脚本
+
+Write-Host "======================================" -ForegroundColor Green
+Write-Host "启动 OpenTwins 端口转发" -ForegroundColor Green
+Write-Host "======================================" -ForegroundColor Green
+Write-Host ""
+
+# 启动端口转发（后台运行）
+Write-Host "正在启动端口转发..." -ForegroundColor Yellow
+Write-Host ""
+
+# Grafana
+Start-Job -Name "grafana-forward" -ScriptBlock { 
+    kubectl port-forward svc/opentwins-grafana 3000:80 
+} | Out-Null
+
+# Ditto API
+Start-Job -Name "ditto-forward" -ScriptBlock { 
+    kubectl port-forward svc/opentwins-ditto-nginx 8080:8080 
+} | Out-Null
+
+# OpenTwins Extended API
+Start-Job -Name "extended-api-forward" -ScriptBlock { 
+    kubectl port-forward svc/opentwins-ditto-extended-api 8081:8080 
+} | Out-Null
+
+# InfluxDB
+Start-Job -Name "influxdb-forward" -ScriptBlock { 
+    kubectl port-forward svc/opentwins-influxdb2 8086:80 
+} | Out-Null
+
+# Mosquitto MQTT
+Start-Job -Name "mosquitto-forward" -ScriptBlock { 
+    kubectl port-forward svc/opentwins-mosquitto 1883:1883 
+} | Out-Null
+
+# 等待端口转发启动
+Start-Sleep -Seconds 3
+
+Write-Host "======================================" -ForegroundColor Green
+Write-Host "端口转发已启动！" -ForegroundColor Green
+Write-Host "======================================" -ForegroundColor Green
+Write-Host ""
+Write-Host "访问地址:" -ForegroundColor Yellow
+Write-Host ""
+Write-Host "  Grafana (数据可视化):" -ForegroundColor Cyan
+Write-Host "    http://localhost:3000" -ForegroundColor White
+Write-Host "    用户名: admin" -ForegroundColor Gray
+Write-Host "    密码: admin" -ForegroundColor Gray
+Write-Host ""
+Write-Host "  Ditto API (数字孪生核心):" -ForegroundColor Cyan
+Write-Host "    http://localhost:8080" -ForegroundColor White
+Write-Host ""
+Write-Host "  OpenTwins Extended API:" -ForegroundColor Cyan
+Write-Host "    http://localhost:8081" -ForegroundColor White
+Write-Host ""
+Write-Host "  InfluxDB (时序数据库):" -ForegroundColor Cyan
+Write-Host "    http://localhost:8086" -ForegroundColor White
+Write-Host ""
+Write-Host "  Mosquitto MQTT:" -ForegroundColor Cyan
+Write-Host "    localhost:1883" -ForegroundColor White
+Write-Host ""
+Write-Host "======================================" -ForegroundColor Green
+Write-Host ""
+Write-Host "管理命令:" -ForegroundColor Yellow
+Write-Host "  查看后台任务: Get-Job" -ForegroundColor Gray
+Write-Host "  停止所有转发: Get-Job | Stop-Job; Get-Job | Remove-Job" -ForegroundColor Gray
+Write-Host ""
+Write-Host "提示: 保持此窗口打开以维持端口转发" -ForegroundColor Yellow
+Write-Host "      按 Ctrl+C 可以停止所有转发" -ForegroundColor Yellow
+Write-Host ""
+
+# 显示后台任务状态
+Write-Host "后台任务状态:" -ForegroundColor Yellow
+Get-Job | Format-Table -AutoSize
+
+Write-Host ""
+Write-Host "正在监控端口转发状态... (按 Ctrl+C 停止)" -ForegroundColor Gray
+Write-Host ""
+
+# 保持脚本运行
+try {
+    while ($true) {
+        Start-Sleep -Seconds 10
+        
+        # 检查任务状态
+        $failedJobs = Get-Job | Where-Object { $_.State -eq "Failed" }
+        if ($failedJobs) {
+            Write-Host "警告: 有端口转发任务失败" -ForegroundColor Red
+            $failedJobs | Format-Table -AutoSize
+        }
+    }
+} finally {
+    Write-Host ""
+    Write-Host "正在停止所有端口转发..." -ForegroundColor Yellow
+    Get-Job | Stop-Job
+    Get-Job | Remove-Job
+    Write-Host "已停止所有端口转发" -ForegroundColor Green
+}
+```
+
+运行脚本：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\start-opentwins-portforward.ps1
+```
+
+### 5.3 访问服务
+
+启动端口转发后，在浏览器中访问以下地址：
+
+#### 📊 Grafana（数据可视化）- 推荐首先访问
+
+```
+http://localhost:3000
+```
+
+- **默认用户名**: `admin`
+- **默认密码**: `admin`
+- 首次登录会要求修改密码
+
+#### 🌐 Ditto API（数字孪生核心）
+
+```
+http://localhost:8080
+```
+
+Eclipse Ditto 提供了完整的数字孪生管理 API。
+
+#### 🌐 OpenTwins Extended API
+
+```
+http://localhost:8081
+```
+
+OpenTwins 的扩展 API 接口。
+
+#### 💾 InfluxDB（时序数据库）
+
+```
+http://localhost:8086
+```
+
+#### 📡 Mosquitto MQTT（消息代理）
+
+```
+localhost:1883
+```
+
+使用 MQTT 客户端连接此地址。
+
+## 六、配置和使用
+
+### 6.1 Grafana 初始配置
+
+1. 访问 `http://localhost:3000`
+2. 使用默认凭据登录（admin/admin）
+3. 系统会提示修改密码，建议修改
+4. 进入主界面后，可以看到预配置的仪表板
+
+### 6.2 创建数字孪生
+
+使用 Ditto API 创建数字孪生实例：
+
+```bash
+# 使用 curl 创建一个简单的数字孪生
+curl -X PUT http://localhost:8080/api/2/things/org.example:my-thing \
+  -H "Content-Type: application/json" \
+  -d '{
+    "attributes": {
+      "location": "Room 42"
+    },
+    "features": {
+      "temperature": {
+        "properties": {
+          "value": 23.5
+        }
+      }
+    }
+  }'
+```
+
+### 6.3 MQTT 消息发布
+
+使用 MQTT 客户端发布消息：
+
+```bash
+# 使用 mosquitto_pub 发布消息
+mosquitto_pub -h localhost -p 1883 -t "org.example/my-thing" -m '{"temperature": 24.5}'
+```
+
+## 七、常用管理命令
+
+### 7.1 查看状态
+
+```powershell
+# 查看所有 Pod 状态
+kubectl get pods
+
+# 查看服务
+kubectl get services
+
+# 查看 Helm 发布
+helm list
+
+# 查看 Helm 发布详情
+helm status opentwins
+
+# 查看特定 Pod 日志
+kubectl logs <pod-name>
+
+# 实时查看日志
+kubectl logs -f <pod-name>
+```
+
+### 7.2 重启服务
+
+```powershell
+# 重启特定 Pod（删除后会自动重建）
+kubectl delete pod <pod-name>
+
+# 重启所有 OpenTwins Pod
+kubectl delete pods -l app.kubernetes.io/instance=opentwins
+```
+
+### 7.3 停止和启动
+
+```powershell
+# 停止 Minikube（保留数据）
+minikube stop
+
+# 启动 Minikube
+minikube start
+
+# 删除 Minikube（删除所有数据）
+minikube delete
+```
+
+### 7.4 卸载 OpenTwins
+
+```powershell
+# 卸载 OpenTwins
+helm uninstall opentwins
+
+# 确认卸载
+kubectl get pods
+# 应该看不到 opentwins 相关的 Pod
+```
+
+## 八、故障排查
+
+### 8.1 Pod 无法启动
+
+**问题**: Pod 一直处于 `Pending` 或 `ContainerCreating` 状态
+
+**解决方案**:
+
+```powershell
+# 查看 Pod 详细信息
+kubectl describe pod <pod-name>
+
+# 查看事件日志
+kubectl get events --sort-by='.lastTimestamp'
+
+# 检查镜像拉取状态
+kubectl get pods -o wide
+```
+
+常见原因：
+- 镜像拉取失败：检查网络连接
+- 资源不足：增加 Minikube 的 CPU 和内存配置
+- 存储不足：清理 Docker 镜像和容器
+
+### 8.2 端口转发失败
+
+**问题**: 无法通过 localhost 访问服务
+
+**解决方案**:
+
+```powershell
+# 检查端口是否被占用
+netstat -ano | findstr :3000
+
+# 使用不同的本地端口
+kubectl port-forward svc/opentwins-grafana 3001:80
+
+# 检查服务是否存在
+kubectl get svc opentwins-grafana
+```
+
+### 8.3 Minikube 启动失败
+
+**问题**: Minikube 无法启动
+
+**解决方案**:
+
+```powershell
+# 查看详细日志
+minikube start --alsologtostderr -v=7
+
+# 删除并重新创建
+minikube delete
+minikube start --cpus 4 --memory 8192 --disk-size 40gb --driver=docker
+
+# 检查 Docker Desktop 是否运行
+docker ps
+```
+
+### 8.4 Telegraf CrashLoopBackOff
+
+**问题**: opentwins-telegraf Pod 显示 `CrashLoopBackOff`
+
+**说明**: 这是正常现象。Telegraf 在等待 InfluxDB 完全启动。一旦 InfluxDB 就绪，Telegraf 会自动恢复正常。
+
+**验证**:
+
+```powershell
+# 检查 InfluxDB 状态
+kubectl get pod -l app.kubernetes.io/name=influxdb2
+
+# 查看 Telegraf 日志
+kubectl logs <telegraf-pod-name>
+```
+
+### 8.5 内存不足
+
+**问题**: Pod 被驱逐或 OOMKilled
+
+**解决方案**:
+
+```powershell
+# 停止 Minikube
+minikube stop
+
+# 增加内存配置
+minikube config set memory 12288
+
+# 重新启动
+minikube start
+```
+
+## 九、性能优化
+
+### 9.1 调整资源配置
+
+根据实际使用情况调整 Minikube 资源：
+
+```powershell
+# 停止 Minikube
+minikube stop
+
+# 调整配置
+minikube config set cpus 6
+minikube config set memory 12288
+
+# 重新启动
+minikube start
+```
+
+### 9.2 持久化数据
+
+默认情况下，数据存储在 Minikube 虚拟机中。如果需要持久化数据：
+
+```powershell
+# 查看持久卷
+kubectl get pv
+kubectl get pvc
+
+# 备份数据（以 MongoDB 为例）
+kubectl exec -it <mongodb-pod-name> -- mongodump --out /tmp/backup
+kubectl cp <mongodb-pod-name>:/tmp/backup ./mongodb-backup
+```
+
+### 9.3 镜像缓存
+
+为了加快后续部署，可以预拉取镜像：
+
+```powershell
+# 进入 Minikube
+minikube ssh
+
+# 手动拉取镜像
+docker pull eclipse/ditto-gateway:latest
+docker pull grafana/grafana:latest
+# ... 其他镜像
+```
+
+## 十、总结
+
+### 10.1 部署清单
+
+完整的部署流程包括：
+
+1. ✅ 安装 Docker Desktop
+2. ✅ 安装 Chocolatey（可选）
+3. ✅ 安装 Helm
+4. ✅ 安装 Minikube
+5. ✅ 启动 Kubernetes 集群
+6. ✅ 部署 OpenTwins
+7. ✅ 配置端口转发
+8. ✅ 访问和配置服务
+
+### 10.2 关键要点
+
+- **网络访问**: Windows 上必须使用端口转发，不能直接访问 Minikube IP
+- **资源配置**: 确保分配足够的 CPU 和内存（最低 4 核 8GB）
+- **部署时间**: 首次部署需要 20-25 分钟，主要时间用于下载镜像
+- **Telegraf 重启**: 在 InfluxDB 启动前会出现 CrashLoopBackOff，这是正常现象
+
+### 10.3 快速访问
+
+部署完成后，通过以下地址访问：
+
+- **Grafana**: http://localhost:3000 (admin/admin)
+- **Ditto API**: http://localhost:8080
+- **Extended API**: http://localhost:8081
+- **InfluxDB**: http://localhost:8086
+- **MQTT**: localhost:1883
+
+### 10.4 后续步骤
+
+1. 熟悉 Grafana 仪表板
+2. 学习 Ditto API 使用
+3. 创建自己的数字孪生实例
+4. 集成 MQTT 设备
+5. 开发自定义应用
+
+## 十一、参考资源
+
+- [OpenTwins 官方文档](https://ertis-research.github.io/opentwins/)
+- [Eclipse Ditto 文档](https://www.eclipse.org/ditto/)
+- [Minikube 文档](https://minikube.sigs.k8s.io/docs/)
+- [Kubernetes 文档](https://kubernetes.io/docs/)
+- [Helm 文档](https://helm.sh/docs/)
+
+---
+
+**文档版本**: 1.0  
+**最后更新**: 2025-01-14  
+**测试环境**: Windows 11 Pro, Docker Desktop 28.5.1, Minikube 1.37.0, Kubernetes 1.34.0
+

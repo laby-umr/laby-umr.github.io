@@ -1,0 +1,2263 @@
+---
+sidebar_position: 1
+title: WMS 仓库管理系统设计
+description: 基于 Spring Cloud 的智能仓库管理系统完整设计方案
+tags: [WMS, 仓库管理, Spring Cloud, 微服务, 系统设计]
+---
+
+# WMS 仓库管理系统设计
+
+## 一、项目概述
+
+### 1.1 系统简介
+
+WMS（Warehouse Management System）仓库管理系统是一个基于 Spring Cloud 微服务架构的智能仓储管理平台，旨在通过数字化手段提升仓库运营效率，实现库存实时可视化、出入库自动化、智能拣货调度等核心功能。
+
+### 1.2 核心价值
+
+| 价值点 | 说明 | 预期效果 |
+|--------|------|----------|
+| 🎯 **提升效率** | 自动化拣货路径优化 | 拣货效率提升 40% |
+| 📊 **实时可视** | 库存实时监控和预警 | 库存准确率达 99.5% |
+| 🔄 **降低成本** | 减少人工盘点和错误 | 运营成本降低 30% |
+| 📈 **数据分析** | 智能报表和决策支持 | 决策效率提升 50% |
+| 🚀 **快速响应** | 订单自动分配和处理 | 出库时效提升 35% |
+
+### 1.3 应用场景
+
+#### 📦 电商仓储
+- 高频出入库操作
+- 多SKU商品管理
+- 订单快速履约
+- 库存周转优化
+
+#### 🏭 制造业仓库
+- 原材料管理
+- 成品/半成品存储
+- 生产线配送
+- 呆滞库存预警
+
+#### 🏪 零售配送中心
+- 多门店配货
+- 补货计划管理
+- 退货处理
+- 库存调拨
+
+### 1.4 技术架构
+
+```mermaid
+graph TB
+    subgraph Client["💻 客户端层"]
+        Web["Web 管理端<br/>(Vue3 + Element Plus)"]
+        Mobile["移动 PDA 端<br/>(UniApp)"]
+        WMS_Screen["仓库大屏<br/>(DataV)"]
+    end
+
+    subgraph Gateway["🌐 网关层"]
+        SpringGW["Spring Cloud Gateway<br/>• 路由转发<br/>• 认证鉴权<br/>• 限流熔断"]
+    end
+
+    subgraph Business["⚙️ 业务服务层"]
+        Inventory["库存服务<br/>inventory-service"]
+        Inbound["入库服务<br/>inbound-service"]
+        Outbound["出库服务<br/>outbound-service"]
+        Picking["拣货服务<br/>picking-service"]
+        Warehouse["仓库服务<br/>warehouse-service"]
+        Report["报表服务<br/>report-service"]
+    end
+
+    subgraph Infrastructure["🔧 基础设施层"]
+        subgraph Registry["注册中心"]
+            Nacos["Nacos<br/>服务注册与发现"]
+        end
+        
+        subgraph Config["配置中心"]
+            NacosConfig["Nacos Config<br/>配置管理"]
+        end
+        
+        subgraph Message["消息队列"]
+            RocketMQ["RocketMQ<br/>异步消息"]
+        end
+    end
+
+    subgraph Data["💾 数据层"]
+        MySQL["MySQL<br/>业务数据"]
+        Redis["Redis<br/>缓存 + 分布式锁"]
+        MongoDB["MongoDB<br/>操作日志"]
+        MinIO["MinIO<br/>文件存储"]
+    end
+
+    %% 连接关系
+    Web --> SpringGW
+    Mobile --> SpringGW
+    WMS_Screen --> SpringGW
+    
+    SpringGW --> Inventory
+    SpringGW --> Inbound
+    SpringGW --> Outbound
+    SpringGW --> Picking
+    SpringGW --> Warehouse
+    SpringGW --> Report
+    
+    Inventory --> Nacos
+    Inbound --> Nacos
+    Outbound --> Nacos
+    Picking --> Nacos
+    Warehouse --> Nacos
+    Report --> Nacos
+    
+    Inventory --> NacosConfig
+    Inbound --> RocketMQ
+    Outbound --> RocketMQ
+    Picking --> RocketMQ
+    
+    Inventory --> MySQL
+    Inventory --> Redis
+    Inbound --> MySQL
+    Outbound --> MySQL
+    Picking --> MongoDB
+    Report --> MinIO
+
+    %% 样式定义
+    classDef clientStyle fill:#e1f5fe,stroke:#01579b,stroke-width:2px
+    classDef gatewayStyle fill:#f3e5f5,stroke:#4a148c,stroke-width:2px
+    classDef serviceStyle fill:#e8f5e9,stroke:#388e3c,stroke-width:2px
+    classDef infraStyle fill:#fff3e0,stroke:#e65100,stroke-width:2px
+    classDef dataStyle fill:#fce4ec,stroke:#c2185b,stroke-width:2px
+    
+    class Web,Mobile,WMS_Screen clientStyle
+    class SpringGW gatewayStyle
+    class Inventory,Inbound,Outbound,Picking,Warehouse,Report serviceStyle
+    class Nacos,NacosConfig,RocketMQ infraStyle
+    class MySQL,Redis,MongoDB,MinIO dataStyle
+```
+
+### 1.5 技术栈
+
+#### 后端技术栈
+
+```xml
+<properties>
+    <!-- Spring 全家桶 -->
+    <spring-boot.version>3.1.5</spring-boot.version>
+    <spring-cloud.version>2022.0.4</spring-cloud.version>
+    <spring-cloud-alibaba.version>2022.0.0.0</spring-cloud-alibaba.version>
+    
+    <!-- 数据库 -->
+    <mybatis-plus.version>3.5.4.1</mybatis-plus.version>
+    <mysql.version>8.0.33</mysql.version>
+    <redis.version>3.1.5</redis.version>
+    
+    <!-- 消息队列 -->
+    <rocketmq.version>2.2.3</rocketmq.version>
+    
+    <!-- 工具类 -->
+    <hutool.version>5.8.22</hutool.version>
+    <lombok.version>1.18.30</lombok.version>
+    <mapstruct.version>1.5.5.Final</mapstruct.version>
+</properties>
+```
+
+#### 前端技术栈
+
+```json
+{
+  "dependencies": {
+    "vue": "^3.3.4",
+    "vue-router": "^4.2.5",
+    "pinia": "^2.1.7",
+    "element-plus": "^2.4.2",
+    "axios": "^1.6.0",
+    "echarts": "^5.4.3",
+    "vxe-table": "^4.5.0"
+  }
+}
+```
+
+---
+
+## 二、核心功能模块
+
+### 2.1 功能架构图
+
+```mermaid
+graph LR
+    subgraph Core["🎯 核心业务"]
+        InventoryMgmt["库存管理<br/>• 实时库存<br/>• 批次管理<br/>• 序列号追踪"]
+        InboundMgmt["入库管理<br/>• 采购入库<br/>• 退货入库<br/>• 调拨入库"]
+        OutboundMgmt["出库管理<br/>• 销售出库<br/>• 调拨出库<br/>• 报损出库"]
+        PickingMgmt["拣货管理<br/>• 波次拣货<br/>• 路径优化<br/>• 任务分配"]
+    end
+
+    subgraph Support["🔧 支撑功能"]
+        WarehouseMgmt["仓库管理<br/>• 库区划分<br/>• 库位管理<br/>• 容量规划"]
+        GoodsMgmt["商品管理<br/>• SKU 信息<br/>• 计量单位<br/>• 商品分类"]
+        StockCount["盘点管理<br/>• 全盘<br/>• 抽盘<br/>• 动态盘点"]
+        ReportMgmt["报表分析<br/>• 库存报表<br/>• 出入库统计<br/>• 周转分析"]
+    end
+
+    Core --> Support
+
+    classDef coreStyle fill:#e3f2fd,stroke:#1976d2,stroke-width:2px
+    classDef supportStyle fill:#fff3e0,stroke:#f57c00,stroke-width:2px
+    
+    class InventoryMgmt,InboundMgmt,OutboundMgmt,PickingMgmt coreStyle
+    class WarehouseMgmt,GoodsMgmt,StockCount,ReportMgmt supportStyle
+```
+
+### 2.2 库存管理
+
+#### 核心能力
+
+| 功能 | 说明 | 关键指标 |
+|------|------|----------|
+| **实时库存** | 库存数据实时更新 | 延迟 < 100ms |
+| **批次管理** | 生产批次追溯 | 批次准确率 100% |
+| **库龄分析** | 库存周转分析 | 预警准确率 95% |
+| **安全库存** | 库存上下限预警 | 缺货率 < 1% |
+| **库存锁定** | 订单库存预占 | 并发支持 10000+ |
+
+#### 库存状态流转
+
+```mermaid
+stateDiagram-v2
+    [*] --> 可用库存
+    可用库存 --> 锁定库存: 下单锁定
+    锁定库存 --> 可用库存: 订单取消
+    锁定库存 --> 拣货中: 开始拣货
+    拣货中 --> 已出库: 出库完成
+    已出库 --> [*]
+    
+    可用库存 --> 冻结库存: 质量问题
+    冻结库存 --> 可用库存: 问题解决
+    冻结库存 --> 报损库存: 无法使用
+    报损库存 --> [*]
+```
+
+### 2.3 入库管理
+
+#### 入库流程
+
+```mermaid
+flowchart TD
+    Start([入库单创建]) --> Review{审核}
+    Review -->|通过| Plan[制定入库计划]
+    Review -->|驳回| End1([结束])
+    
+    Plan --> Assign[分配库位]
+    Assign --> Receive[实物验收]
+    
+    Receive --> Quality{质检}
+    Quality -->|合格| PutAway[上架]
+    Quality -->|不合格| Return[退回供应商]
+    
+    PutAway --> UpdateInv[更新库存]
+    UpdateInv --> Complete([入库完成])
+    
+    Return --> End2([退货结束])
+    
+    style Start fill:#e8f5e9
+    style Complete fill:#c8e6c9
+    style End1 fill:#ffcdd2
+    style End2 fill:#ffcdd2
+```
+
+#### 入库类型
+
+- **采购入库**：供应商采购到货
+- **退货入库**：客户退货入库
+- **调拨入库**：其他仓库调入
+- **盘盈入库**：盘点发现多余库存
+- **生产入库**：生产完工入库
+
+### 2.4 出库管理
+
+#### 出库流程
+
+```mermaid
+flowchart TD
+    Order([出库订单]) --> Audit{订单审核}
+    Audit -->|通过| Allocate[库存分配]
+    Audit -->|驳回| Cancel1([订单取消])
+    
+    Allocate --> CheckStock{库存充足?}
+    CheckStock -->|是| CreateWave[创建波次]
+    CheckStock -->|否| Wait[等待补货]
+    
+    Wait --> CheckStock
+    
+    CreateWave --> AssignPicker[分配拣货员]
+    AssignPicker --> Picking[执行拣货]
+    
+    Picking --> Review{复核}
+    Review -->|通过| Pack[打包]
+    Review -->|异常| Repick[重新拣货]
+    
+    Repick --> Picking
+    
+    Pack --> Ship[发货]
+    Ship --> UpdateInv[更新库存]
+    UpdateInv --> Complete([出库完成])
+    
+    style Order fill:#e8f5e9
+    style Complete fill:#c8e6c9
+    style Cancel1 fill:#ffcdd2
+```
+
+### 2.5 拣货管理
+
+#### 拣货策略
+
+```mermaid
+graph TB
+    subgraph PickStrategy["🎯 拣货策略"]
+        Single["单品拣货<br/>Pick by Item<br/>适用：少量订单"]
+        Batch["批次拣货<br/>Pick by Batch<br/>适用：多订单同品"]
+        Zone["分区拣货<br/>Pick by Zone<br/>适用：大型仓库"]
+        Wave["波次拣货<br/>Pick by Wave<br/>适用：高并发"]
+    end
+    
+    subgraph Optimization["⚡ 路径优化"]
+        ShortestPath["最短路径算法"]
+        TimeWindow["时间窗口调度"]
+        LoadBalance["负载均衡"]
+    end
+    
+    PickStrategy --> Optimization
+    
+    classDef strategyStyle fill:#e1f5fe,stroke:#01579b,stroke-width:2px
+    classDef optStyle fill:#f3e5f5,stroke:#4a148c,stroke-width:2px
+    
+    class Single,Batch,Zone,Wave strategyStyle
+    class ShortestPath,TimeWindow,LoadBalance optStyle
+```
+
+---
+
+## 三、数据库设计
+
+### 3.1 核心表结构
+
+```mermaid
+erDiagram
+    WAREHOUSE ||--o{ WAREHOUSE_AREA : contains
+    WAREHOUSE_AREA ||--o{ WAREHOUSE_LOCATION : contains
+    WAREHOUSE_LOCATION ||--o{ INVENTORY : stores
+    
+    GOODS ||--o{ INVENTORY : has
+    GOODS ||--o{ INBOUND_DETAIL : contains
+    GOODS ||--o{ OUTBOUND_DETAIL : contains
+    
+    INBOUND_ORDER ||--o{ INBOUND_DETAIL : has
+    OUTBOUND_ORDER ||--o{ OUTBOUND_DETAIL : has
+    
+    OUTBOUND_ORDER ||--o{ PICKING_TASK : generates
+    PICKING_TASK ||--o{ PICKING_DETAIL : contains
+    
+    WAREHOUSE {
+        bigint id PK
+        string warehouse_code UK
+        string warehouse_name
+        string address
+        int status
+    }
+    
+    WAREHOUSE_AREA {
+        bigint id PK
+        bigint warehouse_id FK
+        string area_code UK
+        string area_name
+        string area_type
+    }
+    
+    WAREHOUSE_LOCATION {
+        bigint id PK
+        bigint area_id FK
+        string location_code UK
+        decimal capacity
+        int status
+    }
+    
+    GOODS {
+        bigint id PK
+        string sku_code UK
+        string goods_name
+        string category
+        string unit
+    }
+    
+    INVENTORY {
+        bigint id PK
+        bigint location_id FK
+        bigint goods_id FK
+        string batch_no
+        decimal quantity
+        int lock_quantity
+    }
+```
+
+### 3.2 完整建表语句
+
+```sql
+-- ================================
+-- WMS 仓库管理系统数据库
+-- ================================
+
+CREATE DATABASE IF NOT EXISTS `wms` DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+USE `wms`;
+
+-- ================================
+-- 1. 仓库基础表
+-- ================================
+
+-- 仓库表
+CREATE TABLE `warehouse` (
+    `id` BIGINT(20) NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+    `warehouse_code` VARCHAR(50) NOT NULL COMMENT '仓库编码',
+    `warehouse_name` VARCHAR(100) NOT NULL COMMENT '仓库名称',
+    `warehouse_type` TINYINT(4) DEFAULT 1 COMMENT '仓库类型:1-成品仓,2-原料仓,3-半成品仓',
+    `province` VARCHAR(50) DEFAULT NULL COMMENT '省份',
+    `city` VARCHAR(50) DEFAULT NULL COMMENT '城市',
+    `district` VARCHAR(50) DEFAULT NULL COMMENT '区县',
+    `address` VARCHAR(200) DEFAULT NULL COMMENT '详细地址',
+    `contact_person` VARCHAR(50) DEFAULT NULL COMMENT '联系人',
+    `contact_phone` VARCHAR(20) DEFAULT NULL COMMENT '联系电话',
+    `total_area` DECIMAL(10,2) DEFAULT NULL COMMENT '总面积(平方米)',
+    `status` TINYINT(4) DEFAULT 1 COMMENT '状态:1-启用,0-禁用',
+    `remark` VARCHAR(500) DEFAULT NULL COMMENT '备注',
+    `create_time` DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `update_time` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_warehouse_code` (`warehouse_code`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='仓库表';
+
+-- 库区表
+CREATE TABLE `warehouse_area` (
+    `id` BIGINT(20) NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+    `warehouse_id` BIGINT(20) NOT NULL COMMENT '仓库ID',
+    `area_code` VARCHAR(50) NOT NULL COMMENT '库区编码',
+    `area_name` VARCHAR(100) NOT NULL COMMENT '库区名称',
+    `area_type` VARCHAR(20) DEFAULT NULL COMMENT '库区类型:STORAGE-存储区,PICKING-拣货区,STAGING-暂存区',
+    `floor` INT(11) DEFAULT 1 COMMENT '楼层',
+    `area_size` DECIMAL(10,2) DEFAULT NULL COMMENT '面积',
+    `status` TINYINT(4) DEFAULT 1 COMMENT '状态:1-启用,0-禁用',
+    `remark` VARCHAR(500) DEFAULT NULL COMMENT '备注',
+    `create_time` DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `update_time` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_area_code` (`warehouse_id`, `area_code`),
+    KEY `idx_warehouse` (`warehouse_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='库区表';
+
+-- 库位表
+CREATE TABLE `warehouse_location` (
+    `id` BIGINT(20) NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+    `warehouse_id` BIGINT(20) NOT NULL COMMENT '仓库ID',
+    `area_id` BIGINT(20) NOT NULL COMMENT '库区ID',
+    `location_code` VARCHAR(50) NOT NULL COMMENT '库位编码',
+    `location_type` VARCHAR(20) DEFAULT 'NORMAL' COMMENT '库位类型:NORMAL-普通,TEMP-临时,DEFECT-残次品',
+    `row_no` INT(11) DEFAULT NULL COMMENT '排号',
+    `column_no` INT(11) DEFAULT NULL COMMENT '列号',
+    `layer_no` INT(11) DEFAULT NULL COMMENT '层号',
+    `capacity` DECIMAL(10,2) DEFAULT NULL COMMENT '容量',
+    `max_weight` DECIMAL(10,2) DEFAULT NULL COMMENT '最大承重(KG)',
+    `status` TINYINT(4) DEFAULT 1 COMMENT '状态:1-空闲,2-占用,3-锁定,0-禁用',
+    `remark` VARCHAR(500) DEFAULT NULL COMMENT '备注',
+    `create_time` DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `update_time` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_location_code` (`warehouse_id`, `location_code`),
+    KEY `idx_area` (`area_id`),
+    KEY `idx_status` (`status`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='库位表';
+
+-- ================================
+-- 2. 商品管理表
+-- ================================
+
+-- 商品分类表
+CREATE TABLE `goods_category` (
+    `id` BIGINT(20) NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+    `category_code` VARCHAR(50) NOT NULL COMMENT '分类编码',
+    `category_name` VARCHAR(100) NOT NULL COMMENT '分类名称',
+    `parent_id` BIGINT(20) DEFAULT 0 COMMENT '父分类ID',
+    `level` INT(11) DEFAULT 1 COMMENT '层级',
+    `sort_order` INT(11) DEFAULT 0 COMMENT '排序',
+    `create_time` DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `update_time` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_category_code` (`category_code`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='商品分类表';
+
+-- 商品信息表
+CREATE TABLE `goods` (
+    `id` BIGINT(20) NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+    `sku_code` VARCHAR(50) NOT NULL COMMENT 'SKU编码',
+    `goods_name` VARCHAR(200) NOT NULL COMMENT '商品名称',
+    `category_id` BIGINT(20) DEFAULT NULL COMMENT '分类ID',
+    `brand` VARCHAR(100) DEFAULT NULL COMMENT '品牌',
+    `model` VARCHAR(100) DEFAULT NULL COMMENT '型号',
+    `barcode` VARCHAR(50) DEFAULT NULL COMMENT '条形码',
+    `unit` VARCHAR(20) DEFAULT 'PCS' COMMENT '计量单位',
+    `spec` VARCHAR(200) DEFAULT NULL COMMENT '规格',
+    `weight` DECIMAL(10,3) DEFAULT NULL COMMENT '重量(KG)',
+    `volume` DECIMAL(10,3) DEFAULT NULL COMMENT '体积(立方米)',
+    `shelf_life` INT(11) DEFAULT NULL COMMENT '保质期(天)',
+    `storage_temp_min` DECIMAL(5,2) DEFAULT NULL COMMENT '最低存储温度',
+    `storage_temp_max` DECIMAL(5,2) DEFAULT NULL COMMENT '最高存储温度',
+    `need_batch` TINYINT(4) DEFAULT 0 COMMENT '是否批次管理:1-是,0-否',
+    `need_serial` TINYINT(4) DEFAULT 0 COMMENT '是否序列号管理:1-是,0-否',
+    `safety_stock` DECIMAL(10,2) DEFAULT 0 COMMENT '安全库存',
+    `max_stock` DECIMAL(10,2) DEFAULT NULL COMMENT '最大库存',
+    `status` TINYINT(4) DEFAULT 1 COMMENT '状态:1-启用,0-禁用',
+    `remark` VARCHAR(500) DEFAULT NULL COMMENT '备注',
+    `create_time` DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `update_time` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_sku_code` (`sku_code`),
+    KEY `idx_category` (`category_id`),
+    KEY `idx_barcode` (`barcode`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='商品信息表';
+
+-- ================================
+-- 3. 库存管理表
+-- ================================
+
+-- 库存表
+CREATE TABLE `inventory` (
+    `id` BIGINT(20) NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+    `warehouse_id` BIGINT(20) NOT NULL COMMENT '仓库ID',
+    `location_id` BIGINT(20) DEFAULT NULL COMMENT '库位ID',
+    `goods_id` BIGINT(20) NOT NULL COMMENT '商品ID',
+    `batch_no` VARCHAR(50) DEFAULT NULL COMMENT '批次号',
+    `serial_no` VARCHAR(50) DEFAULT NULL COMMENT '序列号',
+    `quantity` DECIMAL(10,2) NOT NULL DEFAULT 0 COMMENT '库存数量',
+    `lock_quantity` DECIMAL(10,2) DEFAULT 0 COMMENT '锁定数量',
+    `available_quantity` DECIMAL(10,2) GENERATED ALWAYS AS (`quantity` - `lock_quantity`) VIRTUAL COMMENT '可用数量',
+    `production_date` DATE DEFAULT NULL COMMENT '生产日期',
+    `expire_date` DATE DEFAULT NULL COMMENT '过期日期',
+    `inbound_date` DATETIME DEFAULT NULL COMMENT '入库日期',
+    `supplier_id` BIGINT(20) DEFAULT NULL COMMENT '供应商ID',
+    `supplier_name` VARCHAR(100) DEFAULT NULL COMMENT '供应商名称',
+    `status` TINYINT(4) DEFAULT 1 COMMENT '状态:1-正常,2-冻结,3-待检,4-损坏',
+    `create_time` DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `update_time` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_inventory` (`warehouse_id`, `location_id`, `goods_id`, `batch_no`, `serial_no`),
+    KEY `idx_goods` (`goods_id`),
+    KEY `idx_location` (`location_id`),
+    KEY `idx_batch` (`batch_no`),
+    KEY `idx_status` (`status`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='库存表';
+
+-- 库存流水表
+CREATE TABLE `inventory_log` (
+    `id` BIGINT(20) NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+    `warehouse_id` BIGINT(20) NOT NULL COMMENT '仓库ID',
+    `goods_id` BIGINT(20) NOT NULL COMMENT '商品ID',
+    `location_id` BIGINT(20) DEFAULT NULL COMMENT '库位ID',
+    `batch_no` VARCHAR(50) DEFAULT NULL COMMENT '批次号',
+    `operation_type` VARCHAR(20) NOT NULL COMMENT '操作类型:INBOUND-入库,OUTBOUND-出库,MOVE-移库,LOCK-锁定,UNLOCK-解锁',
+    `quantity_before` DECIMAL(10,2) DEFAULT NULL COMMENT '操作前数量',
+    `quantity_change` DECIMAL(10,2) NOT NULL COMMENT '变化数量',
+    `quantity_after` DECIMAL(10,2) DEFAULT NULL COMMENT '操作后数量',
+    `business_type` VARCHAR(50) DEFAULT NULL COMMENT '业务类型',
+    `business_no` VARCHAR(50) DEFAULT NULL COMMENT '业务单号',
+    `operator` VARCHAR(50) DEFAULT NULL COMMENT '操作人',
+    `remark` VARCHAR(500) DEFAULT NULL COMMENT '备注',
+    `create_time` DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    PRIMARY KEY (`id`),
+    KEY `idx_warehouse_goods` (`warehouse_id`, `goods_id`),
+    KEY `idx_business` (`business_type`, `business_no`),
+    KEY `idx_create_time` (`create_time`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='库存流水表';
+
+-- ================================
+-- 4. 入库管理表
+-- ================================
+
+-- 入库单表
+CREATE TABLE `inbound_order` (
+    `id` BIGINT(20) NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+    `inbound_no` VARCHAR(50) NOT NULL COMMENT '入库单号',
+    `warehouse_id` BIGINT(20) NOT NULL COMMENT '仓库ID',
+    `inbound_type` VARCHAR(20) NOT NULL COMMENT '入库类型:PURCHASE-采购,RETURN-退货,TRANSFER-调拨,OTHER-其他',
+    `source_no` VARCHAR(50) DEFAULT NULL COMMENT '来源单号',
+    `supplier_id` BIGINT(20) DEFAULT NULL COMMENT '供应商ID',
+    `supplier_name` VARCHAR(100) DEFAULT NULL COMMENT '供应商名称',
+    `expect_time` DATETIME DEFAULT NULL COMMENT '预计到货时间',
+    `actual_time` DATETIME DEFAULT NULL COMMENT '实际到货时间',
+    `total_quantity` DECIMAL(10,2) DEFAULT 0 COMMENT '总数量',
+    `actual_quantity` DECIMAL(10,2) DEFAULT 0 COMMENT '实收数量',
+    `status` TINYINT(4) DEFAULT 1 COMMENT '状态:1-待审核,2-待入库,3-入库中,4-已完成,5-已取消',
+    `audit_user` VARCHAR(50) DEFAULT NULL COMMENT '审核人',
+    `audit_time` DATETIME DEFAULT NULL COMMENT '审核时间',
+    `operator` VARCHAR(50) DEFAULT NULL COMMENT '操作人',
+    `remark` VARCHAR(500) DEFAULT NULL COMMENT '备注',
+    `create_time` DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `update_time` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_inbound_no` (`inbound_no`),
+    KEY `idx_warehouse` (`warehouse_id`),
+    KEY `idx_status` (`status`),
+    KEY `idx_create_time` (`create_time`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='入库单表';
+
+-- 入库单明细表
+CREATE TABLE `inbound_detail` (
+    `id` BIGINT(20) NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+    `inbound_id` BIGINT(20) NOT NULL COMMENT '入库单ID',
+    `inbound_no` VARCHAR(50) NOT NULL COMMENT '入库单号',
+    `goods_id` BIGINT(20) NOT NULL COMMENT '商品ID',
+    `sku_code` VARCHAR(50) NOT NULL COMMENT 'SKU编码',
+    `goods_name` VARCHAR(200) NOT NULL COMMENT '商品名称',
+    `batch_no` VARCHAR(50) DEFAULT NULL COMMENT '批次号',
+    `production_date` DATE DEFAULT NULL COMMENT '生产日期',
+    `expire_date` DATE DEFAULT NULL COMMENT '过期日期',
+    `plan_quantity` DECIMAL(10,2) NOT NULL COMMENT '计划数量',
+    `actual_quantity` DECIMAL(10,2) DEFAULT 0 COMMENT '实收数量',
+    `location_id` BIGINT(20) DEFAULT NULL COMMENT '上架库位ID',
+    `location_code` VARCHAR(50) DEFAULT NULL COMMENT '上架库位编码',
+    `status` TINYINT(4) DEFAULT 1 COMMENT '状态:1-待收货,2-已收货,3-已上架',
+    `remark` VARCHAR(500) DEFAULT NULL COMMENT '备注',
+    `create_time` DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `update_time` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    PRIMARY KEY (`id`),
+    KEY `idx_inbound` (`inbound_id`),
+    KEY `idx_goods` (`goods_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='入库单明细表';
+
+---
+
+## 四、核心业务实现
+
+### 4.1 库存服务实现
+
+#### 实体类定义
+
+```java
+package com.wms.inventory.entity;
+
+import com.baomidou.mybatisplus.annotation.*;
+import lombok.Data;
+import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+
+/**
+ * 库存实体
+ */
+@Data
+@TableName("inventory")
+public class Inventory {
+    
+    @TableId(type = IdType.AUTO)
+    private Long id;
+    
+    /**
+     * 仓库ID
+     */
+    private Long warehouseId;
+    
+    /**
+     * 库位ID
+     */
+    private Long locationId;
+    
+    /**
+     * 商品ID
+     */
+    private Long goodsId;
+    
+    /**
+     * 批次号
+     */
+    private String batchNo;
+    
+    /**
+     * 序列号
+     */
+    private String serialNo;
+    
+    /**
+     * 库存数量
+     */
+    private BigDecimal quantity;
+    
+    /**
+     * 锁定数量
+     */
+    private BigDecimal lockQuantity;
+    
+    /**
+     * 可用数量（虚拟列，自动计算）
+     */
+    private BigDecimal availableQuantity;
+    
+    /**
+     * 生产日期
+     */
+    private LocalDate productionDate;
+    
+    /**
+     * 过期日期
+     */
+    private LocalDate expireDate;
+    
+    /**
+     * 入库日期
+     */
+    private LocalDateTime inboundDate;
+    
+    /**
+     * 供应商ID
+     */
+    private Long supplierId;
+    
+    /**
+     * 供应商名称
+     */
+    private String supplierName;
+    
+    /**
+     * 状态:1-正常,2-冻结,3-待检,4-损坏
+     */
+    private Integer status;
+    
+    @TableField(fill = FieldFill.INSERT)
+    private LocalDateTime createTime;
+    
+    @TableField(fill = FieldFill.INSERT_UPDATE)
+    private LocalDateTime updateTime;
+}
+```
+
+#### 库存服务接口
+
+```java
+package com.wms.inventory.service;
+
+import com.wms.inventory.dto.InventoryLockDTO;
+import com.wms.inventory.dto.InventoryQueryDTO;
+import com.wms.inventory.vo.InventoryVO;
+import java.math.BigDecimal;
+import java.util.List;
+
+/**
+ * 库存服务接口
+ */
+public interface InventoryService {
+    
+    /**
+     * 查询库存
+     */
+    List<InventoryVO> queryInventory(InventoryQueryDTO queryDTO);
+    
+    /**
+     * 锁定库存
+     */
+    boolean lockInventory(InventoryLockDTO lockDTO);
+    
+    /**
+     * 解锁库存
+     */
+    boolean unlockInventory(InventoryLockDTO lockDTO);
+    
+    /**
+     * 扣减库存
+     */
+    boolean deductInventory(Long warehouseId, Long goodsId, String batchNo, BigDecimal quantity);
+    
+    /**
+     * 增加库存
+     */
+    boolean addInventory(Long warehouseId, Long locationId, Long goodsId, String batchNo, BigDecimal quantity);
+    
+    /**
+     * 获取可用库存数量
+     */
+    BigDecimal getAvailableQuantity(Long warehouseId, Long goodsId, String batchNo);
+    
+    /**
+     * 库存预警检查
+     */
+    List<InventoryVO> checkInventoryAlert();
+}
+```
+
+#### 库存服务实现（核心逻辑）
+
+```java
+package com.wms.inventory.service.impl;
+
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.wms.inventory.entity.Inventory;
+import com.wms.inventory.entity.InventoryLog;
+import com.wms.inventory.mapper.InventoryMapper;
+import com.wms.inventory.mapper.InventoryLogMapper;
+import com.wms.inventory.service.InventoryService;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
+import java.util.concurrent.TimeUnit;
+
+/**
+ * 库存服务实现
+ */
+@Slf4j
+@Service
+@RequiredArgsConstructor
+public class InventoryServiceImpl implements InventoryService {
+    
+    private final InventoryMapper inventoryMapper;
+    private final InventoryLogMapper inventoryLogMapper;
+    private final RedisTemplate<String, Object> redisTemplate;
+    
+    private static final String LOCK_KEY_PREFIX = "inventory:lock:";
+    private static final String CACHE_KEY_PREFIX = "inventory:cache:";
+    
+    /**
+     * 锁定库存（支持分布式锁）
+     */
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public boolean lockInventory(InventoryLockDTO lockDTO) {
+        String lockKey = LOCK_KEY_PREFIX + lockDTO.getWarehouseId() + ":" + lockDTO.getGoodsId();
+        
+        try {
+            // 获取分布式锁
+            Boolean acquired = redisTemplate.opsForValue()
+                .setIfAbsent(lockKey, "LOCKED", 10, TimeUnit.SECONDS);
+            
+            if (Boolean.FALSE.equals(acquired)) {
+                log.warn("获取库存锁失败: {}", lockKey);
+                return false;
+            }
+            
+            // 查询可用库存
+            Inventory inventory = getInventoryForUpdate(
+                lockDTO.getWarehouseId(), 
+                lockDTO.getGoodsId(), 
+                lockDTO.getBatchNo()
+            );
+            
+            if (inventory == null) {
+                log.error("库存不存在: warehouseId={}, goodsId={}", 
+                    lockDTO.getWarehouseId(), lockDTO.getGoodsId());
+                return false;
+            }
+            
+            // 检查可用库存是否充足
+            BigDecimal available = inventory.getQuantity().subtract(inventory.getLockQuantity());
+            if (available.compareTo(lockDTO.getQuantity()) < 0) {
+                log.warn("库存不足: 可用={}, 需要={}", available, lockDTO.getQuantity());
+                return false;
+            }
+            
+            // 更新锁定数量
+            inventory.setLockQuantity(inventory.getLockQuantity().add(lockDTO.getQuantity()));
+            inventoryMapper.updateById(inventory);
+            
+            // 记录库存流水
+            saveInventoryLog(inventory, "LOCK", lockDTO.getQuantity(), 
+                lockDTO.getBusinessType(), lockDTO.getBusinessNo());
+            
+            // 清除缓存
+            clearInventoryCache(lockDTO.getWarehouseId(), lockDTO.getGoodsId());
+            
+            log.info("库存锁定成功: {}", lockDTO);
+            return true;
+            
+        } finally {
+            // 释放分布式锁
+            redisTemplate.delete(lockKey);
+        }
+    }
+    
+    /**
+     * 扣减库存（出库时调用）
+     */
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public boolean deductInventory(Long warehouseId, Long goodsId, String batchNo, BigDecimal quantity) {
+        String lockKey = LOCK_KEY_PREFIX + warehouseId + ":" + goodsId;
+        
+        try {
+            Boolean acquired = redisTemplate.opsForValue()
+                .setIfAbsent(lockKey, "LOCKED", 10, TimeUnit.SECONDS);
+            
+            if (Boolean.FALSE.equals(acquired)) {
+                return false;
+            }
+            
+            Inventory inventory = getInventoryForUpdate(warehouseId, goodsId, batchNo);
+            
+            if (inventory == null) {
+                log.error("扣减失败，库存不存在");
+                return false;
+            }
+            
+            // 扣减库存数量和锁定数量
+            BigDecimal newQuantity = inventory.getQuantity().subtract(quantity);
+            BigDecimal newLockQuantity = inventory.getLockQuantity().subtract(quantity);
+            
+            if (newQuantity.compareTo(BigDecimal.ZERO) < 0) {
+                log.error("扣减失败，库存不足");
+                return false;
+            }
+            
+            inventory.setQuantity(newQuantity);
+            inventory.setLockQuantity(newLockQuantity.max(BigDecimal.ZERO));
+            inventoryMapper.updateById(inventory);
+            
+            // 记录流水
+            saveInventoryLog(inventory, "OUTBOUND", quantity.negate(), "OUTBOUND", null);
+            
+            clearInventoryCache(warehouseId, goodsId);
+            
+            return true;
+            
+        } finally {
+            redisTemplate.delete(lockKey);
+        }
+    }
+    
+    /**
+     * 增加库存（入库时调用）
+     */
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public boolean addInventory(Long warehouseId, Long locationId, Long goodsId, 
+                                String batchNo, BigDecimal quantity) {
+        
+        // 查询是否已有库存记录
+        LambdaQueryWrapper<Inventory> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(Inventory::getWarehouseId, warehouseId)
+               .eq(Inventory::getLocationId, locationId)
+               .eq(Inventory::getGoodsId, goodsId)
+               .eq(batchNo != null, Inventory::getBatchNo, batchNo);
+        
+        Inventory inventory = inventoryMapper.selectOne(wrapper);
+        
+        if (inventory != null) {
+            // 已存在，累加数量
+            inventory.setQuantity(inventory.getQuantity().add(quantity));
+            inventoryMapper.updateById(inventory);
+        } else {
+            // 新增库存记录
+            inventory = new Inventory();
+            inventory.setWarehouseId(warehouseId);
+            inventory.setLocationId(locationId);
+            inventory.setGoodsId(goodsId);
+            inventory.setBatchNo(batchNo);
+            inventory.setQuantity(quantity);
+            inventory.setLockQuantity(BigDecimal.ZERO);
+            inventory.setStatus(1);
+            inventory.setInboundDate(LocalDateTime.now());
+            inventoryMapper.insert(inventory);
+        }
+        
+        // 记录流水
+        saveInventoryLog(inventory, "INBOUND", quantity, "INBOUND", null);
+        
+        clearInventoryCache(warehouseId, goodsId);
+        
+        return true;
+    }
+    
+    /**
+     * 查询库存（带行锁）
+     */
+    private Inventory getInventoryForUpdate(Long warehouseId, Long goodsId, String batchNo) {
+        LambdaQueryWrapper<Inventory> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(Inventory::getWarehouseId, warehouseId)
+               .eq(Inventory::getGoodsId, goodsId)
+               .eq(batchNo != null, Inventory::getBatchNo, batchNo)
+               .eq(Inventory::getStatus, 1)
+               .last("FOR UPDATE");
+        
+        return inventoryMapper.selectOne(wrapper);
+    }
+    
+    /**
+     * 保存库存流水
+     */
+    private void saveInventoryLog(Inventory inventory, String operationType, 
+                                  BigDecimal quantityChange, String businessType, String businessNo) {
+        InventoryLog log = new InventoryLog();
+        log.setWarehouseId(inventory.getWarehouseId());
+        log.setGoodsId(inventory.getGoodsId());
+        log.setLocationId(inventory.getLocationId());
+        log.setBatchNo(inventory.getBatchNo());
+        log.setOperationType(operationType);
+        log.setQuantityBefore(inventory.getQuantity().subtract(quantityChange));
+        log.setQuantityChange(quantityChange);
+        log.setQuantityAfter(inventory.getQuantity());
+        log.setBusinessType(businessType);
+        log.setBusinessNo(businessNo);
+        
+        inventoryLogMapper.insert(log);
+    }
+    
+    /**
+     * 清除库存缓存
+     */
+    private void clearInventoryCache(Long warehouseId, Long goodsId) {
+        String cacheKey = CACHE_KEY_PREFIX + warehouseId + ":" + goodsId;
+        redisTemplate.delete(cacheKey);
+    }
+}
+```
+
+### 4.2 出库服务实现
+
+#### 出库订单实体
+
+```java
+package com.wms.outbound.entity;
+
+import com.baomidou.mybatisplus.annotation.*;
+import lombok.Data;
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
+
+@Data
+@TableName("outbound_order")
+public class OutboundOrder {
+    
+    @TableId(type = IdType.AUTO)
+    private Long id;
+    
+    private String outboundNo;
+    private Long warehouseId;
+    private String outboundType; // SALE-销售, TRANSFER-调拨, SCRAP-报损
+    private String customerCode;
+    private String customerName;
+    private String deliveryAddress;
+    private String contactPhone;
+    private LocalDateTime expectTime;
+    private LocalDateTime actualTime;
+    private BigDecimal totalQuantity;
+    private BigDecimal actualQuantity;
+    private Integer priority; // 优先级: 1-普通, 2-紧急, 3-特急
+    private Integer status; // 1-待审核, 2-待出库, 3-拣货中, 4-已完成, 5-已取消
+    private String auditUser;
+    private LocalDateTime auditTime;
+    private String operator;
+    private String remark;
+    
+    @TableField(fill = FieldFill.INSERT)
+    private LocalDateTime createTime;
+    
+    @TableField(fill = FieldFill.INSERT_UPDATE)
+    private LocalDateTime updateTime;
+}
+```
+
+#### 出库服务实现
+
+```java
+package com.wms.outbound.service.impl;
+
+import com.wms.outbound.entity.OutboundOrder;
+import com.wms.outbound.entity.OutboundDetail;
+import com.wms.outbound.mapper.OutboundOrderMapper;
+import com.wms.inventory.service.InventoryService;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+/**
+ * 出库服务实现
+ */
+@Slf4j
+@Service
+@RequiredArgsConstructor
+public class OutboundServiceImpl {
+    
+    private final OutboundOrderMapper outboundOrderMapper;
+    private final InventoryService inventoryService;
+    private final PickingService pickingService;
+    
+    /**
+     * 创建出库单
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public Long createOutboundOrder(OutboundOrderDTO dto) {
+        // 1. 创建出库单
+        OutboundOrder order = new OutboundOrder();
+        order.setOutboundNo(generateOutboundNo());
+        order.setWarehouseId(dto.getWarehouseId());
+        order.setOutboundType(dto.getOutboundType());
+        order.setCustomerCode(dto.getCustomerCode());
+        order.setCustomerName(dto.getCustomerName());
+        order.setStatus(1); // 待审核
+        outboundOrderMapper.insert(order);
+        
+        // 2. 创建出库明细
+        dto.getDetails().forEach(detail -> {
+            OutboundDetail outboundDetail = new OutboundDetail();
+            outboundDetail.setOutboundId(order.getId());
+            outboundDetail.setGoodsId(detail.getGoodsId());
+            outboundDetail.setPlanQuantity(detail.getQuantity());
+            // ... 保存明细
+        });
+        
+        return order.getId();
+    }
+    
+    /**
+     * 审核出库单
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public boolean auditOutboundOrder(Long orderId, boolean approved) {
+        OutboundOrder order = outboundOrderMapper.selectById(orderId);
+        
+        if (approved) {
+            // 审核通过，锁定库存
+            boolean locked = lockInventoryForOrder(order);
+            if (!locked) {
+                throw new BizException("库存不足，审核失败");
+            }
+            order.setStatus(2); // 待出库
+        } else {
+            order.setStatus(5); // 已取消
+        }
+        
+        order.setAuditTime(LocalDateTime.now());
+        outboundOrderMapper.updateById(order);
+        
+        return true;
+    }
+    
+    /**
+     * 创建拣货任务
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public boolean createPickingTask(Long orderId) {
+        OutboundOrder order = outboundOrderMapper.selectById(orderId);
+        
+        if (order.getStatus() != 2) {
+            throw new BizException("订单状态不正确");
+        }
+        
+        // 创建拣货任务
+        pickingService.createPickingTask(order);
+        
+        order.setStatus(3); // 拣货中
+        outboundOrderMapper.updateById(order);
+        
+        return true;
+    }
+    
+    /**
+     * 出库完成
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public boolean completeOutbound(Long orderId) {
+        OutboundOrder order = outboundOrderMapper.selectById(orderId);
+        
+        // 扣减库存
+        boolean deducted = deductInventoryForOrder(order);
+        if (!deducted) {
+            throw new BizException("库存扣减失败");
+        }
+        
+        order.setStatus(4); // 已完成
+        order.setActualTime(LocalDateTime.now());
+        outboundOrderMapper.updateById(order);
+        
+        return true;
+    }
+    
+    /**
+     * 为订单锁定库存
+     */
+    private boolean lockInventoryForOrder(OutboundOrder order) {
+        // 查询出库明细，逐个锁定库存
+        // ... 实现逻辑
+        return true;
+    }
+    
+    /**
+     * 为订单扣减库存
+     */
+    private boolean deductInventoryForOrder(OutboundOrder order) {
+        // 查询出库明细，逐个扣减库存
+        // ... 实现逻辑
+        return true;
+    }
+    
+    /**
+     * 生成出库单号
+     */
+    private String generateOutboundNo() {
+        return "OUT" + System.currentTimeMillis();
+    }
+}
+```
+
+### 4.3 拣货服务实现
+
+#### 拣货路径优化算法
+
+```java
+package com.wms.picking.service;
+
+import lombok.Data;
+import java.util.*;
+
+/**
+ * 拣货路径优化服务
+ */
+@Service
+public class PickingPathOptimizer {
+    
+    /**
+     * 使用贪心算法优化拣货路径
+     */
+    public List<PickingLocation> optimizePath(List<PickingLocation> locations) {
+        if (locations.size() <= 1) {
+            return locations;
+        }
+        
+        List<PickingLocation> optimized = new ArrayList<>();
+        Set<PickingLocation> unvisited = new HashSet<>(locations);
+        
+        // 从起点（库区入口）开始
+        PickingLocation current = findNearestToEntrance(unvisited);
+        optimized.add(current);
+        unvisited.remove(current);
+        
+        // 贪心算法：每次选择距离当前位置最近的点
+        while (!unvisited.isEmpty()) {
+            PickingLocation nearest = findNearest(current, unvisited);
+            optimized.add(nearest);
+            unvisited.remove(nearest);
+            current = nearest;
+        }
+        
+        return optimized;
+    }
+    
+    /**
+     * 计算两个库位之间的距离
+     */
+    private double calculateDistance(PickingLocation loc1, PickingLocation loc2) {
+        // 曼哈顿距离
+        int rowDiff = Math.abs(loc1.getRowNo() - loc2.getRowNo());
+        int colDiff = Math.abs(loc1.getColumnNo() - loc2.getColumnNo());
+        int layerDiff = Math.abs(loc1.getLayerNo() - loc2.getLayerNo());
+        
+        return rowDiff + colDiff + layerDiff * 2; // 层间移动成本更高
+    }
+    
+    /**
+     * 找到距离当前位置最近的库位
+     */
+    private PickingLocation findNearest(PickingLocation current, Set<PickingLocation> candidates) {
+        return candidates.stream()
+            .min(Comparator.comparingDouble(loc -> calculateDistance(current, loc)))
+            .orElseThrow();
+    }
+    
+    /**
+     * 找到距离入口最近的库位
+     */
+    private PickingLocation findNearestToEntrance(Set<PickingLocation> locations) {
+        PickingLocation entrance = new PickingLocation(0, 0, 0);
+        return findNearest(entrance, locations);
+    }
+}
+
+@Data
+class PickingLocation {
+    private Long locationId;
+    private String locationCode;
+    private Integer rowNo;
+    private Integer columnNo;
+    private Integer layerNo;
+    
+    public PickingLocation(int row, int col, int layer) {
+        this.rowNo = row;
+        this.columnNo = col;
+        this.layerNo = layer;
+    }
+}
+```
+
+---
+
+## 五、前端实现
+
+### 5.1 库存管理页面
+
+```vue
+<template>
+  <div class="inventory-container">
+    <!-- 搜索区域 -->
+    <el-card class="search-card">
+      <el-form :inline="true" :model="searchForm">
+        <el-form-item label="商品名称">
+          <el-input v-model="searchForm.goodsName" placeholder="请输入商品名称" clearable />
+        </el-form-item>
+        <el-form-item label="SKU编码">
+          <el-input v-model="searchForm.skuCode" placeholder="请输入SKU编码" clearable />
+        </el-form-item>
+        <el-form-item label="仓库">
+          <el-select v-model="searchForm.warehouseId" placeholder="请选择仓库" clearable>
+            <el-option
+              v-for="item in warehouseList"
+              :key="item.id"
+              :label="item.warehouseName"
+              :value="item.id"
+            />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="库存状态">
+          <el-select v-model="searchForm.status" placeholder="请选择状态" clearable>
+            <el-option label="正常" :value="1" />
+            <el-option label="冻结" :value="2" />
+            <el-option label="待检" :value="3" />
+          </el-select>
+        </el-form-item>
+        <el-form-item>
+          <el-button type="primary" @click="handleSearch" icon="Search">查询</el-button>
+          <el-button @click="handleReset" icon="Refresh">重置</el-button>
+          <el-button type="success" @click="handleExport" icon="Download">导出</el-button>
+        </el-form-item>
+      </el-form>
+    </el-card>
+
+    <!-- 库存预警提示 -->
+    <el-alert
+      v-if="alertCount > 0"
+      title="库存预警"
+      type="warning"
+      :description="`当前有 ${alertCount} 个商品库存不足，请及时补货`"
+      show-icon
+      :closable="false"
+      :style="{ margin: '20px 0' }"
+    />
+
+    <!-- 数据表格 -->
+    <el-card class="table-card">
+      <vxe-table
+        ref="tableRef"
+        :data="tableData"
+        :loading="loading"
+        border
+        stripe
+        height="600"
+        :row-config="{ isHover: true }"
+      >
+        <vxe-column type="seq" title="序号" width="60" />
+        <vxe-column field="warehouseName" title="仓库" width="120" />
+        <vxe-column field="locationCode" title="库位" width="100" />
+        <vxe-column field="skuCode" title="SKU编码" width="150" />
+        <vxe-column field="goodsName" title="商品名称" min-width="200" />
+        <vxe-column field="batchNo" title="批次号" width="120" />
+        <vxe-column field="quantity" title="总库存" width="100" align="right">
+          <template #default="{ row }">
+            <span :class="{ 'text-danger': row.quantity < row.safetyStock }">
+              {{ row.quantity }}
+            </span>
+          </template>
+        </vxe-column>
+        <vxe-column field="lockQuantity" title="锁定数量" width="100" align="right" />
+        <vxe-column field="availableQuantity" title="可用库存" width="100" align="right">
+          <template #default="{ row }">
+            <el-tag :type="getStockTagType(row)">
+              {{ row.availableQuantity }}
+            </el-tag>
+          </template>
+        </vxe-column>
+        <vxe-column field="status" title="状态" width="80">
+          <template #default="{ row }">
+            <el-tag :type="getStatusType(row.status)">
+              {{ getStatusText(row.status) }}
+            </el-tag>
+          </template>
+        </vxe-column>
+        <vxe-column field="inboundDate" title="入库日期" width="150" />
+        <vxe-column title="操作" width="200" fixed="right">
+          <template #default="{ row }">
+            <el-button link type="primary" @click="handleView(row)">详情</el-button>
+            <el-button link type="warning" @click="handleMove(row)">移库</el-button>
+            <el-button link type="danger" @click="handleFreeze(row)">冻结</el-button>
+          </template>
+        </vxe-column>
+      </vxe-table>
+
+      <!-- 分页 -->
+      <el-pagination
+        v-model:current-page="pagination.page"
+        v-model:page-size="pagination.size"
+        :total="pagination.total"
+        :page-sizes="[10, 20, 50, 100]"
+        layout="total, sizes, prev, pager, next, jumper"
+        @size-change="handleSearch"
+        @current-change="handleSearch"
+      />
+    </el-card>
+  </div>
+</template>
+
+<script setup>
+import { ref, reactive, onMounted } from 'vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import { getInventoryList, freezeInventory } from '@/api/inventory'
+
+// 搜索表单
+const searchForm = reactive({
+  goodsName: '',
+  skuCode: '',
+  warehouseId: null,
+  status: null
+})
+
+// 表格数据
+const tableData = ref([])
+const loading = ref(false)
+const alertCount = ref(0)
+
+// 分页
+const pagination = reactive({
+  page: 1,
+  size: 20,
+  total: 0
+})
+
+// 查询数据
+const handleSearch = async () => {
+  loading.value = true
+  try {
+    const params = {
+      ...searchForm,
+      page: pagination.page,
+      size: pagination.size
+    }
+    const { data } = await getInventoryList(params)
+    tableData.value = data.records
+    pagination.total = data.total
+    alertCount.value = data.alertCount || 0
+  } catch (error) {
+    ElMessage.error('查询失败')
+  } finally {
+    loading.value = false
+  }
+}
+
+// 重置
+const handleReset = () => {
+  Object.assign(searchForm, {
+    goodsName: '',
+    skuCode: '',
+    warehouseId: null,
+    status: null
+  })
+  handleSearch()
+}
+
+// 库存标签类型
+const getStockTagType = (row) => {
+  if (row.availableQuantity <= 0) return 'danger'
+  if (row.availableQuantity < row.safetyStock) return 'warning'
+  return 'success'
+}
+
+// 状态类型
+const getStatusType = (status) => {
+  const map = { 1: 'success', 2: 'danger', 3: 'warning', 4: 'info' }
+  return map[status] || ''
+}
+
+const getStatusText = (status) => {
+  const map = { 1: '正常', 2: '冻结', 3: '待检', 4: '损坏' }
+  return map[status] || ''
+}
+
+// 冻结库存
+const handleFreeze = async (row) => {
+  try {
+    await ElMessageBox.confirm('确定要冻结该库存吗？', '提示', {
+      type: 'warning'
+    })
+    await freezeInventory(row.id)
+    ElMessage.success('冻结成功')
+    handleSearch()
+  } catch (error) {
+    if (error !== 'cancel') {
+      ElMessage.error('操作失败')
+    }
+  }
+}
+
+onMounted(() => {
+  handleSearch()
+})
+</script>
+
+<style scoped>
+.inventory-container {
+  padding: 20px;
+}
+
+.search-card {
+  margin-bottom: 20px;
+}
+
+.text-danger {
+  color: #f56c6c;
+  font-weight: bold;
+}
+</style>
+```
+
+### 5.2 入库管理页面（流程图）
+
+```mermaid
+flowchart LR
+    Start[创建入库单] --> Upload[上传单据]
+    Upload --> Review[审核]
+    Review -->|通过| Receive[收货]
+    Review -->|驳回| End1[结束]
+    Receive --> Quality[质检]
+    Quality -->|合格| PutAway[上架]
+    Quality -->|不合格| Return[退回]
+    PutAway --> Complete[完成]
+    
+    style Start fill:#e8f5e9
+    style Complete fill:#c8e6c9
+    style End1 fill:#ffcdd2
+```
+
+### 5.3 仓库大屏监控
+
+```vue
+<template>
+  <div class="warehouse-screen">
+    <div class="screen-header">
+      <h1>🏢 智能仓库监控大屏</h1>
+      <div class="datetime">{{ currentTime }}</div>
+    </div>
+
+    <div class="screen-content">
+      <!-- 统计卡片 -->
+      <div class="stats-row">
+        <div class="stat-card" v-for="stat in stats" :key="stat.label">
+          <div class="stat-icon" :style="{ background: stat.color }">
+            {{ stat.icon }}
+          </div>
+          <div class="stat-content">
+            <div class="stat-value">{{ stat.value }}</div>
+            <div class="stat-label">{{ stat.label }}</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 图表区域 -->
+      <div class="charts-row">
+        <div class="chart-container">
+          <h3>📊 出入库趋势</h3>
+          <div ref="trendChart" class="chart"></div>
+        </div>
+        <div class="chart-container">
+          <h3>🥧 库存分布</h3>
+          <div ref="pieChart" class="chart"></div>
+        </div>
+        <div class="chart-container">
+          <h3>📈 库位利用率</h3>
+          <div ref="barChart" class="chart"></div>
+        </div>
+      </div>
+
+      <!-- 实时任务 -->
+      <div class="tasks-row">
+        <div class="task-list">
+          <h3>🎯 拣货任务</h3>
+          <el-scrollbar height="300px">
+            <div v-for="task in pickingTasks" :key="task.id" class="task-item">
+              <div class="task-info">
+                <span class="task-no">{{ task.taskNo }}</span>
+                <el-tag :type="getTaskTagType(task.status)">
+                  {{ task.statusText }}
+                </el-tag>
+              </div>
+              <el-progress :percentage="task.progress" />
+            </div>
+          </el-scrollbar>
+        </div>
+      </div>
+    </div>
+  </div>
+</template>
+
+<script setup>
+import { ref, onMounted, onUnmounted } from 'vue'
+import * as echarts from 'echarts'
+import dayjs from 'dayjs'
+
+const currentTime = ref(dayjs().format('YYYY-MM-DD HH:mm:ss'))
+
+// 统计数据
+const stats = ref([
+  { label: '总库存', value: '12,345', icon: '📦', color: '#409EFF' },
+  { label: '今日入库', value: '856', icon: '📥', color: '#67C23A' },
+  { label: '今日出库', value: '1,032', icon: '📤', color: '#E6A23C' },
+  { label: '预警商品', value: '23', icon: '⚠️', color: '#F56C6C' }
+])
+
+// ECharts 图表初始化
+const trendChart = ref(null)
+const pieChart = ref(null)
+const barChart = ref(null)
+
+const initCharts = () => {
+  // 趋势图
+  const trend = echarts.init(trendChart.value)
+  trend.setOption({
+    tooltip: { trigger: 'axis' },
+    legend: { data: ['入库', '出库'] },
+    xAxis: { type: 'category', data: ['周一', '周二', '周三', '周四', '周五', '周六', '周日'] },
+    yAxis: { type: 'value' },
+    series: [
+      { name: '入库', type: 'line', data: [820, 932, 901, 934, 1290, 1330, 1320], smooth: true },
+      { name: '出库', type: 'line', data: [680, 732, 701, 734, 1090, 1130, 1120], smooth: true }
+    ]
+  })
+
+  // 饼图
+  const pie = echarts.init(pieChart.value)
+  pie.setOption({
+    tooltip: { trigger: 'item' },
+    series: [{
+      type: 'pie',
+      radius: '60%',
+      data: [
+        { value: 4500, name: '电子产品' },
+        { value: 3200, name: '日用品' },
+        { value: 2800, name: '食品' },
+        { value: 1845, name: '其他' }
+      ]
+    }]
+  })
+
+  // 柱状图
+  const bar = echarts.init(barChart.value)
+  bar.setOption({
+    tooltip: { trigger: 'axis' },
+    xAxis: { type: 'category', data: ['A区', 'B区', 'C区', 'D区', 'E区'] },
+    yAxis: { type: 'value', max: 100 },
+    series: [{
+      type: 'bar',
+      data: [85, 92, 78, 88, 95],
+      itemStyle: { color: '#409EFF' }
+    }]
+  })
+}
+
+onMounted(() => {
+  initCharts()
+  // 定时刷新时间
+  const timer = setInterval(() => {
+    currentTime.value = dayjs().format('YYYY-MM-DD HH:mm:ss')
+  }, 1000)
+  
+  onUnmounted(() => clearInterval(timer))
+})
+</script>
+
+<style scoped>
+.warehouse-screen {
+  width: 100vw;
+  height: 100vh;
+  background: linear-gradient(135deg, #0f2027 0%, #203a43 50%, #2c5364 100%);
+  color: #fff;
+  padding: 20px;
+  overflow: hidden;
+}
+
+.screen-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 30px;
+}
+
+.stats-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 20px;
+  margin-bottom: 30px;
+}
+
+.stat-card {
+  display: flex;
+  align-items: center;
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(10px);
+  border-radius: 10px;
+  padding: 20px;
+}
+
+.stat-icon {
+  font-size: 48px;
+  width: 80px;
+  height: 80px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  margin-right: 20px;
+}
+
+.stat-value {
+  font-size: 32px;
+  font-weight: bold;
+}
+
+.charts-row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 20px;
+  margin-bottom: 30px;
+}
+
+.chart-container {
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(10px);
+  border-radius: 10px;
+  padding: 20px;
+}
+
+.chart {
+  height: 300px;
+}
+</style>
+```
+
+---
+
+## 六、部署方案
+
+### 6.1 微服务架构部署
+
+```yaml
+# docker-compose.yml
+version: '3.8'
+
+services:
+  # Nacos 注册中心
+  nacos:
+    image: nacos/nacos-server:v2.2.3
+    container_name: wms-nacos
+    environment:
+      - MODE=standalone
+      - SPRING_DATASOURCE_PLATFORM=mysql
+      - MYSQL_SERVICE_HOST=mysql
+      - MYSQL_SERVICE_DB_NAME=nacos
+      - MYSQL_SERVICE_USER=root
+      - MYSQL_SERVICE_PASSWORD=123456
+    ports:
+      - "8848:8848"
+      - "9848:9848"
+    networks:
+      - wms-network
+    depends_on:
+      - mysql
+
+  # MySQL 数据库
+  mysql:
+    image: mysql:8.0
+    container_name: wms-mysql
+    environment:
+      - MYSQL_ROOT_PASSWORD=123456
+      - MYSQL_DATABASE=wms
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+      - ./init-sql:/docker-entrypoint-initdb.d
+    networks:
+      - wms-network
+
+  # Redis 缓存
+  redis:
+    image: redis:7.0-alpine
+    container_name: wms-redis
+    command: redis-server --requirepass 123456
+    ports:
+      - "6379:6379"
+    networks:
+      - wms-network
+
+  # RocketMQ NameServer
+  rocketmq-nameserver:
+    image: apache/rocketmq:5.1.0
+    container_name: wms-rocketmq-nameserver
+    command: sh mqnamesrv
+    ports:
+      - "9876:9876"
+    networks:
+      - wms-network
+
+  # RocketMQ Broker
+  rocketmq-broker:
+    image: apache/rocketmq:5.1.0
+    container_name: wms-rocketmq-broker
+    command: sh mqbroker -n rocketmq-nameserver:9876
+    ports:
+      - "10909:10909"
+      - "10911:10911"
+    environment:
+      - NAMESRV_ADDR=rocketmq-nameserver:9876
+    depends_on:
+      - rocketmq-nameserver
+    networks:
+      - wms-network
+
+  # API 网关
+  gateway:
+    image: wms/gateway:latest
+    container_name: wms-gateway
+    ports:
+      - "8080:8080"
+    environment:
+      - NACOS_SERVER=nacos:8848
+      - REDIS_HOST=redis
+    depends_on:
+      - nacos
+      - redis
+    networks:
+      - wms-network
+
+  # 库存服务
+  inventory-service:
+    image: wms/inventory-service:latest
+    container_name: wms-inventory-service
+    environment:
+      - NACOS_SERVER=nacos:8848
+      - MYSQL_HOST=mysql
+      - REDIS_HOST=redis
+    depends_on:
+      - nacos
+      - mysql
+      - redis
+    networks:
+      - wms-network
+    deploy:
+      replicas: 2
+
+  # 入库服务
+  inbound-service:
+    image: wms/inbound-service:latest
+    container_name: wms-inbound-service
+    environment:
+      - NACOS_SERVER=nacos:8848
+      - MYSQL_HOST=mysql
+      - ROCKETMQ_NAMESRV=rocketmq-nameserver:9876
+    depends_on:
+      - nacos
+      - mysql
+      - rocketmq-nameserver
+    networks:
+      - wms-network
+
+  # 出库服务
+  outbound-service:
+    image: wms/outbound-service:latest
+    container_name: wms-outbound-service
+    environment:
+      - NACOS_SERVER=nacos:8848
+      - MYSQL_HOST=mysql
+      - ROCKETMQ_NAMESRV=rocketmq-nameserver:9876
+    depends_on:
+      - nacos
+      - mysql
+      - rocketmq-nameserver
+    networks:
+      - wms-network
+
+networks:
+  wms-network:
+    driver: bridge
+
+volumes:
+  mysql-data:
+```
+
+### 6.2 Kubernetes 部署配置
+
+```yaml
+# k8s-deployment.yaml
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: inventory-service
+  namespace: wms
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: inventory-service
+  template:
+    metadata:
+      labels:
+        app: inventory-service
+    spec:
+      containers:
+      - name: inventory-service
+        image: wms/inventory-service:v1.0.0
+        ports:
+        - containerPort: 8081
+        env:
+        - name: NACOS_SERVER
+          value: "nacos.wms.svc.cluster.local:8848"
+        - name: MYSQL_HOST
+          value: "mysql.wms.svc.cluster.local"
+        - name: REDIS_HOST
+          value: "redis.wms.svc.cluster.local"
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "500m"
+          limits:
+            memory: "1Gi"
+            cpu: "1000m"
+        livenessProbe:
+          httpGet:
+            path: /actuator/health
+            port: 8081
+          initialDelaySeconds: 60
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /actuator/health/readiness
+            port: 8081
+          initialDelaySeconds: 30
+          periodSeconds: 5
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: inventory-service
+  namespace: wms
+spec:
+  selector:
+    app: inventory-service
+  ports:
+  - protocol: TCP
+    port: 8081
+    targetPort: 8081
+  type: ClusterIP
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: inventory-service-hpa
+  namespace: wms
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: inventory-service
+  minReplicas: 2
+  maxReplicas: 10
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 80
+```
+
+### 6.3 监控配置（Prometheus + Grafana）
+
+```yaml
+# prometheus.yml
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  # Spring Boot Actuator 监控
+  - job_name: 'wms-services'
+    metrics_path: '/actuator/prometheus'
+    static_configs:
+      - targets:
+        - 'inventory-service:8081'
+        - 'inbound-service:8082'
+        - 'outbound-service:8083'
+        - 'picking-service:8084'
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+        regex: '([^:]+)(:[0-9]+)?'
+        replacement: '${1}'
+
+  # MySQL 监控
+  - job_name: 'mysql'
+    static_configs:
+      - targets: ['mysql-exporter:9104']
+
+  # Redis 监控
+  - job_name: 'redis'
+    static_configs:
+      - targets: ['redis-exporter:9121']
+```
+
+---
+
+## 七、性能优化
+
+### 7.1 数据库优化
+
+#### 分库分表策略
+
+```java
+/**
+ * 库存流水表分表策略
+ * 按月份分表: inventory_log_202401, inventory_log_202402 ...
+ */
+@Component
+public class InventoryLogShardingAlgorithm implements StandardShardingAlgorithm<LocalDateTime> {
+    
+    @Override
+    public String doSharding(Collection<String> availableTargetNames, 
+                            PreciseShardingValue<LocalDateTime> shardingValue) {
+        LocalDateTime createTime = shardingValue.getValue();
+        String suffix = createTime.format(DateTimeFormatter.ofPattern("yyyyMM"));
+        return "inventory_log_" + suffix;
+    }
+}
+```
+
+#### 索引优化建议
+
+```sql
+-- 1. 库存表组合索引
+CREATE INDEX idx_warehouse_goods_batch 
+ON inventory(warehouse_id, goods_id, batch_no);
+
+-- 2. 出库单状态 + 创建时间索引
+CREATE INDEX idx_status_create_time 
+ON outbound_order(status, create_time);
+
+-- 3. 拣货任务分配索引
+CREATE INDEX idx_warehouse_status_priority 
+ON picking_task(warehouse_id, status, priority DESC);
+
+-- 4. 库存流水时间范围查询
+CREATE INDEX idx_create_time_goods 
+ON inventory_log(create_time, goods_id);
+```
+
+### 7.2 缓存策略
+
+```java
+/**
+ * 多级缓存策略
+ */
+@Service
+public class InventoryCacheService {
+    
+    @Autowired
+    private RedisTemplate<String, Object> redisTemplate;
+    
+    private final Cache<String, InventoryVO> localCache = CacheBuilder.newBuilder()
+        .maximumSize(10000)
+        .expireAfterWrite(5, TimeUnit.MINUTES)
+        .build();
+    
+    /**
+     * 查询库存（多级缓存）
+     */
+    public InventoryVO getInventory(Long warehouseId, Long goodsId) {
+        String key = "inv:" + warehouseId + ":" + goodsId;
+        
+        // 1. 查询本地缓存
+        InventoryVO cached = localCache.getIfPresent(key);
+        if (cached != null) {
+            return cached;
+        }
+        
+        // 2. 查询 Redis
+        cached = (InventoryVO) redisTemplate.opsForValue().get(key);
+        if (cached != null) {
+            localCache.put(key, cached);
+            return cached;
+        }
+        
+        // 3. 查询数据库
+        InventoryVO inventory = inventoryMapper.selectByWarehouseAndGoods(warehouseId, goodsId);
+        
+        // 4. 写入缓存
+        if (inventory != null) {
+            redisTemplate.opsForValue().set(key, inventory, 10, TimeUnit.MINUTES);
+            localCache.put(key, inventory);
+        }
+        
+        return inventory;
+    }
+}
+```
+
+### 7.3 消息队列异步处理
+
+```java
+/**
+ * 出库消息生产者
+ */
+@Service
+public class OutboundMessageProducer {
+    
+    @Autowired
+    private RocketMQTemplate rocketMQTemplate;
+    
+    /**
+     * 发送出库完成消息
+     */
+    public void sendOutboundCompletedMessage(Long orderId) {
+        OutboundCompletedEvent event = new OutboundCompletedEvent();
+        event.setOrderId(orderId);
+        event.setTimestamp(LocalDateTime.now());
+        
+        // 异步发送
+        rocketMQTemplate.asyncSend("OUTBOUND_COMPLETED_TOPIC", event, new SendCallback() {
+            @Override
+            public void onSuccess(SendResult sendResult) {
+                log.info("出库消息发送成功: orderId={}", orderId);
+            }
+            
+            @Override
+            public void onException(Throwable throwable) {
+                log.error("出库消息发送失败: orderId={}", orderId, throwable);
+                // 重试或记录补偿任务
+            }
+        });
+    }
+}
+
+/**
+ * 库存扣减消费者
+ */
+@Service
+@RocketMQMessageListener(
+    topic = "OUTBOUND_COMPLETED_TOPIC",
+    consumerGroup = "inventory-consumer-group"
+)
+public class InventoryDeductConsumer implements RocketMQListener<OutboundCompletedEvent> {
+    
+    @Autowired
+    private InventoryService inventoryService;
+    
+    @Override
+    public void onMessage(OutboundCompletedEvent event) {
+        try {
+            // 扣减库存
+            inventoryService.deductInventoryForOrder(event.getOrderId());
+            log.info("库存扣减完成: orderId={}", event.getOrderId());
+        } catch (Exception e) {
+            log.error("库存扣减失败: orderId={}", event.getOrderId(), e);
+            throw new RuntimeException("库存扣减失败，触发重试", e);
+        }
+    }
+}
+```
+
+---
+
+## 八、总结与展望
+
+### 8.1 系统特点
+
+| 特点 | 说明 |
+|------|------|
+| ⚡ **高性能** | Redis 缓存 + 数据库优化，支持 10000+ TPS |
+| 🔒 **高可靠** | 分布式锁 + 事务保证，库存准确率 99.9% |
+| 📈 **可扩展** | 微服务架构，支持水平扩展 |
+| 🎯 **智能化** | 拣货路径优化，效率提升 40% |
+| 📊 **可视化** | 实时监控大屏，数据一目了然 |
+
+### 8.2 未来规划
+
+#### 🤖 AI 智能化
+- 库存需求预测
+- 智能补货建议
+- 异常检测告警
+
+#### 📱 移动化
+- PDA 手持终端
+- 语音拣货
+- AR 辅助拣货
+
+#### 🌐 IoT 物联网
+- RFID 自动识别
+- 温湿度监控
+- 自动化立体库
+
+#### 🔗 区块链追溯
+- 商品溯源
+- 防伪验证
+- 供应链协同
+
+---
+
+## 附录
+
+### A. 常见问题
+
+**Q1: 如何处理库存并发问题？**
+
+A: 使用 Redis 分布式锁 + 数据库行锁（FOR UPDATE）双重保证。
+
+**Q2: 拣货路径优化算法复杂度如何？**
+
+A: 贪心算法时间复杂度 O(n²)，适用于中小规模（< 1000 个库位）。
+
+**Q3: 如何保证数据一致性？**
+
+A: 采用分布式事务（Seata）+ 最终一致性（消息队列补偿）。
+
+### B. 参考资料
+
+- [Spring Cloud 官方文档](https://spring.io/projects/spring-cloud)
+- [MyBatis-Plus 官方文档](https://baomidou.com/)
+- [RocketMQ 官方文档](https://rocketmq.apache.org/)
+- [Kubernetes 官方文档](https://kubernetes.io/zh-cn/)
+
+---
+
+:::info[📄 文档信息]
+**🎉 WMS 仓库管理系统设计文档**
+
+- **版本**: v1.0.0
+- **更新时间**: 2025-10-16
+- **作者**: 系统架构团队
+- **标签**: WMS, 仓库管理, Spring Cloud, 微服务架构
+:::
+
+---
+
+**文档完成** ✅
+
+
+
+
+
+
