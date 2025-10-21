@@ -307,6 +307,8 @@ const sidebars = {
       },
       items: [
         'digital-twin/opentwins-windows-deployment',
+        'digital-twin/opentwins-web-ui-guide',
+        'digital-twin/opentwins-pc-monitor-tutorial',
         'digital-twin/opentwins-linux-offline-deployment',
       ]
     },
@@ -323,6 +325,23 @@ const sidebars = {
         'projectDesign/erp-system-design',
         'projectDesign/oms-system-design',
         'projectDesign/digital-twin-system-design',
+        'projectDesign/itsm-situational-awareness-interface-design',
+      ]
+    },
+    {
+      type: 'category',
+      label: '文档模板',
+      link: {
+        type: 'doc',
+        id: 'document-template/template-index'
+      },
+      items: [
+        'document-template/tech-doc-template',
+        'document-template/api-doc-template',
+        'document-template/tutorial-template',
+        'document-template/troubleshooting-template',
+        'document-template/best-practices-template',
+        'document-template/prd-template',
       ]
     }
   ]

@@ -1,0 +1,595 @@
+---
+sidebar_position: 9
+title: OpenTwins Web 界面使用指南
+description: 使用 Web 界面（Swagger UI、Postman、Web 工具）管理数字孪生，无需编写代码
+tags: [数字孪生, OpenTwins, Web界面, Swagger, Postman, 可视化]
+---
+
+# OpenTwins Web 界面使用指南
+
+本指南介绍如何使用 Web 界面管理 OpenTwins 数字孪生，**无需编写任何 PowerShell 或 Python 代码**！
+
+## 一、可用的 Web 工具
+
+OpenTwins 提供了多种 Web 界面：
+
+| 工具 | 地址 | 用户名/密码 | 用途 | 推荐度 |
+|------|------|------------|------|--------|
+| **Ditto HTTP API** | http://localhost:8080/apidoc/ | ditto / ditto | 创建和管理 Things | ⭐⭐⭐⭐⭐ |
+| **Extended API** | http://localhost:8081/docs/ | devops / (见下方) | 管理 Twins/Types/Connections | ⭐⭐⭐ |
+| **Grafana** | http://localhost:3002 | admin / admin | 数据可视化大屏 | ⭐⭐⭐⭐⭐ |
+| **InfluxDB UI** | http://localhost:8086 | admin / password | 时序数据库管理 | ⭐⭐⭐ |
+| **MQTT Explorer** | 桌面应用 | 无需认证 | MQTT 消息监控 | ⭐⭐⭐⭐ |
+| **Postman** | 桌面应用 | - | API 测试工具 | ⭐⭐⭐⭐ |
+| **HTML 管理器** | opentwins-manager.html | 无需认证 | 简单易用的可视化界面 | ⭐⭐⭐⭐⭐ |
+
+:::tip 默认凭据
+OpenTwins 的默认认证信息：
+- **Ditto HTTP API** (localhost:8080): `ditto` / `ditto`
+- **Grafana** (localhost:3002): `admin` / `admin` (首次登录后需修改)
+- **InfluxDB** (localhost:8086): `admin` / `password`
+- **Extended API** (localhost:8081): `devops` / 动态密码（存储在 Kubernetes Secret 中）
+:::
+
+## 二、Ditto API 文档（推荐）
+
+### 2.1 访问 Ditto API 文档
+
+Ditto 提供了两个 API 接口：
+
+1. **Ditto HTTP API** - 用于创建和管理 Things（主要使用这个）
+   ```
+   http://localhost:8080/apidoc/
+   ```
+
+2. **Extended API** - 用于管理 Twins、Types、Connections（高级功能）
+   ```
+   http://localhost:8081/docs/
+   ```
+
+:::tip 重要
+创建和管理数字孪生（Things）请使用 **Ditto HTTP API**：http://localhost:8080/apidoc/
+:::
+
+### 2.2 确保端口转发
+
+```powershell
+# Ditto HTTP API（主要使用）
+kubectl port-forward svc/opentwins-ditto-nginx 8080:8080
+
+# Extended API（可选）
+kubectl port-forward svc/opentwins-ditto-extended-api 8081:8080
+```
+
+### 2.3 Ditto API 界面说明
+
+访问 http://localhost:8080/apidoc/ 后，您会看到完整的 Ditto HTTP API 文档，包括：
+
+- **Things API** - 创建、查询、更新、删除数字孪生
+- **Features API** - 管理 Thing 的功能特性
+- **Policies API** - 管理访问权限策略
+- **Search API** - 搜索和查询 Things
+
+:::info 注意
+Ditto API 文档是**静态的 API 参考文档**，不是交互式的 Swagger UI。要进行实际操作，请使用：
+- **HTML 管理器** (opentwins-manager.html) - 最简单
+- **Postman** - 功能强大
+- **浏览器控制台** - 开发调试
+:::
+
+### 2.4 API 端点说明
+
+以下是常用的 API 端点（需要通过 Postman 或其他工具调用）：
+
+**创建 Thing**：
+```
+PUT http://localhost:8080/api/2/things/local:my-device
+Content-Type: application/json
+
+{
+  "thingId": "local:my-device",
+  "policyId": "local:my-device",
+  "attributes": {...},
+  "features": {...}
+}
+```
+
+**查询 Thing**：
+```
+GET http://localhost:8080/api/2/things/local:my-device
+```
+
+**更新 Feature**：
+```
+PUT http://localhost:8080/api/2/things/local:my-device/features/cpu/properties
+Content-Type: application/json
+
+{
+  "usage": 45.5
+}
+```
+
+**删除 Thing**：
+```
+DELETE http://localhost:8080/api/2/things/local:my-device
+```
+
+## 三、HTML 管理器（最简单）
+
+### 3.1 使用 HTML 管理器
+
+项目根目录有一个 `opentwins-manager.html` 文件，提供了可视化界面。
+
+**使用方法**：
+1. 双击打开 `opentwins-manager.html`
+2. 确保端口转发正在运行
+3. 填写表单，点击按钮即可！
+
+**功能**：
+- ✅ 创建数字孪生
+- ✅ 查询数字孪生
+- ✅ 更新 CPU 数据
+- ✅ 删除数字孪生
+- ✅ 快速创建电脑监控
+- ✅ 随机更新测试数据
+- ✅ 列出所有 Things
+
+### 3.2 界面预览
+
+打开后会看到友好的图形界面，包含：
+- 输入框：Thing ID、主机名、CPU 使用率
+- 按钮：创建、查询、更新、删除
+- 结果显示：实时显示操作结果
+
+### 3.3 使用提示
+
+1. **Thing ID 格式**：必须是 `namespace:name`
+   - ✅ 正确：`local:my-device`
+   - ❌ 错误：`my-device`
+
+2. **端口转发**：确保运行
+   ```powershell
+   kubectl port-forward svc/opentwins-ditto-nginx 8080:8080
+   ```
+
+3. **浏览器控制台**：按 F12 查看详细日志
+
+## 四、Postman（专业工具）
+
+### 4.1 安装 Postman
+
+下载地址：https://www.postman.com/downloads/
+
+### 4.2 配置认证
+
+在 Postman 中，Ditto API 需要 HTTP 基本认证：
+
+1. 打开请求设置
+2. 切换到 **Authorization** 标签
+3. **Type**: 选择 `Basic Auth`
+4. **Username**: `ditto`
+5. **Password**: `ditto`
+
+### 4.3 创建请求
+
+#### 创建 Thing
+
+1. **Method**: `PUT`
+2. **URL**: `http://localhost:8080/api/2/things/local:pc-monitor`
+3. **Authorization**: Basic Auth (ditto / ditto)
+4. **Headers**:
+   ```
+   Content-Type: application/json
+   ```
+5. **Body** (raw JSON):
+   ```json
+   {
+     "thingId": "local:pc-monitor",
+     "policyId": "local:pc-monitor",
+     "attributes": {
+       "hostname": "My PC"
+     },
+     "features": {
+       "cpu": {
+         "properties": {
+           "usage": 0
+         }
+       }
+     }
+   }
+   ```
+6. 点击 **Send**
+
+#### 查询 Thing
+
+1. **Method**: `GET`
+2. **URL**: `http://localhost:8080/api/2/things/local:pc-monitor`
+3. **Authorization**: Basic Auth (ditto / ditto)
+4. 点击 **Send**
+
+#### 更新数据
+
+1. **Method**: `PUT`
+2. **URL**: `http://localhost:8080/api/2/things/local:pc-monitor/features/cpu/properties`
+3. **Authorization**: Basic Auth (ditto / ditto)
+4. **Body**:
+   ```json
+   {
+     "usage": 75.5
+   }
+   ```
+5. 点击 **Send**
+
+#### 删除 Thing
+
+1. **Method**: `DELETE`
+2. **URL**: `http://localhost:8080/api/2/things/local:pc-monitor`
+3. **Authorization**: Basic Auth (ditto / ditto)
+4. 点击 **Send**
+
+### 4.4 使用环境变量
+
+在 Postman 中设置环境变量：
+
+```json
+{
+  "DITTO_URL": "http://localhost:8080",
+  "THING_ID": "local:pc-monitor"
+}
+```
+
+URL 中使用变量（在 Postman 中输入）：
+```
+((DITTO_URL))/api/2/things/((THING_ID))
+```
+
+注意：实际在 Postman 中应该使用双花括号，这里为了文档显示使用圆括号代替。
+
+### 4.5 保存和分享
+
+1. 创建 **Collection** 保存所有请求
+2. 导出为 JSON 文件
+3. 分享给团队成员
+
+## 五、MQTT Explorer（MQTT 客户端）
+
+### 5.1 下载和安装
+
+访问：http://mqtt-explorer.com/
+
+下载对应系统版本并安装。
+
+### 5.2 连接配置
+
+1. 打开 MQTT Explorer
+2. 点击 **Connections** → **+**
+3. 配置连接：
+   - **Name**: `OpenTwins Local`
+   - **Protocol**: `mqtt://`
+   - **Host**: `localhost`
+   - **Port**: `1883`
+   - **Username**: (留空)
+   - **Password**: (留空)
+4. 点击 **CONNECT**
+
+### 5.3 订阅主题
+
+连接后在左侧可以看到主题树：
+```
+local:pc-monitor/
+├── things/
+│   └── twin/
+│       ├── commands/
+│       └── events/
+```
+
+### 5.4 发布消息
+
+1. 在右侧 **Publish** 区域
+2. **Topic**: `local:pc-monitor/things/twin/commands/modify`
+3. **Message**:
+   ```json
+   {
+     "topic": "local:pc-monitor/things/twin/commands/modify",
+     "path": "/features/cpu/properties",
+     "value": {
+       "usage": 75.5
+     }
+   }
+   ```
+4. 点击 **PUBLISH**
+
+### 5.5 监控实时数据
+
+订阅通配符主题查看所有消息：
+```
+local:pc-monitor/#
+```
+
+## 六、浏览器开发者工具
+
+### 6.1 使用浏览器控制台
+
+按 `F12` 打开开发者工具，切换到 **Console** 标签。
+
+### 6.2 JavaScript 示例（带认证）
+
+:::info 认证说明
+Ditto API 使用 HTTP 基本认证。在浏览器中使用 `fetch` 时，需要添加 `Authorization` 头。
+:::
+
+**创建 Thing**：
+```javascript
+const auth = 'Basic ' + btoa('ditto:ditto');
+
+fetch('http://localhost:8080/api/2/things/local:test-device', {
+  method: 'PUT',
+  headers: {
+    'Content-Type': 'application/json',
+    'Authorization': auth
+  },
+  body: JSON.stringify({
+    thingId: "local:test-device",
+    policyId: "local:test-device",
+    attributes: {name: "测试设备"},
+    features: {
+      sensor: {properties: {value: 0}}
+    }
+  })
+})
+.then(r => r.json())
+.then(d => console.log('创建成功:', d))
+.catch(e => console.error('错误:', e));
+```
+
+**查询 Thing**：
+```javascript
+const auth = 'Basic ' + btoa('ditto:ditto');
+
+fetch('http://localhost:8080/api/2/things/local:test-device', {
+  headers: {'Authorization': auth}
+})
+  .then(r => r.json())
+  .then(d => console.log('Thing 数据:', d))
+  .catch(e => console.error('错误:', e));
+```
+
+**更新数据**：
+```javascript
+const auth = 'Basic ' + btoa('ditto:ditto');
+
+fetch('http://localhost:8080/api/2/things/local:test-device/features/sensor/properties', {
+  method: 'PUT',
+  headers: {
+    'Content-Type': 'application/json',
+    'Authorization': auth
+  },
+  body: JSON.stringify({value: 100})
+})
+.then(r => r.json())
+.then(d => console.log('更新成功:', d))
+.catch(e => console.error('错误:', e));
+```
+
+**删除 Thing**：
+```javascript
+const auth = 'Basic ' + btoa('ditto:ditto');
+
+fetch('http://localhost:8080/api/2/things/local:test-device', {
+  method: 'DELETE',
+  headers: {'Authorization': auth}
+})
+.then(() => console.log('删除成功'))
+.catch(e => console.error('错误:', e));
+```
+
+## 七、对比：命令行 vs Web 界面
+
+### 7.1 功能对比
+
+| 功能 | PowerShell | Swagger UI | HTML 管理器 | Postman |
+|------|-----------|------------|-------------|---------|
+| 创建 Thing | ⭐⭐ | ⭐⭐⭐⭐ | ⭐⭐⭐⭐⭐ | ⭐⭐⭐⭐ |
+| 查询 Thing | ⭐⭐ | ⭐⭐⭐⭐ | ⭐⭐⭐⭐⭐ | ⭐⭐⭐⭐ |
+| 更新数据 | ⭐⭐ | ⭐⭐⭐⭐ | ⭐⭐⭐⭐⭐ | ⭐⭐⭐⭐ |
+| 易用性 | ⭐⭐ | ⭐⭐⭐⭐ | ⭐⭐⭐⭐⭐ | ⭐⭐⭐ |
+| 适合人群 | 开发者 | 开发者/测试 | 所有人 | 开发者 |
+
+### 7.2 示例对比
+
+**PowerShell（复杂）**：
+```powershell
+$body = @{
+    "thingId" = "local:pc-monitor"
+    # ... 更多代码 ...
+} | ConvertTo-Json -Depth 10
+
+Invoke-RestMethod -Uri "http://localhost:8080/api/2/things/local:pc-monitor" `
+    -Method Put -Headers @{"Content-Type"="application/json"} -Body $body
+```
+
+**HTML 管理器（简单）**：
+1. 打开网页
+2. 填写表单
+3. 点击按钮
+✅ 完成！
+
+## 八、推荐工作流程
+
+### 8.1 初学者（非开发人员）
+
+1. ✅ 使用 **HTML 管理器** 创建和管理 Thing
+2. ✅ 使用 **Grafana** 查看可视化数据
+3. ✅ 使用 **MQTT Explorer** 监控消息
+
+### 8.2 开发者
+
+1. ✅ 使用 **Swagger UI** 进行 API 测试
+2. ✅ 使用 **Postman** 进行复杂的 API 测试
+3. ✅ 使用 **Python 脚本** 进行自动化
+
+### 8.3 团队协作
+
+1. ✅ 使用 **HTML 管理器** 进行演示
+2. ✅ 使用 **Postman Collection** 分享 API
+3. ✅ 使用 **Grafana Dashboard** 分享监控大屏
+
+## 九、快速开始指南
+
+### 9.1 第一次使用
+
+1. **确认端口转发**：
+   ```powershell
+   kubectl port-forward svc/opentwins-ditto-nginx 8080:8080
+   ```
+
+2. **选择工具**：
+   - 新手：打开 `opentwins-manager.html`
+   - 开发者：访问 http://localhost:8080/apidoc/
+
+3. **创建 Thing**：
+   - Thing ID: `local:my-first-device`
+   - 填写属性和特性
+   - 点击创建/执行
+
+4. **验证**：
+   - 查询刚创建的 Thing
+   - 更新一些数据
+   - 在 Grafana 中查看
+
+### 9.2 Thing ID 命名规范
+
+Thing ID 必须包含命名空间，格式：`namespace:name`
+
+**✅ 正确格式**：
+- `local:my-device`
+- `local:pc-monitor`
+- `org.example:sensor-01`
+- `factory:machine-123`
+
+**❌ 错误格式**：
+- `my-device` (缺少命名空间)
+- `local-my-device` (使用连字符)
+- `local:my device` (包含空格)
+
+## 十、常见问题
+
+### Q1: 应该使用哪个 API 地址？
+
+**A**: 根据用途选择：
+- **创建和管理 Things**：使用 http://localhost:8080/apidoc/
+- **管理 Twins/Types/Connections**：使用 http://localhost:8081/docs/
+
+大多数情况下，您需要的是 **8080 端口的 Ditto HTTP API**。
+
+### Q2: 如何获取 Extended API 的动态密码？
+
+**A**: Extended API 使用动态生成的 devops 密码。获取方法：
+
+```powershell
+# 查看 devops 密码
+kubectl get secret opentwins-ditto-gateway-secret -o jsonpath="{.data.devops-password}" | ForEach-Object { [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String($_)) }
+```
+
+不过，大多数情况下您不需要使用 Extended API，**使用 Ditto HTTP API (ditto/ditto) 即可**。
+
+### Q3: Ditto API 文档页面是什么样的？
+
+**A**: 访问 http://localhost:8080/apidoc/ 后，您会看到 Eclipse Ditto 的 HTTP API 文档，这是一个静态的 API 文档页面，不是 Swagger UI。建议使用 **Postman** 或 **HTML 管理器**进行交互式操作。
+
+### Q4: HTML 管理器无法连接？
+
+**A**: 确认端口转发正在运行：
+```powershell
+Test-NetConnection -ComputerName localhost -Port 8080
+```
+
+如果失败，重新启动端口转发：
+```powershell
+kubectl port-forward svc/opentwins-ditto-nginx 8080:8080
+```
+
+### Q5: MQTT Explorer 无法连接？
+
+**A**: 确认 MQTT 端口转发：
+```powershell
+kubectl port-forward svc/opentwins-mosquitto 1883:1883
+```
+
+### Q6: 创建 Thing 时报错 409？
+
+**A**: Thing ID 已存在。选择：
+1. 使用不同的 Thing ID
+2. 先删除已有的 Thing
+
+### Q7: InfluxDB 首次登录需要设置什么？
+
+**A**: 首次访问 http://localhost:8086 时：
+1. **Username**: `admin`
+2. **Password**: `password`
+3. **Organization**: 根据需要设置（如 `opentwins`）
+4. **Bucket**: 根据需要设置（如 `telemetry`）
+
+如果已经初始化，直接使用 `admin/password` 登录即可。
+
+### Q8: 想要更强大的功能？
+
+**A**: 可以：
+- 使用 Postman 的高级功能（测试脚本、环境变量）
+- 在 Grafana 中创建自定义仪表板
+- 开发自己的 Vue/React 管理界面
+- 使用 Python 脚本进行自动化
+
+## 十一、总结
+
+### 11.1 Web 界面的优势
+
+- ✅ **无需编程** - 任何人都能使用
+- ✅ **可视化** - 直观的界面操作
+- ✅ **交互式** - 立即看到结果
+- ✅ **易于分享** - 通过 URL 分享
+- ✅ **跨平台** - 浏览器即可使用
+
+### 11.2 推荐工具
+
+| 场景 | 推荐工具 | 原因 |
+|------|---------|------|
+| 快速测试 | HTML 管理器 | 最简单 |
+| API 探索 | Swagger UI | 完整的 API 文档 |
+| 专业开发 | Postman | 功能强大 |
+| MQTT 调试 | MQTT Explorer | 可视化 MQTT |
+| 数据可视化 | Grafana | 实时大屏 |
+
+### 11.3 下一步
+
+1. 尝试使用 HTML 管理器创建第一个 Thing
+2. 在 Swagger UI 中探索所有 API
+3. 使用 MQTT Explorer 监控消息
+4. 在 Grafana 中创建可视化大屏
+5. (进阶) 学习 Python 脚本自动化
+
+## 十二、相关资源
+
+### 12.1 文档链接
+
+- [OpenTwins 部署指南](./opentwins-windows-deployment.mdx)
+- [电脑监控大屏教程](./opentwins-pc-monitor-tutorial.mdx)
+- [Linux 离线部署](./opentwins-linux-offline-deployment.mdx)
+
+### 12.2 工具下载
+
+- **MQTT Explorer**: http://mqtt-explorer.com/
+- **Postman**: https://www.postman.com/downloads/
+- **Visual Studio Code**: https://code.visualstudio.com/
+
+### 12.3 官方资源
+
+- [OpenTwins 官方文档](https://ertis-research.github.io/opentwins/)
+- [Eclipse Ditto 文档](https://www.eclipse.org/ditto/)
+- [Grafana 文档](https://grafana.com/docs/)
+
+---
+
+**恭喜！** 🎉 现在您可以完全通过 Web 界面管理 OpenTwins，无需编写任何代码！
+
+**下一步**: 在 Grafana 中创建可视化大屏 → [实战案例：电脑监控大屏](./opentwins-pc-monitor-tutorial.mdx)

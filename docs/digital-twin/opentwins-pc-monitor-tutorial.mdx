@@ -1,0 +1,1066 @@
+---
+sidebar_position: 8
+title: 实战案例：本地电脑监控大屏
+description: 使用 OpenTwins 创建电脑性能监控系统和可视化大屏的完整教程
+tags: [数字孪生, OpenTwins, 实战案例, Grafana, 监控大屏, Python]
+---
+
+# 实战案例：本地电脑监控大屏
+
+本教程将引导你使用 OpenTwins 创建一个完整的电脑性能监控系统，实时采集并展示 CPU、内存、磁盘等性能指标。
+
+## 一、案例概述
+
+### 1.1 功能目标
+
+- ✅ 实时监控本地电脑的 CPU 使用率
+- ✅ 实时监控内存使用情况
+- ✅ 实时监控磁盘空间
+- ✅ 在 Grafana 中创建可视化大屏
+- ✅ 支持历史数据查询和趋势分析
+
+### 1.2 系统架构
+
+```mermaid
+graph LR
+    A[Windows 电脑] -->|采集数据| B[Python 脚本]
+    B -->|MQTT 协议| C[Mosquitto]
+    C -->|传输| D[Eclipse Ditto]
+    D -->|存储| E[InfluxDB]
+    E -->|查询| F[Grafana 大屏]
+```
+
+### 1.3 技术栈
+
+- **数据采集**: Python + psutil
+- **数据传输**: MQTT 协议
+- **数字孪生**: Eclipse Ditto
+- **时序数据库**: InfluxDB 2.x
+- **数据可视化**: Grafana
+
+### 1.4 前置条件
+
+- ✅ 已完成 OpenTwins 部署（参见 [OpenTwins Windows 部署指南](./opentwins-windows-deployment.mdx)）
+- ✅ 所有端口转发正在运行
+- ✅ 已安装 Python 3.7+
+- ✅ 已安装 pip
+
+## 二、快速开始（5 分钟体验）
+
+### 2.1 配置 Grafana
+
+1. 访问 http://localhost:3002
+2. 登录（admin/admin）
+3. 跳过修改密码（或设置新密码）
+
+### 2.2 创建数字孪生
+
+打开 PowerShell，运行：
+
+```powershell
+# 第一步：创建 Policy
+$policyBody = @{
+    policyId = "local:pc-monitor"
+    entries = @{
+        DEFAULT = @{
+            subjects = @{
+                "nginx:ditto" = @{ type = "Basic auth user" }
+            }
+            resources = @{
+                "policy:/" = @{ grant = @("READ", "WRITE"); revoke = @() }
+                "thing:/" = @{ grant = @("READ", "WRITE"); revoke = @() }
+                "message:/" = @{ grant = @("READ", "WRITE"); revoke = @() }
+            }
+        }
+    }
+} | ConvertTo-Json -Depth 10
+
+# 准备认证信息
+$auth = [Convert]::ToBase64String([Text.Encoding]::ASCII.GetBytes("ditto:ditto"))
+$headers = @{
+    "Content-Type" = "application/json"
+    "Authorization" = "Basic $auth"
+}
+
+# 创建 Policy
+Write-Host "创建 Policy..." -ForegroundColor Yellow
+Invoke-RestMethod -Uri "http://localhost:8080/api/2/policies/local:pc-monitor" `
+    -Method Put `
+    -Headers $headers `
+    -Body $policyBody
+
+# 第二步：创建 Thing
+$thingBody = @{
+    "thingId" = "local:pc-monitor"
+    "policyId" = "local:pc-monitor"
+    "attributes" = @{
+        "hostname" = $env:COMPUTERNAME
+        "os" = "Windows"
+        "createdAt" = (Get-Date -Format "yyyy-MM-ddTHH:mm:ssZ")
+    }
+    "features" = @{
+        "cpu" = @{
+            "properties" = @{
+                "usage" = 0.0
+                "cores" = [System.Environment]::ProcessorCount
+            }
+        }
+        "memory" = @{
+            "properties" = @{
+                "usage" = 0.0
+                "total" = [Math]::Round((Get-CimInstance Win32_ComputerSystem).TotalPhysicalMemory / 1GB, 2)
+            }
+        }
+        "disk" = @{
+            "properties" = @{
+                "usage" = 0.0
+                "total" = [Math]::Round((Get-PSDrive C).Used / 1GB + (Get-PSDrive C).Free / 1GB, 2)
+            }
+        }
+    }
+} | ConvertTo-Json -Depth 10
+
+# 创建 Thing
+Write-Host "创建 Thing..." -ForegroundColor Yellow
+Invoke-RestMethod -Uri "http://localhost:8080/api/2/things/local:pc-monitor" `
+    -Method Put `
+    -Headers $headers `
+    -Body $thingBody | ConvertTo-Json -Depth 10
+
+Write-Host "`n✅ 数字孪生创建成功！" -ForegroundColor Green
+Write-Host "主机名: $env:COMPUTERNAME" -ForegroundColor Cyan
+Write-Host "CPU 核心: $([System.Environment]::ProcessorCount)" -ForegroundColor Cyan
+```
+
+### 2.3 验证创建
+
+```powershell
+# 查询 Thing
+$auth = [Convert]::ToBase64String([Text.Encoding]::ASCII.GetBytes("ditto:ditto"))
+Invoke-RestMethod -Uri "http://localhost:8080/api/2/things/local:pc-monitor" `
+    -Method Get `
+    -Headers @{"Authorization"="Basic $auth"} | ConvertTo-Json -Depth 10
+```
+
+## 三、数据采集（无需 Python）
+
+### 3.1 使用 PowerShell 采集数据
+
+**无需安装 Python**，直接使用 Windows PowerShell 进行数据采集！
+
+### 3.2 手动发送一次数据（测试）
+
+```powershell
+# 准备认证信息
+$auth = [Convert]::ToBase64String([Text.Encoding]::ASCII.GetBytes("ditto:ditto"))
+$headers = @{
+    "Content-Type" = "application/json"
+    "Authorization" = "Basic $auth"
+}
+
+# 采集系统数据
+$cpuUsage = (Get-Counter '\Processor(_Total)\% Processor Time').CounterSamples.CookedValue
+$os = Get-CimInstance Win32_OperatingSystem
+$computerSystem = Get-CimInstance Win32_ComputerSystem
+$totalMemory = $computerSystem.TotalPhysicalMemory
+$freeMemory = $os.FreePhysicalMemory * 1KB
+$usedMemory = $totalMemory - $freeMemory
+$memUsagePercent = ($usedMemory / $totalMemory) * 100
+$disk = Get-PSDrive C
+$diskUsagePercent = ($disk.Used / ($disk.Used + $disk.Free)) * 100
+
+# 显示采集的数据
+Write-Host "采集到的数据:" -ForegroundColor Yellow
+Write-Host "  CPU: $([Math]::Round($cpuUsage, 2))%" -ForegroundColor Cyan
+Write-Host "  内存: $([Math]::Round($memUsagePercent, 2))%" -ForegroundColor Cyan
+Write-Host "  磁盘: $([Math]::Round($diskUsagePercent, 2))%" -ForegroundColor Cyan
+
+# 构建 JSON 数据
+$updateBody = @{
+    cpu = @{
+        properties = @{
+            usage = [Math]::Round($cpuUsage, 2)
+            cores = [System.Environment]::ProcessorCount
+        }
+    }
+    memory = @{
+        properties = @{
+            usage = [Math]::Round($memUsagePercent, 2)
+            total_gb = [Math]::Round($totalMemory / 1GB, 2)
+            used_gb = [Math]::Round($usedMemory / 1GB, 2)
+            available_gb = [Math]::Round($freeMemory / 1GB, 2)
+        }
+    }
+    disk = @{
+        properties = @{
+            usage = [Math]::Round($diskUsagePercent, 2)
+            total_gb = [Math]::Round(($disk.Used + $disk.Free) / 1GB, 2)
+            used_gb = [Math]::Round($disk.Used / 1GB, 2)
+            free_gb = [Math]::Round($disk.Free / 1GB, 2)
+        }
+    }
+} | ConvertTo-Json -Depth 10
+
+# 发送到 OpenTwins
+$url = "http://localhost:8080/api/2/things/local:pc-monitor/features"
+Invoke-RestMethod -Uri $url -Method PUT -Headers $headers -Body $updateBody
+
+Write-Host "`n✅ 数据发送成功！" -ForegroundColor Green
+```
+
+### 3.3 查看更新后的数据
+
+```powershell
+# 查询 Thing 验证数据
+$auth = [Convert]::ToBase64String([Text.Encoding]::ASCII.GetBytes("ditto:ditto"))
+$thing = Invoke-RestMethod -Uri "http://localhost:8080/api/2/things/local:pc-monitor" `
+    -Method Get `
+    -Headers @{"Authorization"="Basic $auth"}
+
+Write-Host "`n当前监控数据:" -ForegroundColor Green
+Write-Host "  CPU: $($thing.features.cpu.properties.usage)%" -ForegroundColor Cyan
+Write-Host "  内存: $($thing.features.memory.properties.usage)%" -ForegroundColor Cyan
+Write-Host "  磁盘: $($thing.features.disk.properties.usage)%" -ForegroundColor Cyan
+```
+
+## 四、持续监控（可选）
+
+### 4.1 方法 1：使用 HTML 管理器手动更新
+
+打开项目根目录的 `opentwins-manager.html`：
+1. Thing ID 填写：`local:pc-monitor`
+2. 点击"查询 Thing"查看当前数据
+3. CPU 使用率填写新值（如 45.5）
+4. 点击"更新 CPU"按钮
+
+### 4.2 方法 2：PowerShell 循环脚本
+
+创建文件 `monitor-loop.ps1`：
+
+```powershell title="monitor-loop.ps1"
+# OpenTwins PC 监控 - 持续采集脚本
+$THING_ID = "local:pc-monitor"
+$INTERVAL = 10  # 采集间隔（秒）
+
+$auth = [Convert]::ToBase64String([Text.Encoding]::ASCII.GetBytes("ditto:ditto"))
+$headers = @{
+    "Content-Type" = "application/json"
+    "Authorization" = "Basic $auth"
+}
+
+Write-Host "开始监控... (按 Ctrl+C 停止)" -ForegroundColor Green
+Write-Host ""
+
+while ($true) {
+    try {
+        # 采集数据
+        $cpu = (Get-Counter '\Processor(_Total)\% Processor Time').CounterSamples.CookedValue
+        $os = Get-CimInstance Win32_OperatingSystem
+        $cs = Get-CimInstance Win32_ComputerSystem
+        $totalMem = $cs.TotalPhysicalMemory
+        $freeMem = $os.FreePhysicalMemory * 1KB
+        $usedMem = $totalMem - $freeMem
+        $memPct = ($usedMem / $totalMem) * 100
+        $disk = Get-PSDrive C
+        $diskPct = ($disk.Used / ($disk.Used + $disk.Free)) * 100
+        
+        # 构建数据
+        $body = @{
+            cpu = @{
+                properties = @{
+                    usage = [Math]::Round($cpu, 2)
+                    cores = [System.Environment]::ProcessorCount
+                }
+            }
+            memory = @{
+                properties = @{
+                    usage = [Math]::Round($memPct, 2)
+                    total_gb = [Math]::Round($totalMem / 1GB, 2)
+                    used_gb = [Math]::Round($usedMem / 1GB, 2)
+                }
+            }
+            disk = @{
+                properties = @{
+                    usage = [Math]::Round($diskPct, 2)
+                    total_gb = [Math]::Round(($disk.Used + $disk.Free) / 1GB, 2)
+                    used_gb = [Math]::Round($disk.Used / 1GB, 2)
+                }
+            }
+        } | ConvertTo-Json -Depth 10
+        
+        # 发送数据
+        Invoke-RestMethod -Uri "http://localhost:8080/api/2/things/$THING_ID/features" `
+            -Method PUT -Headers $headers -Body $body | Out-Null
+        
+        # 显示状态
+        $time = Get-Date -Format "HH:mm:ss"
+        $cpuStr = "{0,5:N1}%" -f [Math]::Round($cpu, 2)
+        $memStr = "{0,5:N1}%" -f [Math]::Round($memPct, 2)
+        $diskStr = "{0,5:N1}%" -f [Math]::Round($diskPct, 2)
+        
+        Write-Host "[$time] CPU: $cpuStr | Memory: $memStr | Disk: $diskStr" -ForegroundColor Cyan
+        
+        Start-Sleep -Seconds $INTERVAL
+    }
+    catch {
+        Write-Host "[ERROR] $_" -ForegroundColor Red
+        Start-Sleep -Seconds $INTERVAL
+    }
+}
+```
+
+### 4.3 运行监控脚本
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\monitor-loop.ps1
+```
+
+### 4.4 方法 3：Python 脚本（可选）
+
+如果您已安装 Python，可以使用原版的 Python 脚本：
+
+```python title="pc-monitor.py"
+"""
+OpenTwins 电脑性能监控脚本
+实时采集 CPU、内存、磁盘使用情况并发送到数字孪生平台
+"""
+
+import paho.mqtt.client as mqtt
+import psutil
+import json
+import time
+import platform
+from datetime import datetime
+
+# ==================== 配置 ====================
+MQTT_BROKER = "localhost"
+MQTT_PORT = 1883
+THING_ID = "local:pc-monitor"
+COLLECT_INTERVAL = 5  # 采集间隔（秒）
+
+# ==================== MQTT 回调函数 ====================
+def on_connect(client, userdata, flags, rc):
+    """MQTT 连接回调"""
+    if rc == 0:
+        print("✅ 已连接到 MQTT Broker")
+    else:
+        print(f"❌ 连接失败，返回码: {rc}")
+
+def on_publish(client, userdata, mid):
+    """消息发布回调"""
+    pass  # 可以添加日志记录
+
+# ==================== 数据采集函数 ====================
+def get_cpu_usage():
+    """获取 CPU 使用情况"""
+    cpu_percent = psutil.cpu_percent(interval=1)
+    cpu_freq = psutil.cpu_freq()
+    
+    return {
+        "usage": round(cpu_percent, 2),
+        "cores": psutil.cpu_count(logical=False),
+        "threads": psutil.cpu_count(logical=True),
+        "frequency": round(cpu_freq.current, 2) if cpu_freq else 0
+    }
+
+def get_memory_usage():
+    """获取内存使用情况"""
+    mem = psutil.virtual_memory()
+    
+    return {
+        "total": mem.total,
+        "available": mem.available,
+        "used": mem.used,
+        "usage": round(mem.percent, 2),
+        "total_gb": round(mem.total / (1024**3), 2),
+        "used_gb": round(mem.used / (1024**3), 2),
+        "available_gb": round(mem.available / (1024**3), 2)
+    }
+
+def get_disk_usage():
+    """获取 C 盘使用情况"""
+    disk = psutil.disk_usage('C:\\')
+    
+    return {
+        "total": disk.total,
+        "free": disk.free,
+        "used": disk.used,
+        "usage": round(disk.percent, 2),
+        "total_gb": round(disk.total / (1024**3), 2),
+        "free_gb": round(disk.free / (1024**3), 2),
+        "used_gb": round(disk.used / (1024**3), 2)
+    }
+
+def send_metrics(client):
+    """采集并发送所有指标"""
+    try:
+        # 采集数据
+        cpu_data = get_cpu_usage()
+        memory_data = get_memory_usage()
+        disk_data = get_disk_usage()
+        
+        # 构建 Ditto 消息格式
+        payload = {
+            "topic": f"{THING_ID}/things/twin/commands/modify",
+            "headers": {
+                "response-required": False
+            },
+            "path": "/features",
+            "value": {
+                "cpu": {
+                    "properties": cpu_data
+                },
+                "memory": {
+                    "properties": memory_data
+                },
+                "disk": {
+                    "properties": disk_data
+                }
+            }
+        }
+        
+        # 发布到 MQTT
+        topic = f"{THING_ID}/things/twin/commands/modify"
+        message = json.dumps(payload)
+        result = client.publish(topic, message, qos=0)
+        
+        # 打印状态
+        timestamp = datetime.now().strftime("%H:%M:%S")
+        print(f"[{timestamp}] "
+              f"CPU: {cpu_data['usage']:5.1f}% | "
+              f"内存: {memory_data['usage']:5.1f}% ({memory_data['used_gb']:.1f}GB/{memory_data['total_gb']:.1f}GB) | "
+              f"磁盘: {disk_data['usage']:5.1f}% ({disk_data['used_gb']:.0f}GB/{disk_data['total_gb']:.0f}GB)")
+        
+        return True
+        
+    except Exception as e:
+        print(f"❌ 发送数据失败: {e}")
+        return False
+
+# ==================== 主程序 ====================
+def main():
+    """主函数"""
+    # 创建 MQTT 客户端
+    client = mqtt.Client(client_id=f"pc-monitor-{platform.node()}")
+    client.on_connect = on_connect
+    client.on_publish = on_publish
+    
+    # 连接到 MQTT Broker
+    try:
+        client.connect(MQTT_BROKER, MQTT_PORT, 60)
+        client.loop_start()
+        time.sleep(2)  # 等待连接建立
+    except Exception as e:
+        print(f"❌ 无法连接到 MQTT Broker: {e}")
+        print("\n请确认:")
+        print("1. OpenTwins 正在运行")
+        print("2. 端口转发已启动: kubectl port-forward svc/opentwins-mosquitto 1883:1883")
+        return
+    
+    # 显示启动信息
+    print("\n" + "=" * 70)
+    print("🖥️  OpenTwins 电脑性能监控系统")
+    print("=" * 70)
+    print(f"📌 电脑名称: {platform.node()}")
+    print(f"💻 操作系统: {platform.system()} {platform.release()}")
+    print(f"🔗 Thing ID: {THING_ID}")
+    print(f"⏰ 采集间隔: {COLLECT_INTERVAL} 秒")
+    print(f"📊 Grafana: http://localhost:3002")
+    print("=" * 70)
+    print("\n开始采集数据... (按 Ctrl+C 停止)\n")
+    
+    # 主循环
+    try:
+        while True:
+            send_metrics(client)
+            time.sleep(COLLECT_INTERVAL)
+            
+    except KeyboardInterrupt:
+        print("\n\n⏹️  停止监控")
+        client.loop_stop()
+        client.disconnect()
+        print("✅ 已断开连接")
+
+if __name__ == "__main__":
+    main()
+```
+
+运行 Python 脚本：
+
+```powershell
+pip install paho-mqtt psutil
+python pc-monitor.py
+```
+
+**预期输出**:
+```
+✅ 已连接到 MQTT Broker
+
+======================================================================
+🖥️  OpenTwins 电脑性能监控系统
+======================================================================
+📌 电脑名称: YOUR-PC-NAME
+💻 操作系统: Windows 10
+🔗 Thing ID: local:pc-monitor
+⏰ 采集间隔: 5 秒
+📊 Grafana: http://localhost:3002
+======================================================================
+
+开始采集数据... (按 Ctrl+C 停止)
+
+[14:30:15] CPU:  25.3% | 内存:  45.2% (7.2GB/16.0GB) | 磁盘:  68.5% (342GB/500GB)
+[14:30:20] CPU:  18.7% | 内存:  45.3% (7.2GB/16.0GB) | 磁盘:  68.5% (342GB/500GB)
+[14:30:25] CPU:  32.1% | 内存:  45.1% (7.2GB/16.0GB) | 磁盘:  68.5% (342GB/500GB)
+```
+
+**验证数据更新**：
+
+在另一个 PowerShell 窗口中：
+
+```powershell
+# 查询数字孪生的实时数据
+$auth = [Convert]::ToBase64String([Text.Encoding]::ASCII.GetBytes("ditto:ditto"))
+Invoke-RestMethod -Uri "http://localhost:8080/api/2/things/local:pc-monitor" `
+    -Method Get `
+    -Headers @{"Authorization"="Basic $auth"} | ConvertTo-Json -Depth 10
+```
+
+应该能看到 `features` 中的数据在实时更新！
+
+## 五、创建 Grafana 可视化大屏
+
+### 5.1 登录 Grafana
+
+1. 访问 http://localhost:3002
+2. 登录（admin/admin）
+
+### 5.2 验证数据源
+
+1. 点击左侧菜单 ⚙️ **Configuration** → **Data Sources**
+2. 应该能看到 `InfluxDB` 数据源（绿色✅表示正常）
+
+### 5.3 创建新仪表板
+
+1. 点击左侧 **+** → **Dashboard**
+2. 点击 **Add a new panel**
+
+### 5.4 创建 CPU 使用率面板
+
+:::warning 重要步骤
+如果面板显示 **"No data"**，请确保：
+1. ✅ 监控脚本 `monitor-loop.ps1` 正在运行
+2. ✅ 至少运行 5-10 分钟以积累数据
+3. ✅ 时间范围设置为 "Last 15 minutes"
+4. ✅ 查询语句完全正确（复制粘贴下面的查询）
+:::
+
+#### 步骤 1：选择数据源
+
+在 Query 配置区域：
+1. **Data source**: 下拉选择 `InfluxDB` (opentwins)
+2. **Language**: 确保选择 `Flux` (不是 InfluxQL)
+
+#### 步骤 2：输入查询语句
+
+点击查询编辑器底部的 **Flux language syntax** 标签，在文本框中输入：
+
+```flux
+from(bucket: "ditto")
+  |> range(start: -1h)
+  |> filter(fn: (r) => r["_measurement"] == "local:pc-monitor")
+  |> filter(fn: (r) => r["_field"] == "features.cpu.properties.usage")
+  |> aggregateWindow(every: 10s, fn: mean, createEmpty: false)
+  |> yield(name: "mean")
+```
+
+**查询说明**：
+- `bucket: "ditto"` - InfluxDB 数据桶名称
+- `_measurement == "local:pc-monitor"` - Thing ID（必须匹配）
+- `_field == "features.cpu.properties.usage"` - CPU 使用率字段路径
+- `range(start: -1h)` - 查询最近 1 小时的数据
+- `aggregateWindow(every: 10s)` - 每 10 秒聚合一次数据
+
+#### 步骤 3：测试查询
+
+点击右上角的 **Run Query** 按钮（或按 `Shift+Enter`），应该看到：
+- ✅ 数据曲线显示在预览区域
+- ❌ 如果显示 "No data"，检查上方的警告提示
+
+#### 步骤 4：配置面板样式
+
+在右侧面板配置区域：
+
+**Panel options**:
+- **Panel title**: `CPU 使用率`
+- **Description**: `实时监控 CPU 使用百分比`
+
+**Visualization**:
+- 点击右上角可视化类型，选择 `Gauge` (仪表盘)
+
+**Standard options**:
+- **Unit**: 搜索并选择 `Percent (0-100)`
+- **Min**: `0`
+- **Max**: `100`
+
+**Thresholds**:
+- 点击 **+ Add threshold**
+- 设置阈值：
+  - 🟢 Base (0): Green
+  - 🟡 60: Yellow
+  - 🔴 80: Red
+
+#### 步骤 5：保存面板
+
+点击右上角 **Apply** 保存面板。
+
+### 5.5 创建内存使用率面板
+
+1. 点击 **Add panel** → **Add a new panel**
+
+**查询语句**：
+```flux
+from(bucket: "ditto")
+  |> range(start: -1h)
+  |> filter(fn: (r) => r["_measurement"] == "local:pc-monitor")
+  |> filter(fn: (r) => r["_field"] == "features.memory.properties.usage")
+  |> aggregateWindow(every: 10s, fn: mean, createEmpty: false)
+  |> yield(name: "mean")
+```
+
+#### 配置面板
+
+- **Panel title**: `内存使用率`
+- **Visualization**: `Gauge`
+- **Unit**: `Percent (0-100)`
+- **Thresholds**: 0-70 (绿), 70-85 (黄), 85-100 (红)
+
+### 5.6 创建磁盘使用率面板
+
+**查询语句**：
+```flux
+from(bucket: "ditto")
+  |> range(start: -1h)
+  |> filter(fn: (r) => r["_measurement"] == "local:pc-monitor")
+  |> filter(fn: (r) => r["_field"] == "features.disk.properties.usage")
+  |> aggregateWindow(every: 10s, fn: mean, createEmpty: false)
+  |> yield(name: "mean")
+```
+
+#### 配置面板
+
+- **Panel title**: `磁盘使用率`
+- **Visualization**: `Gauge`
+- **Unit**: `Percent (0-100)`
+
+### 5.7 创建趋势图面板
+
+#### CPU 趋势图
+
+**查询语句**：
+```flux
+from(bucket: "ditto")
+  |> range(start: -30m)
+  |> filter(fn: (r) => r["_measurement"] == "local:pc-monitor")
+  |> filter(fn: (r) => r["_field"] == "features.cpu.properties.usage")
+  |> aggregateWindow(every: 10s, fn: mean, createEmpty: false)
+```
+
+#### 配置面板
+
+- **Panel title**: `CPU 使用率趋势（30分钟）`
+- **Visualization**: `Time series` (时间序列图)
+- **Unit**: `Percent (0-100)`
+- **Graph style**: `Lines`
+- **Fill opacity**: `20`
+- **Line width**: `2`
+
+### 5.8 创建统计卡片
+
+#### 当前 CPU 使用率卡片
+
+**查询语句**：
+```flux
+from(bucket: "ditto")
+  |> range(start: -1m)
+  |> filter(fn: (r) => r["_measurement"] == "local:pc-monitor")
+  |> filter(fn: (r) => r["_field"] == "features.cpu.properties.usage")
+  |> last()
+```
+
+#### 配置面板
+
+- **Panel title**: `当前 CPU`
+- **Visualization**: `Stat`
+- **Value**: `Last` (最新值)
+- **Unit**: `Percent (0-100)`
+- **Text size**: `Title` 设置为大字体
+
+### 5.9 推荐的大屏布局
+
+```
+┌─────────────────────────────────────────────────────────┐
+│  电脑性能监控大屏 🖥️                                    │
+│  YOUR-PC-NAME                                           │
+├───────────┬───────────┬───────────┬─────────────────────┤
+│ CPU       │ 内存      │ 磁盘      │  系统信息           │
+│ 32.5%     │ 45.2%     │ 68.5%     │  核心: 8            │
+│ (Gauge)   │ (Gauge)   │ (Gauge)   │  内存: 16GB         │
+│           │           │           │  磁盘: 500GB        │
+├───────────┴───────────┴───────────┴─────────────────────┤
+│  CPU 使用率趋势（30分钟）                               │
+│  [折线图显示 CPU 波动]                                  │
+├─────────────────────────────────────────────────────────┤
+│  内存使用率趋势（30分钟）                               │
+│  [折线图显示内存使用]                                   │
+├─────────────────────────────────────────────────────────┤
+│  磁盘使用率趋势（30分钟）                               │
+│  [折线图显示磁盘变化]                                   │
+└─────────────────────────────────────────────────────────┘
+```
+
+### 5.10 保存仪表板
+
+1. 点击右上角 💾 **Save dashboard**
+2. **Dashboard name**: `电脑性能监控大屏`
+3. **Folder**: `General` 或创建新文件夹
+4. 点击 **Save**
+
+### 5.11 设置自动刷新
+
+1. 点击右上角的时间范围选择器旁边的刷新图标
+2. 选择 **5s** (每 5 秒自动刷新)
+3. 或选择 **10s** / **30s** 根据需要
+
+### 5.12 全屏显示
+
+1. 点击右上角的 **Cycle view mode** 图标（全屏按钮）
+2. 或按键盘 `F` 键进入全屏模式
+3. 按 `Esc` 退出全屏
+
+## 六、高级功能
+
+### 6.1 添加告警
+
+#### 创建 CPU 高使用率告警
+
+1. 编辑 CPU 使用率面板
+2. 点击 **Alert** 标签
+3. 点击 **Create alert rule from this panel**
+4. 配置条件：
+   ```
+   WHEN avg() OF query(A, 5m, now) IS ABOVE 80
+   ```
+5. 配置通知渠道（邮件、Webhook 等）
+
+### 6.2 监控多台电脑
+
+#### 修改脚本支持多台电脑
+
+在 `pc-monitor.py` 中修改：
+
+```python
+# 使用电脑名称作为 Thing ID
+import socket
+THING_ID = f"local:pc-{socket.gethostname().lower()}"
+```
+
+#### 在 Grafana 中添加变量
+
+1. Dashboard Settings → **Variables** → **Add variable**
+2. **Name**: `hostname`
+3. **Type**: `Query`
+4. **Query**:
+   ```flux
+   import "influxdata/influxdb/schema"
+   schema.measurementTagValues(
+     bucket: "ditto",
+     measurement: "local:pc-*",
+     tag: "_measurement"
+   )
+   ```
+
+5. 在查询中使用变量：
+   ```flux
+   filter(fn: (r) => r["_measurement"] == "${hostname}")
+   ```
+
+### 6.3 添加网络监控
+
+在 `pc-monitor.py` 中添加：
+
+```python
+def get_network_usage():
+    """获取网络使用情况"""
+    net_io = psutil.net_io_counters()
+    return {
+        "bytes_sent": net_io.bytes_sent,
+        "bytes_recv": net_io.bytes_recv,
+        "packets_sent": net_io.packets_sent,
+        "packets_recv": net_io.packets_recv,
+        "bytes_sent_mb": round(net_io.bytes_sent / (1024**2), 2),
+        "bytes_recv_mb": round(net_io.bytes_recv / (1024**2), 2)
+    }
+
+# 在 send_metrics 中添加
+network_data = get_network_usage()
+payload["value"]["network"] = {
+    "properties": network_data
+}
+```
+
+### 6.4 添加进程监控
+
+```python
+def get_top_processes(limit=5):
+    """获取 CPU 占用最高的前 N 个进程"""
+    processes = []
+    for proc in psutil.process_iter(['pid', 'name', 'cpu_percent']):
+        try:
+            processes.append({
+                'pid': proc.info['pid'],
+                'name': proc.info['name'],
+                'cpu': proc.info['cpu_percent']
+            })
+        except:
+            pass
+    
+    # 按 CPU 使用率排序
+    processes.sort(key=lambda x: x['cpu'], reverse=True)
+    return processes[:limit]
+```
+
+### 6.5 后台运行脚本
+
+#### 方法 1：使用 Windows 任务计划程序
+
+1. 打开 **任务计划程序**
+2. 创建基本任务
+3. 名称: `PC Monitor`
+4. 触发器: **计算机启动时**
+5. 操作: **启动程序**
+   - 程序: `python.exe`
+   - 参数: `D:\path\to\pc-monitor.py`
+   - 起始于: `D:\path\to\`
+
+#### 方法 2：创建批处理文件
+
+创建 `start-monitor.bat`：
+
+```batch
+@echo off
+cd /d "%~dp0"
+python pc-monitor.py
+pause
+```
+
+双击运行即可。
+
+#### 方法 3：使用 pythonw（无窗口运行）
+
+```powershell
+pythonw pc-monitor.py
+```
+
+## 七、故障排查
+
+### 7.1 常见问题
+
+#### 问题 1：脚本无法连接 MQTT
+
+**症状**：
+```
+❌ 无法连接到 MQTT Broker: [Errno 10061] 由于目标计算机积极拒绝，无法连接。
+```
+
+**解决方案**：
+```powershell
+# 1. 确认端口转发正在运行
+Test-NetConnection -ComputerName localhost -Port 1883
+
+# 2. 如果失败，重新启动端口转发
+kubectl port-forward svc/opentwins-mosquitto 1883:1883
+```
+
+#### 问题 2：Grafana 中没有数据
+
+**检查清单**：
+
+1. **确认脚本正在运行**
+   ```powershell
+   # 应该看到持续的数据输出
+   ```
+
+2. **验证 Ditto 收到数据**
+   ```powershell
+   Invoke-RestMethod -Uri "http://localhost:8080/api/2/things/local:pc-monitor" -Method Get
+   ```
+
+3. **检查 InfluxDB**
+   - 访问 http://localhost:8086
+   - 登录后查看 `ditto` bucket
+   - Data Explorer → 选择 `local:pc-monitor`
+
+4. **检查 Grafana 查询语句**
+   - measurement 名称是否正确：`local:pc-monitor`
+   - field 名称格式：`features.cpu.properties.usage`
+
+#### 问题 3：数据不更新
+
+**可能原因**：
+
+1. **Thing ID 不匹配**
+   ```python
+   # 检查脚本中的 THING_ID
+   THING_ID = "local:pc-monitor"  # 必须与 Grafana 查询中的一致
+   ```
+
+2. **时间范围太短**
+   - 在 Grafana 右上角调整时间范围为 `Last 5 minutes`
+
+3. **聚合窗口太大**
+   ```flux
+   # 减小聚合窗口
+   |> aggregateWindow(every: 5s, fn: mean, createEmpty: false)
+   ```
+
+#### 问题 4：Python 模块未安装
+
+```powershell
+# 重新安装
+pip install paho-mqtt psutil --upgrade
+
+# 或使用国内镜像
+pip install paho-mqtt psutil -i https://pypi.tuna.tsinghua.edu.cn/simple
+```
+
+### 7.2 调试技巧
+
+#### 启用详细日志
+
+在 `pc-monitor.py` 中添加：
+
+```python
+import logging
+logging.basicConfig(level=logging.DEBUG)
+```
+
+#### 查看 MQTT 消息
+
+使用 MQTT Explorer 连接到 `localhost:1883`，订阅主题：
+```
+local:pc-monitor/#
+```
+
+#### 手动测试 Ditto API
+
+```powershell
+# 手动更新 CPU 数据
+$body = @{
+    "usage" = 50.0
+} | ConvertTo-Json
+
+Invoke-RestMethod -Uri "http://localhost:8080/api/2/things/local:pc-monitor/features/cpu/properties" `
+    -Method PUT `
+    -Headers @{"Content-Type"="application/json"} `
+    -Body $body
+```
+
+## 八、性能优化
+
+### 8.1 调整采集频率
+
+```python
+# 在 pc-monitor.py 中
+COLLECT_INTERVAL = 10  # 从 5 秒改为 10 秒，减少数据量
+```
+
+### 8.2 数据保留策略
+
+在 InfluxDB 中设置数据保留时间：
+
+1. 访问 http://localhost:8086
+2. **Data** → **Buckets** → `ditto`
+3. 设置保留时间（如 7 天、30 天）
+
+### 8.3 优化 Grafana 查询
+
+```flux
+# 使用更大的聚合窗口减少数据点
+from(bucket: "ditto")
+  |> range(start: -1h)
+  |> filter(fn: (r) => r["_measurement"] == "local:pc-monitor")
+  |> filter(fn: (r) => r["_field"] == "features.cpu.properties.usage")
+  |> aggregateWindow(every: 30s, fn: mean, createEmpty: false)  # 30秒聚合
+```
+
+## 九、扩展方案
+
+### 9.1 监控服务器集群
+
+- 在每台服务器上运行监控脚本
+- 使用不同的 Thing ID
+- 在 Grafana 中创建多服务器概览仪表板
+
+### 9.2 移动端访问
+
+- 配置 Grafana 的移动端显示
+- 使用 Grafana Cloud 实现远程访问
+
+### 9.3 集成告警系统
+
+- 邮件告警
+- 企业微信/钉钉告警
+- Webhook 集成其他系统
+
+### 9.4 数据分析
+
+- 导出历史数据到 Excel
+- 使用 Python/Jupyter 进行数据分析
+- 预测资源使用趋势
+
+## 十、总结
+
+### 10.1 学到的知识
+
+- ✅ 如何使用 Ditto API 创建数字孪生
+- ✅ 如何通过 MQTT 发送数据到 OpenTwins
+- ✅ 如何在 Grafana 中创建可视化大屏
+- ✅ 如何编写 Flux 查询语句
+- ✅ 如何使用 Python 采集系统性能数据
+
+### 10.2 完整代码
+
+所有示例代码已包含在教程中，完整的项目结构：
+
+```
+pc-monitor/
+├── pc-monitor.py          # 主监控脚本
+├── requirements.txt       # Python 依赖
+├── start-monitor.bat      # Windows 启动脚本
+└── README.md             # 说明文档
+```
+
+### 10.3 下一步
+
+1. 尝试添加更多监控指标（网络、GPU、温度）
+2. 创建更复杂的 Grafana 仪表板
+3. 配置告警规则
+4. 监控多台电脑
+5. 探索 OpenTwins 的其他功能
+
+## 十一、参考资源
+
+- [OpenTwins 官方文档](https://ertis-research.github.io/opentwins/)
+- [Eclipse Ditto API 文档](https://www.eclipse.org/ditto/httpapi-overview.html)
+- [Grafana 文档](https://grafana.com/docs/)
+- [InfluxDB Flux 查询语言](https://docs.influxdata.com/influxdb/v2.0/query-data/get-started/)
+- [Python psutil 文档](https://psutil.readthedocs.io/)
+
+---
+
+**教程版本**: 1.0  
+**最后更新**: 2025-01-19  
+**难度**: ⭐⭐⭐ 中级
+
+**如有问题，请参考 [OpenTwins 部署文档](./opentwins-windows-deployment.mdx) 的故障排查部分。**
+

@@ -1,0 +1,911 @@
+---
+sidebar_position: 3
+title: API接口文档模板
+description: RESTful API、GraphQL等接口文档的标准模板
+tags: [模板, API文档, RESTful, 接口设计]
+---
+
+import ComparisonTable from '@site/src/components/ComparisonTable';
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
+# [项目名称] API 接口文档
+
+> **API版本**：v1.0.0  
+> **BaseURL**：`https://api.example.com/v1`  
+> **最后更新**：2025-01-20  
+> **维护人**：[API团队]
+
+---
+
+## 文档说明
+
+:::info 使用说明
+这是一个API接口文档模板，适用于RESTful API、GraphQL等接口文档的编写。
+包含完整的接口定义、请求示例、响应格式等内容。
+:::
+
+---
+
+## 一、接口概览
+
+### 1.1 基本信息
+
+| 项目 | 说明 |
+|------|------|
+| **协议** | HTTPS |
+| **请求格式** | JSON |
+| **响应格式** | JSON |
+| **字符编码** | UTF-8 |
+| **认证方式** | JWT Bearer Token |
+
+### 1.2 接口列表
+
+<ComparisonTable
+  caption="API接口总览"
+  headers={['分类', '接口数量', '认证要求', '限流策略']}
+  rows={[
+    ['用户管理', '8个', '必需', '100次/分钟'],
+    ['订单管理', '12个', '必需', '200次/分钟'],
+    ['商品管理', '10个', '部分必需', '1000次/分钟'],
+    ['支付接口', '6个', '必需', '50次/分钟'],
+    ['系统接口', '4个', '不需要', '无限制']
+  ]}
+/>
+
+---
+
+## 二、通用规范
+
+### 2.1 请求格式
+
+**请求头（Headers）**：
+
+```http
+Content-Type: application/json
+Authorization: Bearer {access_token}
+X-Request-ID: {unique_request_id}
+Accept-Language: zh-CN
+```
+
+**通用参数**：
+
+| 参数名 | 类型 | 必填 | 说明 |
+|--------|------|------|------|
+| `timestamp` | long | 否 | 请求时间戳（毫秒） |
+| `sign` | string | 否 | 签名（部分接口需要） |
+
+### 2.2 响应格式
+
+**成功响应**：
+
+```json
+{
+  "code": 200,
+  "message": "Success",
+  "data": {
+    // 具体数据
+  },
+  "timestamp": 1706227200000,
+  "requestId": "req_1234567890"
+}
+```
+
+**错误响应**：
+
+```json
+{
+  "code": 400,
+  "message": "参数错误",
+  "error": {
+    "field": "email",
+    "reason": "邮箱格式不正确"
+  },
+  "timestamp": 1706227200000,
+  "requestId": "req_1234567890"
+}
+```
+
+### 2.3 状态码
+
+<ComparisonTable
+  caption="HTTP状态码说明"
+  headers={['状态码', '说明', '常见原因']}
+  rows={[
+    ['200', 'OK - 请求成功', '正常返回'],
+    ['201', 'Created - 创建成功', '资源创建成功'],
+    ['400', 'Bad Request - 请求错误', '参数格式错误'],
+    ['401', 'Unauthorized - 未授权', 'Token无效或过期'],
+    ['403', 'Forbidden - 禁止访问', '权限不足'],
+    ['404', 'Not Found - 资源不存在', '请求的资源不存在'],
+    ['429', 'Too Many Requests - 请求过多', '超过限流阈值'],
+    ['500', 'Internal Server Error - 服务器错误', '服务器内部异常']
+  ]}
+/>
+
+### 2.4 业务状态码
+
+| Code | Message | 说明 |
+|------|---------|------|
+| `1000` | 成功 | 请求处理成功 |
+| `1001` | 参数错误 | 请求参数不正确 |
+| `1002` | 认证失败 | Token无效或过期 |
+| `1003` | 权限不足 | 无权限访问该资源 |
+| `1004` | 资源不存在 | 请求的资源不存在 |
+| `1005` | 操作失败 | 业务操作失败 |
+| `1006` | 重复操作 | 资源已存在或重复操作 |
+| `1007` | 限流限制 | 请求频率超过限制 |
+
+---
+
+## 三、认证授权
+
+### 3.1 获取Token
+
+**接口地址**：`POST /auth/login`
+
+**请求参数**：
+
+```json
+{
+  "username": "user@example.com",
+  "password": "P@ssw0rd123",
+  "grant_type": "password"
+}
+```
+
+**响应示例**：
+
+```json
+{
+  "code": 200,
+  "message": "登录成功",
+  "data": {
+    "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+    "refresh_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+    "token_type": "Bearer",
+    "expires_in": 7200,
+    "user": {
+      "id": 12345,
+      "username": "user@example.com",
+      "nickname": "张三",
+      "avatar": "https://cdn.example.com/avatar/12345.jpg"
+    }
+  }
+}
+```
+
+### 3.2 刷新Token
+
+**接口地址**：`POST /auth/refresh`
+
+**请求参数**：
+
+| 参数名 | 类型 | 必填 | 说明 |
+|--------|------|------|------|
+| `refresh_token` | string | 是 | 刷新令牌 |
+
+**响应示例**：
+
+```json
+{
+  "code": 200,
+  "message": "Token刷新成功",
+  "data": {
+    "access_token": "新的访问令牌",
+    "expires_in": 7200
+  }
+}
+```
+
+### 3.3 Token使用
+
+在请求头中携带Token：
+
+```http
+GET /api/users/profile HTTP/1.1
+Host: api.example.com
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+Content-Type: application/json
+```
+
+---
+
+## 四、用户管理接口
+
+### 4.1 用户注册
+
+**接口说明**：用户通过邮箱注册新账号
+
+**请求方式**：`POST`
+
+**接口地址**：`/users/register`
+
+**是否需要认证**：否
+
+**请求参数**：
+
+| 参数名 | 类型 | 必填 | 说明 | 示例 |
+|--------|------|------|------|------|
+| `email` | string | 是 | 邮箱地址 | user@example.com |
+| `password` | string | 是 | 密码（8-20位，包含字母和数字） | P@ssw0rd123 |
+| `username` | string | 是 | 用户名（3-20位） | zhangsan |
+| `phone` | string | 否 | 手机号 | 13800138000 |
+| `captcha` | string | 是 | 验证码 | 1234 |
+
+**请求示例**：
+
+<Tabs>
+  <TabItem value="curl" label="cURL" default>
+    ```bash
+    curl -X POST "https://api.example.com/v1/users/register" \
+      -H "Content-Type: application/json" \
+      -d '{
+        "email": "user@example.com",
+        "password": "P@ssw0rd123",
+        "username": "zhangsan",
+        "phone": "13800138000",
+        "captcha": "1234"
+      }'
+    ```
+  </TabItem>
+  <TabItem value="javascript" label="JavaScript">
+    ```javascript
+    const response = await fetch('https://api.example.com/v1/users/register', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        email: 'user@example.com',
+        password: 'P@ssw0rd123',
+        username: 'zhangsan',
+        phone: '13800138000',
+        captcha: '1234'
+      })
+    });
+    
+    const data = await response.json();
+    console.log(data);
+    ```
+  </TabItem>
+  <TabItem value="python" label="Python">
+    ```python
+    import requests
+    
+    url = "https://api.example.com/v1/users/register"
+    payload = {
+        "email": "user@example.com",
+        "password": "P@ssw0rd123",
+        "username": "zhangsan",
+        "phone": "13800138000",
+        "captcha": "1234"
+    }
+    
+    response = requests.post(url, json=payload)
+    print(response.json())
+    ```
+  </TabItem>
+  <TabItem value="java" label="Java">
+    ```java
+    OkHttpClient client = new OkHttpClient();
+    
+    String json = "{\"email\":\"user@example.com\"," +
+                  "\"password\":\"P@ssw0rd123\"," +
+                  "\"username\":\"zhangsan\"," +
+                  "\"phone\":\"13800138000\"," +
+                  "\"captcha\":\"1234\"}";
+    
+    RequestBody body = RequestBody.create(
+        json, MediaType.parse("application/json"));
+    
+    Request request = new Request.Builder()
+        .url("https://api.example.com/v1/users/register")
+        .post(body)
+        .build();
+    
+    Response response = client.newCall(request).execute();
+    System.out.println(response.body().string());
+    ```
+  </TabItem>
+</Tabs>
+
+**响应示例**：
+
+```json
+{
+  "code": 200,
+  "message": "注册成功",
+  "data": {
+    "userId": 12345,
+    "email": "user@example.com",
+    "username": "zhangsan",
+    "createdAt": "2025-01-20T10:30:00Z"
+  }
+}
+```
+
+**错误响应**：
+
+```json
+{
+  "code": 1001,
+  "message": "参数错误",
+  "error": {
+    "field": "email",
+    "reason": "邮箱已被注册"
+  }
+}
+```
+
+---
+
+### 4.2 获取用户信息
+
+**接口说明**：获取当前登录用户的详细信息
+
+**请求方式**：`GET`
+
+**接口地址**：`/users/profile`
+
+**是否需要认证**：是（需要Bearer Token）
+
+**请求参数**：无
+
+**请求示例**：
+
+```bash
+curl -X GET "https://api.example.com/v1/users/profile" \
+  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+```
+
+**响应示例**：
+
+```json
+{
+  "code": 200,
+  "message": "获取成功",
+  "data": {
+    "userId": 12345,
+    "username": "zhangsan",
+    "email": "user@example.com",
+    "phone": "13800138000",
+    "avatar": "https://cdn.example.com/avatar/12345.jpg",
+    "nickname": "张三",
+    "gender": "male",
+    "birthday": "1990-01-01",
+    "address": {
+      "province": "北京市",
+      "city": "北京市",
+      "district": "朝阳区",
+      "detail": "xxx街道xxx号"
+    },
+    "status": "active",
+    "role": "user",
+    "createdAt": "2024-01-01T00:00:00Z",
+    "lastLoginAt": "2025-01-20T10:00:00Z"
+  }
+}
+```
+
+---
+
+### 4.3 更新用户信息
+
+**接口说明**：更新当前登录用户的个人信息
+
+**请求方式**：`PUT`
+
+**接口地址**：`/users/profile`
+
+**是否需要认证**：是（需要Bearer Token）
+
+**请求参数**：
+
+| 参数名 | 类型 | 必填 | 说明 |
+|--------|------|------|------|
+| `nickname` | string | 否 | 昵称 |
+| `avatar` | string | 否 | 头像URL |
+| `gender` | string | 否 | 性别：male/female/other |
+| `birthday` | string | 否 | 生日（YYYY-MM-DD） |
+| `address` | object | 否 | 地址信息 |
+
+**请求示例**：
+
+```json
+{
+  "nickname": "张三丰",
+  "avatar": "https://cdn.example.com/avatar/new.jpg",
+  "gender": "male",
+  "birthday": "1990-01-01",
+  "address": {
+    "province": "北京市",
+    "city": "北京市",
+    "district": "海淀区",
+    "detail": "中关村大街1号"
+  }
+}
+```
+
+**响应示例**：
+
+```json
+{
+  "code": 200,
+  "message": "更新成功",
+  "data": {
+    "userId": 12345,
+    "nickname": "张三丰",
+    "avatar": "https://cdn.example.com/avatar/new.jpg",
+    "updatedAt": "2025-01-20T11:00:00Z"
+  }
+}
+```
+
+---
+
+## 五、订单管理接口
+
+### 5.1 创建订单
+
+**接口说明**：用户创建新订单
+
+**请求方式**：`POST`
+
+**接口地址**：`/orders`
+
+**是否需要认证**：是（需要Bearer Token）
+
+**业务流程**：
+
+```mermaid
+sequenceDiagram
+    participant Client as 客户端
+    participant API as API服务
+    participant Order as 订单服务
+    participant Stock as 库存服务
+    participant Payment as 支付服务
+    
+    Client->>API: 创建订单请求
+    API->>Order: 验证订单信息
+    Order->>Stock: 锁定库存
+    
+    alt 库存充足
+        Stock-->>Order: 库存锁定成功
+        Order->>Order: 生成订单号
+        Order->>Payment: 创建支付单
+        Payment-->>Order: 支付单创建成功
+        Order-->>API: 订单创建成功
+        API-->>Client: 返回订单信息
+    else 库存不足
+        Stock-->>Order: 库存不足
+        Order-->>API: 创建失败
+        API-->>Client: 返回错误信息
+    end
+```
+
+**请求参数**：
+
+```json
+{
+  "items": [
+    {
+      "productId": 10001,
+      "quantity": 2,
+      "price": 99.99
+    },
+    {
+      "productId": 10002,
+      "quantity": 1,
+      "price": 199.99
+    }
+  ],
+  "shippingAddress": {
+    "province": "北京市",
+    "city": "北京市",
+    "district": "朝阳区",
+    "detail": "xxx街道xxx号",
+    "recipient": "张三",
+    "phone": "13800138000"
+  },
+  "remark": "请尽快发货",
+  "couponCode": "DISCOUNT2025"
+}
+```
+
+**响应示例**：
+
+```json
+{
+  "code": 200,
+  "message": "订单创建成功",
+  "data": {
+    "orderId": "ORD202501200001",
+    "orderNo": "20250120000000001",
+    "status": "pending_payment",
+    "totalAmount": 399.97,
+    "discountAmount": 40.00,
+    "payableAmount": 359.97,
+    "items": [
+      {
+        "productId": 10001,
+        "productName": "商品A",
+        "quantity": 2,
+        "price": 99.99,
+        "subtotal": 199.98
+      },
+      {
+        "productId": 10002,
+        "productName": "商品B",
+        "quantity": 1,
+        "price": 199.99,
+        "subtotal": 199.99
+      }
+    ],
+    "shippingAddress": {
+      "province": "北京市",
+      "city": "北京市",
+      "district": "朝阳区",
+      "detail": "xxx街道xxx号",
+      "recipient": "张三",
+      "phone": "13800138000"
+    },
+    "paymentInfo": {
+      "paymentId": "PAY202501200001",
+      "paymentUrl": "https://pay.example.com/pay/123456",
+      "qrCode": "https://cdn.example.com/qr/123456.png",
+      "expiresAt": "2025-01-20T12:00:00Z"
+    },
+    "createdAt": "2025-01-20T11:30:00Z"
+  }
+}
+```
+
+---
+
+### 5.2 查询订单列表
+
+**接口说明**：查询当前用户的订单列表
+
+**请求方式**：`GET`
+
+**接口地址**：`/orders`
+
+**是否需要认证**：是（需要Bearer Token）
+
+**请求参数**：
+
+| 参数名 | 类型 | 必填 | 说明 | 默认值 |
+|--------|------|------|------|--------|
+| `page` | int | 否 | 页码（从1开始） | 1 |
+| `pageSize` | int | 否 | 每页数量（1-100） | 10 |
+| `status` | string | 否 | 订单状态筛选 | all |
+| `keyword` | string | 否 | 搜索关键词 | - |
+| `startDate` | string | 否 | 开始日期 | - |
+| `endDate` | string | 否 | 结束日期 | - |
+
+**订单状态值**：
+
+<ComparisonTable
+  caption="订单状态说明"
+  headers={['状态值', '中文名称', '说明']}
+  rows={[
+    ['pending_payment', '待支付', '订单已创建，等待支付'],
+    ['paid', '已支付', '支付完成，等待发货'],
+    ['shipped', '已发货', '商品已发出，等待收货'],
+    ['completed', '已完成', '订单已完成'],
+    ['cancelled', '已取消', '订单已取消'],
+    ['refunding', '退款中', '正在处理退款'],
+    ['refunded', '已退款', '退款已完成']
+  ]}
+/>
+
+**请求示例**：
+
+```bash
+curl -X GET "https://api.example.com/v1/orders?page=1&pageSize=10&status=paid" \
+  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+```
+
+**响应示例**：
+
+```json
+{
+  "code": 200,
+  "message": "查询成功",
+  "data": {
+    "list": [
+      {
+        "orderId": "ORD202501200001",
+        "orderNo": "20250120000000001",
+        "status": "paid",
+        "statusText": "已支付",
+        "totalAmount": 359.97,
+        "itemCount": 3,
+        "createdAt": "2025-01-20T11:30:00Z",
+        "paidAt": "2025-01-20T11:35:00Z"
+      }
+    ],
+    "pagination": {
+      "page": 1,
+      "pageSize": 10,
+      "total": 45,
+      "totalPages": 5
+    }
+  }
+}
+```
+
+---
+
+## 六、分页查询规范
+
+### 6.1 请求参数
+
+所有列表查询接口统一使用以下分页参数：
+
+| 参数名 | 类型 | 必填 | 说明 | 默认值 |
+|--------|------|------|------|--------|
+| `page` | int | 否 | 页码（从1开始） | 1 |
+| `pageSize` | int | 否 | 每页数量 | 10 |
+| `sortBy` | string | 否 | 排序字段 | - |
+| `sortOrder` | string | 否 | 排序方向：asc/desc | desc |
+
+### 6.2 响应格式
+
+```json
+{
+  "code": 200,
+  "message": "查询成功",
+  "data": {
+    "list": [],
+    "pagination": {
+      "page": 1,
+      "pageSize": 10,
+      "total": 100,
+      "totalPages": 10,
+      "hasNext": true,
+      "hasPrev": false
+    }
+  }
+}
+```
+
+---
+
+## 七、错误处理
+
+### 7.1 错误响应格式
+
+```json
+{
+  "code": 1001,
+  "message": "参数错误",
+  "error": {
+    "field": "email",
+    "reason": "邮箱格式不正确",
+    "value": "invalid-email"
+  },
+  "timestamp": 1706227200000,
+  "requestId": "req_1234567890",
+  "path": "/users/register"
+}
+```
+
+### 7.2 常见错误码
+
+| Code | Message | 解决方案 |
+|------|---------|---------|
+| `1001` | 参数错误 | 检查请求参数格式 |
+| `1002` | Token无效 | 重新登录获取Token |
+| `1003` | 权限不足 | 联系管理员分配权限 |
+| `1004` | 资源不存在 | 检查资源ID是否正确 |
+| `1005` | 操作失败 | 查看详细错误信息 |
+| `1006` | 重复操作 | 避免重复提交 |
+| `1007` | 请求限流 | 降低请求频率 |
+
+---
+
+## 八、限流说明
+
+### 8.1 限流策略
+
+<ComparisonTable
+  caption="接口限流配置"
+  headers={['接口类型', '限流规则', '超限后行为']}
+  rows={[
+    ['登录注册', '10次/分钟/IP', '返回429状态码，60秒后重试'],
+    ['查询接口', '100次/分钟/用户', '返回429状态码，1分钟后重试'],
+    ['修改接口', '50次/分钟/用户', '返回429状态码，1分钟后重试'],
+    ['支付接口', '10次/分钟/用户', '返回429状态码，5分钟后重试']
+  ]}
+/>
+
+### 8.2 限流响应
+
+```json
+{
+  "code": 1007,
+  "message": "请求过于频繁，请稍后重试",
+  "error": {
+    "retryAfter": 60,
+    "limit": 100,
+    "remaining": 0,
+    "resetAt": "2025-01-20T12:00:00Z"
+  }
+}
+```
+
+---
+
+## 九、Webhook回调
+
+### 9.1 支付回调
+
+**回调URL**：由商户在系统中配置
+
+**回调方式**：`POST`
+
+**回调参数**：
+
+```json
+{
+  "eventType": "payment.success",
+  "orderId": "ORD202501200001",
+  "paymentId": "PAY202501200001",
+  "amount": 359.97,
+  "paidAt": "2025-01-20T11:35:00Z",
+  "sign": "8a7b9c6d5e4f3g2h1i0j..."
+}
+```
+
+**验证签名**：
+
+```javascript
+const crypto = require('crypto');
+
+function verifySign(data, sign, secret) {
+  const str = Object.keys(data)
+    .sort()
+    .map(key => `${key}=${data[key]}`)
+    .join('&');
+  
+  const hash = crypto
+    .createHmac('sha256', secret)
+    .update(str)
+    .digest('hex');
+  
+  return hash === sign;
+}
+```
+
+---
+
+## 十、SDK示例
+
+### 10.1 JavaScript SDK
+
+```javascript
+class ApiClient {
+  constructor(baseURL, token) {
+    this.baseURL = baseURL;
+    this.token = token;
+  }
+  
+  async request(method, path, data = null) {
+    const url = `${this.baseURL}${path}`;
+    const options = {
+      method,
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${this.token}`
+      }
+    };
+    
+    if (data) {
+      options.body = JSON.stringify(data);
+    }
+    
+    const response = await fetch(url, options);
+    return await response.json();
+  }
+  
+  // 用户相关
+  async getProfile() {
+    return this.request('GET', '/users/profile');
+  }
+  
+  async updateProfile(data) {
+    return this.request('PUT', '/users/profile', data);
+  }
+  
+  // 订单相关
+  async createOrder(data) {
+    return this.request('POST', '/orders', data);
+  }
+  
+  async getOrders(params) {
+    const query = new URLSearchParams(params).toString();
+    return this.request('GET', `/orders?${query}`);
+  }
+}
+
+// 使用示例
+const client = new ApiClient('https://api.example.com/v1', 'your_token');
+
+// 获取用户信息
+const profile = await client.getProfile();
+console.log(profile);
+
+// 创建订单
+const order = await client.createOrder({
+  items: [
+    { productId: 10001, quantity: 2, price: 99.99 }
+  ]
+});
+console.log(order);
+```
+
+---
+
+## 十一、测试工具
+
+### 11.1 Postman集合
+
+我们提供了完整的Postman集合，包含所有API接口的示例请求。
+
+**导入步骤**：
+1. 下载 [API.postman_collection.json](./api-collection.json)
+2. 在Postman中选择 Import
+3. 选择下载的文件导入
+
+### 11.2 在线调试
+
+访问我们的API在线调试平台：
+
+🔗 [https://api-debug.example.com](https://api-debug.example.com)
+
+---
+
+## 十二、常见问题
+
+### Q1: 如何获取API密钥？
+
+**A:** 登录开发者平台，在"应用管理"中创建应用并获取密钥。
+
+### Q2: Token过期后如何处理？
+
+**A:** 使用refresh_token调用刷新接口获取新的access_token。
+
+### Q3: 如何调试Webhook回调？
+
+**A:** 可以使用 [webhook.site](https://webhook.site/) 或 [ngrok](https://ngrok.com/) 进行本地调试。
+
+---
+
+## 十三、联系我们
+
+:::tip API支持
+- **技术文档**：https://docs.example.com
+- **开发者社区**：https://community.example.com
+- **技术支持邮箱**：api-support@example.com
+- **工单系统**：https://support.example.com
+:::
+
+---
+
+## 附录
+
+### A. 完整接口列表
+
+查看 [接口索引](./api-index.md) 获取完整的接口列表。
+
+### B. 更新日志
+
+**v1.0.0 (2025-01-20)**
+- 初始版本发布
+- 支持用户管理、订单管理等基础功能
+
+**v0.9.0 (2025-01-10)**
+- Beta版本测试
+

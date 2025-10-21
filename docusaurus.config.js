@@ -135,7 +135,7 @@ const config = {
     ({
       // 设置图片亮暗模式
       colorMode: {
-        defaultMode: 'dark',
+        defaultMode: 'light',
         disableSwitch: false,
         respectPrefersColorScheme: false,
       },
