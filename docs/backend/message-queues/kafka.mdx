@@ -6018,9 +6018,1813 @@ groups:
       summary: "Kafka has under-replicated partitions"
 ```
 
-## 7. Kafka最佳实践与总结
+## 7. Kafka实战项目案例
 
-### 7.1 设计原则与最佳实践
+### 7.1 电商订单处理系统
+
+这是一个基于 Kafka 的完整电商订单处理系统，展示了 Kafka 在实际业务场景中的应用。
+
+#### 7.1.1 系统架构设计
+
+```mermaid
+graph TB
+    subgraph "前端层"
+        A[用户下单] --> B[订单服务]
+        C[支付服务] --> D[库存服务]
+    end
+    
+    subgraph "Kafka消息层"
+        E[订单事件Topic]
+        F[支付事件Topic] 
+        G[库存事件Topic]
+        H[通知事件Topic]
+    end
+    
+    subgraph "业务处理层"
+        I[订单处理器]
+        J[支付处理器]
+        K[库存处理器]
+        L[通知处理器]
+    end
+    
+    subgraph "数据存储层"
+        M[订单数据库]
+        N[库存数据库]
+        O[用户数据库]
+    end
+    
+    B --> E
+    C --> F
+    D --> G
+    
+    E --> I
+    F --> J
+    G --> K
+    H --> L
+    
+    I --> M
+    J --> M
+    K --> N
+    L --> O
+```
+
+#### 7.1.2 项目结构
+
+```
+ecommerce-kafka-system/
+├── pom.xml
+├── src/main/java/com/ecommerce/
+│   ├── config/
+│   │   ├── KafkaConfig.java
+│   │   └── DatabaseConfig.java
+│   ├── model/
+│   │   ├── Order.java
+│   │   ├── Payment.java
+│   │   └── Inventory.java
+│   ├── producer/
+│   │   ├── OrderEventProducer.java
+│   │   └── PaymentEventProducer.java
+│   ├── consumer/
+│   │   ├── OrderEventConsumer.java
+│   │   └── PaymentEventConsumer.java
+│   ├── service/
+│   │   ├── OrderService.java
+│   │   └── PaymentService.java
+│   └── controller/
+│       └── OrderController.java
+├── src/main/resources/
+│   ├── application.yml
+│   └── logback-spring.xml
+└── docker-compose.yml
+```
+
+#### 7.1.3 核心代码实现
+
+**订单事件模型**：
+
+```java
+@Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+public class OrderEvent {
+    private String orderId;
+    private String userId;
+    private String productId;
+    private Integer quantity;
+    private BigDecimal amount;
+    private OrderStatus status;
+    private LocalDateTime timestamp;
+    private String correlationId; // 用于追踪消息链路
+    
+    public enum OrderStatus {
+        CREATED, PAID, SHIPPED, DELIVERED, CANCELLED
+    }
+}
+```
+
+**订单事件生产者**：
+
+```java
+@Component
+@Slf4j
+public class OrderEventProducer {
+    
+    @Autowired
+    private KafkaTemplate<String, OrderEvent> kafkaTemplate;
+    
+    @Value("${kafka.topic.order}")
+    private String orderTopic;
+    
+    public void sendOrderEvent(OrderEvent orderEvent) {
+        try {
+            // 设置消息头
+            ProducerRecord<String, OrderEvent> record = new ProducerRecord<>(
+                orderTopic, 
+                orderEvent.getOrderId(), 
+                orderEvent
+            );
+            
+            // 添加消息头用于追踪
+            record.headers().add("correlation-id", 
+                orderEvent.getCorrelationId().getBytes());
+            record.headers().add("event-type", 
+                "ORDER_CREATED".getBytes());
+            
+            // 异步发送
+            kafkaTemplate.send(record).addCallback(
+                result -> {
+                    if (result != null) {
+                        log.info("订单事件发送成功: orderId={}, partition={}, offset={}", 
+                            orderEvent.getOrderId(),
+                            result.getRecordMetadata().partition(),
+                            result.getRecordMetadata().offset());
+                    }
+                },
+                failure -> {
+                    log.error("订单事件发送失败: orderId={}, error={}", 
+                        orderEvent.getOrderId(), failure.getMessage());
+                    // 实现重试机制
+                    retrySendOrderEvent(orderEvent);
+                }
+            );
+            
+        } catch (Exception e) {
+            log.error("发送订单事件异常: {}", e.getMessage(), e);
+            throw new RuntimeException("发送订单事件失败", e);
+        }
+    }
+    
+    private void retrySendOrderEvent(OrderEvent orderEvent) {
+        // 实现指数退避重试
+        CompletableFuture.delayedExecutor(1, TimeUnit.SECONDS)
+            .execute(() -> sendOrderEvent(orderEvent));
+    }
+}
+```
+
+**订单事件消费者**：
+
+```java
+@Component
+@Slf4j
+public class OrderEventConsumer {
+    
+    @Autowired
+    private OrderService orderService;
+    
+    @Autowired
+    private PaymentEventProducer paymentEventProducer;
+    
+    @KafkaListener(
+        topics = "${kafka.topic.order}",
+        groupId = "order-processing-group",
+        containerFactory = "kafkaListenerContainerFactory"
+    )
+    public void handleOrderEvent(
+            @Payload OrderEvent orderEvent,
+            @Header(KafkaHeaders.RECEIVED_TOPIC) String topic,
+            @Header(KafkaHeaders.RECEIVED_PARTITION_ID) int partition,
+            @Header(KafkaHeaders.OFFSET) long offset,
+            @Header("correlation-id") String correlationId) {
+        
+        try {
+            log.info("接收到订单事件: orderId={}, partition={}, offset={}", 
+                orderEvent.getOrderId(), partition, offset);
+            
+            // 幂等性检查
+            if (orderService.isOrderProcessed(orderEvent.getOrderId())) {
+                log.warn("订单已处理，跳过: orderId={}", orderEvent.getOrderId());
+                return;
+            }
+            
+            // 业务处理
+            processOrderEvent(orderEvent);
+            
+            // 手动提交偏移量
+            // 注意：这里需要根据实际配置决定是否手动提交
+            
+        } catch (Exception e) {
+            log.error("处理订单事件失败: orderId={}, error={}", 
+                orderEvent.getOrderId(), e.getMessage(), e);
+            
+            // 实现死信队列处理
+            handleFailedOrderEvent(orderEvent, e);
+        }
+    }
+    
+    private void processOrderEvent(OrderEvent orderEvent) {
+        // 1. 验证订单
+        validateOrder(orderEvent);
+        
+        // 2. 检查库存
+        checkInventory(orderEvent);
+        
+        // 3. 创建支付事件
+        PaymentEvent paymentEvent = PaymentEvent.builder()
+            .orderId(orderEvent.getOrderId())
+            .amount(orderEvent.getAmount())
+            .userId(orderEvent.getUserId())
+            .correlationId(orderEvent.getCorrelationId())
+            .build();
+        
+        // 4. 发送支付事件
+        paymentEventProducer.sendPaymentEvent(paymentEvent);
+        
+        // 5. 更新订单状态
+        orderService.updateOrderStatus(orderEvent.getOrderId(), 
+            OrderEvent.OrderStatus.PENDING_PAYMENT);
+    }
+    
+    private void handleFailedOrderEvent(OrderEvent orderEvent, Exception e) {
+        // 发送到死信队列或错误处理Topic
+        log.error("订单处理失败，发送到错误处理队列: orderId={}", 
+            orderEvent.getOrderId());
+    }
+}
+```
+
+#### 7.1.4 配置管理
+
+**application.yml**：
+
+```yaml
+spring:
+  kafka:
+    bootstrap-servers: localhost:9092
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+      acks: all
+      retries: 3
+      batch-size: 16384
+      linger-ms: 5
+      buffer-memory: 33554432
+      properties:
+        enable.idempotence: true
+        max.in.flight.requests.per.connection: 5
+    consumer:
+      group-id: ecommerce-group
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      auto-offset-reset: earliest
+      enable-auto-commit: false
+      properties:
+        spring.json.trusted.packages: "com.ecommerce.model"
+        max.poll.records: 500
+        session.timeout.ms: 30000
+        heartbeat.interval.ms: 10000
+    listener:
+      ack-mode: manual_immediate
+      concurrency: 3
+      missing-topics-fatal: false
+
+kafka:
+  topic:
+    order: order-events
+    payment: payment-events
+    inventory: inventory-events
+    notification: notification-events
+    dlq: dead-letter-queue
+```
+
+#### 7.1.5 Docker部署配置
+
+**docker-compose.yml**：
+
+```yaml
+version: '3.8'
+
+services:
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.4.0
+    hostname: zookeeper
+    container_name: zookeeper
+    ports:
+      - "2181:2181"
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+
+  kafka:
+    image: confluentinc/cp-kafka:7.4.0
+    hostname: kafka
+    container_name: kafka
+    depends_on:
+      - zookeeper
+    ports:
+      - "9092:9092"
+      - "9101:9101"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: 'zookeeper:2181'
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_JMX_PORT: 9101
+      KAFKA_JMX_HOSTNAME: localhost
+
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    container_name: kafka-ui
+    depends_on:
+      - kafka
+    ports:
+      - "8080:8080"
+    environment:
+      KAFKA_CLUSTERS_0_NAME: local
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:29092
+
+  mysql:
+    image: mysql:8.0
+    container_name: mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: ecommerce
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+
+volumes:
+  mysql_data:
+```
+
+#### 7.1.6 监控和告警
+
+**Prometheus配置**：
+
+```yaml
+# prometheus.yml
+global:
+  scrape_interval: 15s
+
+scrape_configs:
+  - job_name: 'kafka'
+    static_configs:
+      - targets: ['kafka:9092']
+    metrics_path: /metrics
+    scrape_interval: 5s
+
+  - job_name: 'kafka-jmx'
+    static_configs:
+      - targets: ['kafka:9101']
+    scrape_interval: 5s
+```
+
+**Grafana仪表板**：
+
+```json
+{
+  "dashboard": {
+    "title": "Kafka电商系统监控",
+    "panels": [
+      {
+        "title": "消息生产速率",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "rate(kafka_server_brokertopicmetrics_messagesin_total[5m])",
+            "legendFormat": "{{topic}}"
+          }
+        ]
+      },
+      {
+        "title": "消费者延迟",
+        "type": "graph", 
+        "targets": [
+          {
+            "expr": "kafka_consumer_lag_sum",
+            "legendFormat": "{{consumer_group}}"
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+### 7.2 性能测试实践
+
+#### 7.2.1 压力测试脚本
+
+```bash
+#!/bin/bash
+# kafka-performance-test.sh
+
+# 测试生产者性能
+kafka-producer-perf-test.sh \
+  --topic order-events \
+  --num-records 1000000 \
+  --record-size 1024 \
+  --throughput 10000 \
+  --producer-props bootstrap.servers=localhost:9092 \
+  --producer-props acks=all \
+  --producer-props retries=3
+
+# 测试消费者性能  
+kafka-consumer-perf-test.sh \
+  --topic order-events \
+  --bootstrap-server localhost:9092 \
+  --messages 1000000 \
+  --threads 4
+```
+
+#### 7.2.2 JMeter测试计划
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<jmeterTestPlan version="1.2">
+  <hashTree>
+    <TestPlan testname="Kafka性能测试">
+      <elementProp name="TestPlan.arguments" elementType="Arguments" guiclass="ArgumentsPanel">
+        <collectionProp name="Arguments.arguments"/>
+      </elementProp>
+      <stringProp name="TestPlan.user_define_classpath"></stringProp>
+      <boolProp name="TestPlan.functional_mode">false</boolProp>
+      <boolProp name="TestPlan.tearDown_on_shutdown">true</boolProp>
+      <boolProp name="TestPlan.serialize_threadgroups">false</boolProp>
+    </TestPlan>
+  </hashTree>
+</jmeterTestPlan>
+```
+
+### 7.3 生产环境部署指南
+
+#### 7.3.1 集群规划
+
+**硬件配置建议**：
+
+| 组件 | CPU | 内存 | 磁盘 | 网络 | 说明 |
+|------|-----|------|------|------|------|
+| **Kafka Broker** | 8核+ | 32GB+ | SSD 1TB+ | 万兆 | 高性能存储和网络 |
+| **Zookeeper** | 4核+ | 8GB+ | SSD 100GB+ | 千兆 | 元数据存储 |
+| **监控节点** | 4核+ | 16GB+ | SSD 500GB+ | 千兆 | Prometheus/Grafana |
+
+**集群规模规划**：
+
+```yaml
+# 生产环境集群配置
+production-cluster:
+  brokers: 3-5个节点
+  zookeeper: 3个节点（奇数）
+  partitions: 根据业务量计算
+  replication-factor: 3
+  min-insync-replicas: 2
+```
+
+#### 7.3.2 配置文件优化
+
+**server.properties 生产配置**：
+
+```properties
+# 基础配置
+broker.id=1
+listeners=PLAINTEXT://0.0.0.0:9092
+advertised.listeners=PLAINTEXT://kafka-1.example.com:9092
+
+# 日志配置
+log.dirs=/data/kafka-logs
+num.partitions=3
+default.replication.factor=3
+min.insync.replicas=2
+
+# 性能优化
+num.network.threads=8
+num.io.threads=16
+socket.send.buffer.bytes=102400
+socket.receive.buffer.bytes=102400
+socket.request.max.bytes=104857600
+
+# 日志段配置
+log.segment.bytes=1073741824
+log.retention.hours=168
+log.retention.bytes=107374182400
+log.cleanup.policy=delete
+
+# 压缩配置
+compression.type=snappy
+message.max.bytes=1000000
+replica.fetch.max.bytes=1048576
+
+# 副本配置
+replica.lag.time.max.ms=10000
+replica.fetch.wait.max.ms=500
+replica.socket.timeout.ms=30000
+
+# 控制器配置
+controller.socket.timeout.ms=30000
+```
+
+#### 7.3.3 安全配置
+
+**SSL/TLS 加密配置**：
+
+```properties
+# SSL配置
+listeners=SSL://0.0.0.0:9093
+security.inter.broker.protocol=SSL
+ssl.keystore.location=/opt/kafka/ssl/kafka.server.keystore.jks
+ssl.keystore.password=keystore_password
+ssl.key.password=key_password
+ssl.truststore.location=/opt/kafka/ssl/kafka.server.truststore.jks
+ssl.truststore.password=truststore_password
+ssl.client.auth=required
+```
+
+**SASL认证配置**：
+
+```properties
+# SASL配置
+listeners=SASL_SSL://0.0.0.0:9094
+security.inter.broker.protocol=SASL_SSL
+sasl.mechanism.inter.broker.protocol=PLAIN
+sasl.enabled.mechanisms=PLAIN
+sasl.jaas.config=org.apache.kafka.common.security.plain.PlainLoginModule required \
+  username="admin" \
+  password="admin-secret" \
+  user_admin="admin-secret" \
+  user_alice="alice-secret";
+```
+
+#### 7.3.4 监控配置
+
+**JMX监控配置**：
+
+```properties
+# JMX配置
+jmx.port=9999
+kafka.jmx.port=9999
+```
+
+**Prometheus JMX Exporter配置**：
+
+```yaml
+# jmx_prometheus_javaagent.yml
+startDelaySeconds: 0
+ssl: false
+lowercaseOutputName: false
+lowercaseOutputLabelNames: false
+rules:
+  - pattern: kafka.server<type=BrokerTopicMetrics, name=MessagesInPerSec, topic=(.+)><>Count
+    name: kafka_server_brokertopicmetrics_messagesin_total
+    labels:
+      topic: "$1"
+    type: COUNTER
+  - pattern: kafka.server<type=BrokerTopicMetrics, name=BytesInPerSec, topic=(.+)><>Count
+    name: kafka_server_brokertopicmetrics_bytesin_total
+    labels:
+      topic: "$1"
+    type: COUNTER
+```
+
+### 7.4 运维管理实践
+
+#### 7.4.1 日常运维脚本
+
+**集群健康检查脚本**：
+
+```bash
+#!/bin/bash
+# kafka-health-check.sh
+
+KAFKA_HOME="/opt/kafka"
+BROKER_LIST="localhost:9092"
+
+echo "=== Kafka集群健康检查 ==="
+
+# 检查Broker状态
+echo "1. 检查Broker状态..."
+$KAFKA_HOME/bin/kafka-broker-api-versions.sh --bootstrap-server $BROKER_LIST
+
+# 检查Topic列表
+echo "2. 检查Topic列表..."
+$KAFKA_HOME/bin/kafka-topics.sh --bootstrap-server $BROKER_LIST --list
+
+# 检查消费者组
+echo "3. 检查消费者组..."
+$KAFKA_HOME/bin/kafka-consumer-groups.sh --bootstrap-server $BROKER_LIST --list
+
+# 检查分区状态
+echo "4. 检查分区状态..."
+$KAFKA_HOME/bin/kafka-topics.sh --bootstrap-server $BROKER_LIST --describe
+
+# 检查日志大小
+echo "5. 检查日志大小..."
+du -sh /data/kafka-logs/*
+
+# 检查磁盘使用率
+echo "6. 检查磁盘使用率..."
+df -h /data
+
+echo "=== 健康检查完成 ==="
+```
+
+**自动备份脚本**：
+
+```bash
+#!/bin/bash
+# kafka-backup.sh
+
+BACKUP_DIR="/backup/kafka"
+DATE=$(date +%Y%m%d_%H%M%S)
+KAFKA_HOME="/opt/kafka"
+
+# 创建备份目录
+mkdir -p $BACKUP_DIR/$DATE
+
+# 备份配置文件
+cp -r $KAFKA_HOME/config $BACKUP_DIR/$DATE/
+
+# 备份Topic元数据
+$KAFKA_HOME/bin/kafka-topics.sh --bootstrap-server localhost:9092 --list > $BACKUP_DIR/$DATE/topics.txt
+
+# 备份消费者组信息
+$KAFKA_HOME/bin/kafka-consumer-groups.sh --bootstrap-server localhost:9092 --list > $BACKUP_DIR/$DATE/consumer-groups.txt
+
+# 压缩备份
+tar -czf $BACKUP_DIR/kafka-backup-$DATE.tar.gz -C $BACKUP_DIR $DATE
+
+# 清理旧备份（保留7天）
+find $BACKUP_DIR -name "kafka-backup-*.tar.gz" -mtime +7 -delete
+
+echo "备份完成: kafka-backup-$DATE.tar.gz"
+```
+
+#### 7.4.2 故障排查指南
+
+**常见问题及解决方案**：
+
+| 问题 | 症状 | 原因 | 解决方案 |
+|------|------|------|----------|
+| **Leader不可用** | 分区无Leader | Broker宕机 | 重启Broker或重新分配分区 |
+| **消息丢失** | 消费者收不到消息 | 副本不足 | 增加副本因子 |
+| **性能下降** | 吞吐量降低 | 磁盘IO瓶颈 | 优化磁盘配置 |
+| **内存溢出** | Broker崩溃 | 内存不足 | 调整JVM参数 |
+
+**故障排查脚本**：
+
+```bash
+#!/bin/bash
+# kafka-troubleshoot.sh
+
+echo "=== Kafka故障排查 ==="
+
+# 1. 检查Broker状态
+echo "1. 检查Broker状态..."
+$KAFKA_HOME/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:9092
+
+# 2. 检查分区状态
+echo "2. 检查分区状态..."
+$KAFKA_HOME/bin/kafka-topics.sh --bootstrap-server localhost:9092 --describe --unavailable-partitions
+
+# 3. 检查副本状态
+echo "3. 检查副本状态..."
+$KAFKA_HOME/bin/kafka-topics.sh --bootstrap-server localhost:9092 --describe --under-replicated-partitions
+
+# 4. 检查消费者延迟
+echo "4. 检查消费者延迟..."
+$KAFKA_HOME/bin/kafka-consumer-groups.sh --bootstrap-server localhost:9092 --describe --all-groups
+
+# 5. 检查日志文件
+echo "5. 检查日志文件..."
+tail -n 100 $KAFKA_HOME/logs/server.log | grep ERROR
+
+# 6. 检查系统资源
+echo "6. 检查系统资源..."
+echo "CPU使用率:"
+top -bn1 | grep "Cpu(s)"
+echo "内存使用率:"
+free -h
+echo "磁盘使用率:"
+df -h
+
+echo "=== 故障排查完成 ==="
+```
+
+#### 7.4.3 性能调优实践
+
+**JVM参数优化**：
+
+```bash
+# kafka-server-start.sh
+export KAFKA_HEAP_OPTS="-Xmx8g -Xms8g"
+export KAFKA_JVM_PERFORMANCE_OPTS="-server -XX:+UseG1GC -XX:MaxGCPauseMillis=20 -XX:InitiatingHeapOccupancyPercent=35 -XX:+ExplicitGCInvokesConcurrent -XX:MaxInlineLevel=15 -Djava.awt.headless=true"
+```
+
+**系统参数优化**：
+
+```bash
+# /etc/sysctl.conf
+# 网络参数
+net.core.rmem_max = 134217728
+net.core.wmem_max = 134217728
+net.ipv4.tcp_rmem = 4096 65536 134217728
+net.ipv4.tcp_wmem = 4096 65536 134217728
+
+# 文件描述符
+fs.file-max = 1000000
+
+# 虚拟内存
+vm.swappiness = 1
+vm.dirty_ratio = 15
+vm.dirty_background_ratio = 5
+```
+
+### 7.5 与其他技术栈集成
+
+#### 7.5.1 Spring Boot集成
+
+**Maven依赖**：
+
+```xml
+<dependencies>
+    <dependency>
+        <groupId>org.springframework.kafka</groupId>
+        <artifactId>spring-kafka</artifactId>
+        <version>2.9.0</version>
+    </dependency>
+    <dependency>
+        <groupId>org.apache.kafka</groupId>
+        <artifactId>kafka-streams</artifactId>
+        <version>3.4.0</version>
+    </dependency>
+</dependencies>
+```
+
+**配置类**：
+
+```java
+@Configuration
+@EnableKafka
+public class KafkaConfig {
+    
+    @Bean
+    public ProducerFactory<String, Object> producerFactory() {
+        Map<String, Object> configProps = new HashMap<>();
+        configProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
+        configProps.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
+        configProps.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, JsonSerializer.class);
+        configProps.put(ProducerConfig.ACKS_CONFIG, "all");
+        configProps.put(ProducerConfig.RETRIES_CONFIG, 3);
+        configProps.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, true);
+        return new DefaultKafkaProducerFactory<>(configProps);
+    }
+    
+    @Bean
+    public KafkaTemplate<String, Object> kafkaTemplate() {
+        return new KafkaTemplate<>(producerFactory());
+    }
+}
+```
+
+#### 7.5.2 与数据库集成
+
+**Kafka Connect配置**：
+
+```json
+{
+  "name": "mysql-source-connector",
+  "config": {
+    "connector.class": "io.confluent.connect.jdbc.JdbcSourceConnector",
+    "connection.url": "jdbc:mysql://localhost:3306/ecommerce",
+    "connection.user": "root",
+    "connection.password": "password",
+    "table.whitelist": "orders",
+    "mode": "incrementing",
+    "incrementing.column.name": "id",
+    "topic.prefix": "mysql-",
+    "poll.interval.ms": 1000
+  }
+}
+```
+
+#### 7.5.3 与Elasticsearch集成
+
+**Logstash配置**：
+
+```ruby
+input {
+  kafka {
+    bootstrap_servers => "localhost:9092"
+    topics => ["order-events"]
+    group_id => "logstash"
+    consumer_threads => 4
+  }
+}
+
+filter {
+  json {
+    source => "message"
+  }
+  
+  date {
+    match => ["timestamp", "ISO8601"]
+  }
+}
+
+output {
+  elasticsearch {
+    hosts => ["localhost:9200"]
+    index => "kafka-events-%{+YYYY.MM.dd}"
+  }
+}
+```
+
+### 7.6 高级错误处理与容错机制
+
+#### 7.6.1 生产者错误处理
+
+**重试机制实现**：
+
+```java
+@Component
+@Slf4j
+public class RobustKafkaProducer {
+    
+    private final KafkaTemplate<String, Object> kafkaTemplate;
+    private final RetryTemplate retryTemplate;
+    
+    public RobustKafkaProducer(KafkaTemplate<String, Object> kafkaTemplate) {
+        this.kafkaTemplate = kafkaTemplate;
+        this.retryTemplate = createRetryTemplate();
+    }
+    
+    private RetryTemplate createRetryTemplate() {
+        RetryTemplate template = new RetryTemplate();
+        
+        // 重试策略：指数退避
+        ExponentialBackOffPolicy backOffPolicy = new ExponentialBackOffPolicy();
+        backOffPolicy.setInitialInterval(1000);
+        backOffPolicy.setMultiplier(2.0);
+        backOffPolicy.setMaxInterval(10000);
+        template.setBackOffPolicy(backOffPolicy);
+        
+        // 重试条件：可重试的异常
+        SimpleRetryPolicy retryPolicy = new SimpleRetryPolicy(3, 
+            Map.of(
+                RetriableException.class, true,
+                TimeoutException.class, true,
+                NetworkException.class, true
+            ));
+        template.setRetryPolicy(retryPolicy);
+        
+        return template;
+    }
+    
+    public void sendMessageWithRetry(String topic, String key, Object message) {
+        try {
+            retryTemplate.execute(context -> {
+                try {
+                    ListenableFuture<SendResult<String, Object>> future = 
+                        kafkaTemplate.send(topic, key, message);
+                    
+                    return future.get(5, TimeUnit.SECONDS);
+                } catch (Exception e) {
+                    log.warn("发送消息失败，重试第{}次: {}", 
+                        context.getRetryCount() + 1, e.getMessage());
+                    throw new RetriableException("消息发送失败", e);
+                }
+            });
+        } catch (Exception e) {
+            log.error("消息发送最终失败: topic={}, key={}, error={}", 
+                topic, key, e.getMessage());
+            // 发送到死信队列
+            sendToDeadLetterQueue(topic, key, message, e);
+        }
+    }
+    
+    private void sendToDeadLetterQueue(String topic, String key, 
+                                     Object message, Exception error) {
+        DeadLetterMessage dlqMessage = DeadLetterMessage.builder()
+            .originalTopic(topic)
+            .originalKey(key)
+            .originalMessage(message)
+            .errorMessage(error.getMessage())
+            .timestamp(Instant.now())
+            .build();
+        
+        kafkaTemplate.send("dlq-topic", key, dlqMessage);
+    }
+}
+```
+
+**死信队列处理**：
+
+```java
+@Component
+@Slf4j
+public class DeadLetterQueueHandler {
+    
+    @KafkaListener(topics = "dlq-topic", groupId = "dlq-handler")
+    public void handleDeadLetterMessage(@Payload DeadLetterMessage dlqMessage) {
+        log.error("处理死信消息: topic={}, key={}, error={}", 
+            dlqMessage.getOriginalTopic(),
+            dlqMessage.getOriginalKey(),
+            dlqMessage.getErrorMessage());
+        
+        // 1. 记录到数据库
+        saveDeadLetterRecord(dlqMessage);
+        
+        // 2. 发送告警
+        sendAlert(dlqMessage);
+        
+        // 3. 尝试修复或人工处理
+        attemptRecovery(dlqMessage);
+    }
+    
+    private void saveDeadLetterRecord(DeadLetterMessage dlqMessage) {
+        // 保存到数据库用于后续分析
+        DeadLetterRecord record = DeadLetterRecord.builder()
+            .originalTopic(dlqMessage.getOriginalTopic())
+            .originalKey(dlqMessage.getOriginalKey())
+            .errorMessage(dlqMessage.getErrorMessage())
+            .timestamp(dlqMessage.getTimestamp())
+            .status(DeadLetterStatus.PENDING)
+            .build();
+        
+        deadLetterRepository.save(record);
+    }
+    
+    private void sendAlert(DeadLetterMessage dlqMessage) {
+        AlertMessage alert = AlertMessage.builder()
+            .level(AlertLevel.ERROR)
+            .title("Kafka消息发送失败")
+            .content(String.format("Topic: %s, Key: %s, Error: %s", 
+                dlqMessage.getOriginalTopic(),
+                dlqMessage.getOriginalKey(),
+                dlqMessage.getErrorMessage()))
+            .timestamp(Instant.now())
+            .build();
+        
+        alertService.sendAlert(alert);
+    }
+}
+```
+
+#### 7.6.2 消费者错误处理
+
+**消费者容错机制**：
+
+```java
+@Component
+@Slf4j
+public class FaultTolerantConsumer {
+    
+    private final OrderService orderService;
+    private final CircuitBreaker circuitBreaker;
+    
+    public FaultTolerantConsumer(OrderService orderService) {
+        this.orderService = orderService;
+        this.circuitBreaker = createCircuitBreaker();
+    }
+    
+    private CircuitBreaker createCircuitBreaker() {
+        return CircuitBreaker.ofDefaults("order-processing")
+            .toBuilder()
+            .failureRateThreshold(50)
+            .waitDurationInOpenState(Duration.ofSeconds(30))
+            .slidingWindowSize(10)
+            .build();
+    }
+    
+    @KafkaListener(topics = "order-events", groupId = "order-processor")
+    public void handleOrderEvent(@Payload OrderEvent orderEvent,
+                               Acknowledgment acknowledgment) {
+        try {
+            // 使用断路器保护
+            circuitBreaker.executeSupplier(() -> {
+                processOrderEvent(orderEvent);
+                return null;
+            });
+            
+            // 处理成功，提交偏移量
+            acknowledgment.acknowledge();
+            
+        } catch (Exception e) {
+            log.error("处理订单事件失败: orderId={}, error={}", 
+                orderEvent.getOrderId(), e.getMessage(), e);
+            
+            // 根据异常类型决定处理策略
+            handleConsumerError(orderEvent, e, acknowledgment);
+        }
+    }
+    
+    private void handleConsumerError(OrderEvent orderEvent, Exception error, 
+                                   Acknowledgment acknowledgment) {
+        if (isRetryableError(error)) {
+            // 可重试错误：延迟重试
+            scheduleRetry(orderEvent, error);
+            // 不提交偏移量，等待重试
+        } else if (isBusinessError(error)) {
+            // 业务错误：记录并跳过
+            logBusinessError(orderEvent, error);
+            acknowledgment.acknowledge();
+        } else {
+            // 系统错误：发送到死信队列
+            sendToDeadLetterQueue(orderEvent, error);
+            acknowledgment.acknowledge();
+        }
+    }
+    
+    private boolean isRetryableError(Exception error) {
+        return error instanceof TimeoutException ||
+               error instanceof ConnectException ||
+               error instanceof SocketTimeoutException;
+    }
+    
+    private boolean isBusinessError(Exception error) {
+        return error instanceof ValidationException ||
+               error instanceof BusinessLogicException;
+    }
+    
+    private void scheduleRetry(OrderEvent orderEvent, Exception error) {
+        // 使用延迟队列实现重试
+        RetryMessage retryMessage = RetryMessage.builder()
+            .originalMessage(orderEvent)
+            .retryCount(0)
+            .maxRetries(3)
+            .nextRetryTime(Instant.now().plusSeconds(30))
+            .build();
+        
+        kafkaTemplate.send("retry-topic", orderEvent.getOrderId(), retryMessage);
+    }
+}
+```
+
+#### 7.6.3 消息去重与幂等性
+
+**幂等性保证**：
+
+```java
+@Component
+@Slf4j
+public class IdempotentMessageProcessor {
+    
+    private final RedisTemplate<String, String> redisTemplate;
+    private final OrderService orderService;
+    
+    @KafkaListener(topics = "order-events", groupId = "idempotent-processor")
+    public void processOrderEvent(@Payload OrderEvent orderEvent,
+                                @Header("message-id") String messageId) {
+        
+        // 1. 检查消息是否已处理
+        if (isMessageProcessed(messageId)) {
+            log.info("消息已处理，跳过: messageId={}", messageId);
+            return;
+        }
+        
+        // 2. 标记消息为处理中
+        markMessageAsProcessing(messageId);
+        
+        try {
+            // 3. 业务处理
+            orderService.processOrder(orderEvent);
+            
+            // 4. 标记消息为已处理
+            markMessageAsProcessed(messageId);
+            
+        } catch (Exception e) {
+            // 5. 处理失败，清除处理标记
+            clearProcessingMark(messageId);
+            throw e;
+        }
+    }
+    
+    private boolean isMessageProcessed(String messageId) {
+        String key = "processed:" + messageId;
+        return redisTemplate.hasKey(key);
+    }
+    
+    private void markMessageAsProcessing(String messageId) {
+        String key = "processing:" + messageId;
+        String processingKey = "processed:" + messageId;
+        
+        // 使用Redis原子操作保证并发安全
+        Boolean success = redisTemplate.opsForValue()
+            .setIfAbsent(key, "processing", Duration.ofMinutes(5));
+        
+        if (!success) {
+            throw new DuplicateMessageException("消息正在处理中: " + messageId);
+        }
+    }
+    
+    private void markMessageAsProcessed(String messageId) {
+        String processingKey = "processing:" + messageId;
+        String processedKey = "processed:" + messageId;
+        
+        // 原子操作：删除处理标记，添加已处理标记
+        redisTemplate.execute(new SessionCallback<Object>() {
+            @Override
+            public Object execute(RedisOperations operations) {
+                operations.multi();
+                operations.delete(processingKey);
+                operations.opsForValue().set(processedKey, "processed", 
+                    Duration.ofHours(24));
+                return operations.exec();
+            }
+        });
+    }
+}
+```
+
+#### 7.6.4 消息顺序保证
+
+**分区内顺序处理**：
+
+```java
+@Component
+@Slf4j
+public class OrderedMessageProcessor {
+    
+    private final Map<String, BlockingQueue<OrderEvent>> partitionQueues = new ConcurrentHashMap<>();
+    private final ExecutorService executorService = Executors.newFixedThreadPool(10);
+    
+    @KafkaListener(topics = "order-events", groupId = "ordered-processor")
+    public void handleOrderEvent(@Payload OrderEvent orderEvent,
+                               @Header(KafkaHeaders.RECEIVED_PARTITION_ID) int partition) {
+        
+        String partitionKey = "partition-" + partition;
+        
+        // 将消息放入对应分区的队列
+        partitionQueues.computeIfAbsent(partitionKey, 
+            k -> new LinkedBlockingQueue<>()).offer(orderEvent);
+        
+        // 异步处理该分区的消息
+        executorService.submit(() -> processPartitionMessages(partitionKey));
+    }
+    
+    private void processPartitionMessages(String partitionKey) {
+        BlockingQueue<OrderEvent> queue = partitionQueues.get(partitionKey);
+        
+        while (!queue.isEmpty()) {
+            try {
+                OrderEvent orderEvent = queue.take();
+                processOrderEvent(orderEvent);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                break;
+            } catch (Exception e) {
+                log.error("处理分区消息失败: partition={}, error={}", 
+                    partitionKey, e.getMessage(), e);
+                // 错误处理逻辑
+                handleProcessingError(partitionKey, e);
+            }
+        }
+    }
+    
+    private void processOrderEvent(OrderEvent orderEvent) {
+        // 确保同一分区的消息按顺序处理
+        log.info("处理订单事件: orderId={}, partition={}", 
+            orderEvent.getOrderId(), orderEvent.getPartition());
+        
+        // 业务处理逻辑
+        orderService.processOrder(orderEvent);
+    }
+}
+```
+
+#### 7.6.5 监控与告警
+
+**自定义监控指标**：
+
+```java
+@Component
+@Slf4j
+public class KafkaMetricsCollector {
+    
+    private final MeterRegistry meterRegistry;
+    private final Counter messageProcessedCounter;
+    private final Counter messageFailedCounter;
+    private final Timer messageProcessingTimer;
+    private final Gauge consumerLagGauge;
+    
+    public KafkaMetricsCollector(MeterRegistry meterRegistry) {
+        this.meterRegistry = meterRegistry;
+        
+        // 消息处理计数器
+        this.messageProcessedCounter = Counter.builder("kafka.messages.processed")
+            .description("已处理的消息数量")
+            .register(meterRegistry);
+        
+        // 消息失败计数器
+        this.messageFailedCounter = Counter.builder("kafka.messages.failed")
+            .description("处理失败的消息数量")
+            .register(meterRegistry);
+        
+        // 消息处理时间
+        this.messageProcessingTimer = Timer.builder("kafka.message.processing.time")
+            .description("消息处理时间")
+            .register(meterRegistry);
+        
+        // 消费者延迟
+        this.consumerLagGauge = Gauge.builder("kafka.consumer.lag")
+            .description("消费者延迟")
+            .register(meterRegistry, this, KafkaMetricsCollector::getConsumerLag);
+    }
+    
+    public void recordMessageProcessed(String topic, String consumerGroup) {
+        messageProcessedCounter.increment(
+            Tags.of("topic", topic, "consumer_group", consumerGroup));
+    }
+    
+    public void recordMessageFailed(String topic, String consumerGroup, String errorType) {
+        messageFailedCounter.increment(
+            Tags.of("topic", topic, "consumer_group", consumerGroup, "error_type", errorType));
+    }
+    
+    public void recordProcessingTime(String topic, Duration duration) {
+        messageProcessingTimer.record(duration);
+    }
+    
+    private double getConsumerLag() {
+        // 实现获取消费者延迟的逻辑
+        return calculateConsumerLag();
+    }
+    
+    private double calculateConsumerLag() {
+        // 实际实现中需要查询Kafka获取延迟信息
+        return 0.0;
+    }
+}
+```
+
+**健康检查端点**：
+
+```java
+@RestController
+@RequestMapping("/health")
+public class KafkaHealthController {
+    
+    private final KafkaAdmin kafkaAdmin;
+    private final KafkaMetricsCollector metricsCollector;
+    
+    @GetMapping("/kafka")
+    public ResponseEntity<Map<String, Object>> checkKafkaHealth() {
+        Map<String, Object> health = new HashMap<>();
+        
+        try {
+            // 检查Kafka连接
+            boolean isConnected = checkKafkaConnection();
+            health.put("status", isConnected ? "UP" : "DOWN");
+            health.put("kafka_connection", isConnected);
+            
+            // 检查消费者延迟
+            double consumerLag = metricsCollector.getConsumerLag();
+            health.put("consumer_lag", consumerLag);
+            health.put("lag_status", consumerLag < 1000 ? "NORMAL" : "HIGH");
+            
+            // 检查处理速率
+            double processingRate = getProcessingRate();
+            health.put("processing_rate", processingRate);
+            
+            return ResponseEntity.ok(health);
+            
+        } catch (Exception e) {
+            health.put("status", "DOWN");
+            health.put("error", e.getMessage());
+            return ResponseEntity.status(503).body(health);
+        }
+    }
+    
+    private boolean checkKafkaConnection() {
+        try {
+            kafkaAdmin.describeTopics("test-topic");
+            return true;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+    
+    private double getProcessingRate() {
+        // 实现获取处理速率的逻辑
+        return 0.0;
+    }
+}
+```
+
+### 7.7 性能测试与调优实践
+
+#### 7.7.1 性能基准测试
+
+**Kafka性能测试工具**：
+
+```bash
+#!/bin/bash
+# kafka-benchmark.sh
+
+KAFKA_HOME="/opt/kafka"
+BROKER_LIST="localhost:9092"
+TOPIC_NAME="benchmark-topic"
+
+echo "=== Kafka性能基准测试 ==="
+
+# 1. 生产者性能测试
+echo "1. 测试生产者性能..."
+kafka-producer-perf-test.sh \
+  --topic $TOPIC_NAME \
+  --num-records 1000000 \
+  --record-size 1024 \
+  --throughput 10000 \
+  --producer-props bootstrap.servers=$BROKER_LIST \
+  --producer-props acks=all \
+  --producer-props retries=3 \
+  --producer-props batch.size=16384 \
+  --producer-props linger.ms=5
+
+# 2. 消费者性能测试
+echo "2. 测试消费者性能..."
+kafka-consumer-perf-test.sh \
+  --topic $TOPIC_NAME \
+  --bootstrap-server $BROKER_LIST \
+  --messages 1000000 \
+  --threads 4 \
+  --group test-group
+
+# 3. 端到端延迟测试
+echo "3. 测试端到端延迟..."
+kafka-producer-perf-test.sh \
+  --topic $TOPIC_NAME \
+  --num-records 10000 \
+  --record-size 1024 \
+  --throughput -1 \
+  --producer-props bootstrap.servers=$BROKER_LIST \
+  --producer-props acks=1 &
+
+sleep 5
+
+kafka-consumer-perf-test.sh \
+  --topic $TOPIC_NAME \
+  --bootstrap-server $BROKER_LIST \
+  --messages 10000 \
+  --threads 1 \
+  --group latency-test-group
+
+echo "=== 性能测试完成 ==="
+```
+
+**自定义性能测试工具**：
+
+```java
+@Component
+@Slf4j
+public class KafkaPerformanceTester {
+    
+    private final KafkaTemplate<String, Object> kafkaTemplate;
+    private final MeterRegistry meterRegistry;
+    
+    public void runProducerBenchmark(String topic, int messageCount, int messageSize) {
+        log.info("开始生产者性能测试: topic={}, count={}, size={}", 
+            topic, messageCount, messageSize);
+        
+        Timer.Sample sample = Timer.start(meterRegistry);
+        
+        for (int i = 0; i < messageCount; i++) {
+            String message = generateMessage(messageSize);
+            kafkaTemplate.send(topic, String.valueOf(i), message);
+        }
+        
+        sample.stop(Timer.builder("kafka.producer.benchmark")
+            .register(meterRegistry));
+        
+        log.info("生产者性能测试完成");
+    }
+    
+    public void runConsumerBenchmark(String topic, String groupId, int expectedMessages) {
+        log.info("开始消费者性能测试: topic={}, group={}, expected={}", 
+            topic, groupId, expectedMessages);
+        
+        AtomicInteger messageCount = new AtomicInteger(0);
+        Timer.Sample sample = Timer.start(meterRegistry);
+        
+        // 使用KafkaListener进行测试
+        // 实际实现中需要配置测试专用的消费者
+        
+        log.info("消费者性能测试完成: processed={}", messageCount.get());
+    }
+    
+    private String generateMessage(int size) {
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < size; i++) {
+            sb.append('A');
+        }
+        return sb.toString();
+    }
+}
+```
+
+#### 7.7.2 性能调优策略
+
+**生产者调优**：
+
+```java
+@Configuration
+public class OptimizedKafkaConfig {
+    
+    @Bean
+    public ProducerFactory<String, Object> optimizedProducerFactory() {
+        Map<String, Object> configProps = new HashMap<>();
+        
+        // 基础配置
+        configProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
+        configProps.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
+        configProps.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, JsonSerializer.class);
+        
+        // 性能优化配置
+        configProps.put(ProducerConfig.ACKS_CONFIG, "1"); // 降低延迟
+        configProps.put(ProducerConfig.RETRIES_CONFIG, 3);
+        configProps.put(ProducerConfig.BATCH_SIZE_CONFIG, 32768); // 增加批次大小
+        configProps.put(ProducerConfig.LINGER_MS_CONFIG, 10); // 增加等待时间
+        configProps.put(ProducerConfig.BUFFER_MEMORY_CONFIG, 67108864); // 增加缓冲区
+        configProps.put(ProducerConfig.COMPRESSION_TYPE_CONFIG, "snappy"); // 启用压缩
+        configProps.put(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION, 5);
+        configProps.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, true);
+        
+        // 网络优化
+        configProps.put(ProducerConfig.SEND_BUFFER_CONFIG, 131072);
+        configProps.put(ProducerConfig.RECEIVE_BUFFER_CONFIG, 131072);
+        
+        return new DefaultKafkaProducerFactory<>(configProps);
+    }
+    
+    @Bean
+    public ConsumerFactory<String, Object> optimizedConsumerFactory() {
+        Map<String, Object> configProps = new HashMap<>();
+        
+        // 基础配置
+        configProps.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
+        configProps.put(ConsumerConfig.GROUP_ID_CONFIG, "optimized-group");
+        configProps.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
+        configProps.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, JsonDeserializer.class);
+        
+        // 性能优化配置
+        configProps.put(ConsumerConfig.FETCH_MIN_BYTES_CONFIG, 1048576); // 增加最小拉取大小
+        configProps.put(ConsumerConfig.FETCH_MAX_WAIT_MS_CONFIG, 500); // 减少等待时间
+        configProps.put(ConsumerConfig.MAX_PARTITION_FETCH_BYTES_CONFIG, 1048576); // 增加分区拉取大小
+        configProps.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, 30000);
+        configProps.put(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, 10000);
+        configProps.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "latest");
+        configProps.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, false); // 手动提交
+        
+        return new DefaultKafkaConsumerFactory<>(configProps);
+    }
+}
+```
+
+**JVM调优配置**：
+
+```bash
+#!/bin/bash
+# kafka-jvm-tuning.sh
+
+# 设置JVM参数
+export KAFKA_HEAP_OPTS="-Xmx8g -Xms8g"
+
+# G1GC优化参数
+export KAFKA_JVM_PERFORMANCE_OPTS="
+-server
+-XX:+UseG1GC
+-XX:MaxGCPauseMillis=20
+-XX:InitiatingHeapOccupancyPercent=35
+-XX:+ExplicitGCInvokesConcurrent
+-XX:MaxInlineLevel=15
+-XX:+UseStringDeduplication
+-XX:+OptimizeStringConcat
+-XX:+UseCompressedOops
+-XX:+UseCompressedClassPointers
+-Djava.awt.headless=true
+"
+
+# 网络优化参数
+export KAFKA_OPTS="
+-Djava.net.preferIPv4Stack=true
+-Dcom.sun.management.jmxremote
+-Dcom.sun.management.jmxremote.authenticate=false
+-Dcom.sun.management.jmxremote.ssl=false
+-Dcom.sun.management.jmxremote.port=9999
+"
+
+echo "JVM调优参数已设置"
+```
+
+#### 7.7.3 系统级优化
+
+**Linux系统优化**：
+
+```bash
+#!/bin/bash
+# kafka-system-tuning.sh
+
+echo "=== Kafka系统级优化 ==="
+
+# 1. 网络参数优化
+echo "1. 优化网络参数..."
+cat >> /etc/sysctl.conf << EOF
+# 网络缓冲区
+net.core.rmem_max = 134217728
+net.core.wmem_max = 134217728
+net.ipv4.tcp_rmem = 4096 65536 134217728
+net.ipv4.tcp_wmem = 4096 65536 134217728
+
+# 网络连接优化
+net.core.netdev_max_backlog = 5000
+net.ipv4.tcp_max_syn_backlog = 4096
+net.ipv4.tcp_keepalive_time = 600
+net.ipv4.tcp_keepalive_intvl = 60
+net.ipv4.tcp_keepalive_probes = 3
+
+# 文件描述符
+fs.file-max = 1000000
+fs.nr_open = 1000000
+EOF
+
+# 2. 磁盘I/O优化
+echo "2. 优化磁盘I/O..."
+cat >> /etc/sysctl.conf << EOF
+# 虚拟内存优化
+vm.swappiness = 1
+vm.dirty_ratio = 15
+vm.dirty_background_ratio = 5
+vm.dirty_expire_centisecs = 3000
+vm.dirty_writeback_centisecs = 500
+EOF
+
+# 3. 应用系统参数
+sysctl -p
+
+# 4. 设置文件描述符限制
+echo "3. 设置文件描述符限制..."
+cat >> /etc/security/limits.conf << EOF
+kafka soft nofile 1000000
+kafka hard nofile 1000000
+kafka soft nproc 1000000
+kafka hard nproc 1000000
+EOF
+
+# 5. 磁盘挂载优化
+echo "4. 优化磁盘挂载..."
+# 为Kafka数据目录添加noatime选项
+mount -o remount,noatime /data
+
+echo "=== 系统优化完成 ==="
+```
+
+#### 7.7.4 监控指标分析
+
+**关键性能指标**：
+
+```java
+@Component
+@Slf4j
+public class KafkaPerformanceAnalyzer {
+    
+    private final MeterRegistry meterRegistry;
+    private final KafkaAdmin kafkaAdmin;
+    
+    public PerformanceReport analyzePerformance() {
+        PerformanceReport report = new PerformanceReport();
+        
+        // 1. 吞吐量分析
+        double producerThroughput = calculateProducerThroughput();
+        double consumerThroughput = calculateConsumerThroughput();
+        report.setProducerThroughput(producerThroughput);
+        report.setConsumerThroughput(consumerThroughput);
+        
+        // 2. 延迟分析
+        double p99Latency = calculateP99Latency();
+        double avgLatency = calculateAverageLatency();
+        report.setP99Latency(p99Latency);
+        report.setAverageLatency(avgLatency);
+        
+        // 3. 资源使用率
+        double cpuUsage = getCpuUsage();
+        double memoryUsage = getMemoryUsage();
+        double diskUsage = getDiskUsage();
+        report.setCpuUsage(cpuUsage);
+        report.setMemoryUsage(memoryUsage);
+        report.setDiskUsage(diskUsage);
+        
+        // 4. 消费者延迟
+        double consumerLag = getConsumerLag();
+        report.setConsumerLag(consumerLag);
+        
+        // 5. 生成性能报告
+        generatePerformanceReport(report);
+        
+        return report;
+    }
+    
+    private void generatePerformanceReport(PerformanceReport report) {
+        log.info("=== Kafka性能分析报告 ===");
+        log.info("生产者吞吐量: {} msg/s", report.getProducerThroughput());
+        log.info("消费者吞吐量: {} msg/s", report.getConsumerThroughput());
+        log.info("P99延迟: {} ms", report.getP99Latency());
+        log.info("平均延迟: {} ms", report.getAverageLatency());
+        log.info("CPU使用率: {}%", report.getCpuUsage());
+        log.info("内存使用率: {}%", report.getMemoryUsage());
+        log.info("磁盘使用率: {}%", report.getDiskUsage());
+        log.info("消费者延迟: {} ms", report.getConsumerLag());
+        
+        // 性能建议
+        providePerformanceRecommendations(report);
+    }
+    
+    private void providePerformanceRecommendations(PerformanceReport report) {
+        log.info("=== 性能优化建议 ===");
+        
+        if (report.getProducerThroughput() < 10000) {
+            log.warn("生产者吞吐量较低，建议：");
+            log.warn("- 增加batch.size");
+            log.warn("- 启用压缩");
+            log.warn("- 调整linger.ms");
+        }
+        
+        if (report.getP99Latency() > 100) {
+            log.warn("延迟较高，建议：");
+            log.warn("- 减少acks配置");
+            log.warn("- 优化网络参数");
+            log.warn("- 检查磁盘I/O");
+        }
+        
+        if (report.getConsumerLag() > 1000) {
+            log.warn("消费者延迟较高，建议：");
+            log.warn("- 增加消费者实例");
+            log.warn("- 优化fetch配置");
+            log.warn("- 检查处理逻辑性能");
+        }
+    }
+}
+```
+
+#### 7.7.5 压力测试场景
+
+**多场景压力测试**：
+
+```java
+@Component
+@Slf4j
+public class KafkaStressTester {
+    
+    private final KafkaTemplate<String, Object> kafkaTemplate;
+    private final ExecutorService executorService = Executors.newFixedThreadPool(20);
+    
+    public void runStressTest() {
+        log.info("开始Kafka压力测试...");
+        
+        // 场景1：高并发写入
+        runHighConcurrencyWriteTest();
+        
+        // 场景2：大消息处理
+        runLargeMessageTest();
+        
+        // 场景3：长时间运行
+        runLongRunningTest();
+        
+        // 场景4：故障恢复
+        runFailureRecoveryTest();
+        
+        log.info("压力测试完成");
+    }
+    
+    private void runHighConcurrencyWriteTest() {
+        log.info("场景1：高并发写入测试");
+        
+        int threadCount = 20;
+        int messagesPerThread = 10000;
+        
+        CountDownLatch latch = new CountDownLatch(threadCount);
+        
+        for (int i = 0; i < threadCount; i++) {
+            final int threadId = i;
+            executorService.submit(() -> {
+                try {
+                    for (int j = 0; j < messagesPerThread; j++) {
+                        String message = String.format("Thread-%d-Message-%d", threadId, j);
+                        kafkaTemplate.send("stress-test-topic", String.valueOf(j), message);
+                    }
+                } finally {
+                    latch.countDown();
+                }
+            });
+        }
+        
+        try {
+            latch.await(5, TimeUnit.MINUTES);
+            log.info("高并发写入测试完成");
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+    }
+    
+    private void runLargeMessageTest() {
+        log.info("场景2：大消息处理测试");
+        
+        int[] messageSizes = {1024, 10240, 102400, 1048576}; // 1KB, 10KB, 100KB, 1MB
+        
+        for (int size : messageSizes) {
+            String largeMessage = generateLargeMessage(size);
+            long startTime = System.currentTimeMillis();
+            
+            kafkaTemplate.send("large-message-topic", "large-message", largeMessage);
+            
+            long endTime = System.currentTimeMillis();
+            log.info("大消息测试完成: size={} bytes, time={} ms", 
+                size, endTime - startTime);
+        }
+    }
+    
+    private void runLongRunningTest() {
+        log.info("场景3：长时间运行测试");
+        
+        long startTime = System.currentTimeMillis();
+        long endTime = startTime + TimeUnit.HOURS.toMillis(1); // 运行1小时
+        
+        int messageCount = 0;
+        while (System.currentTimeMillis() < endTime) {
+            String message = String.format("LongRunning-Message-%d", messageCount++);
+            kafkaTemplate.send("long-running-topic", String.valueOf(messageCount), message);
+            
+            if (messageCount % 1000 == 0) {
+                log.info("长时间运行测试: 已发送 {} 条消息", messageCount);
+            }
+            
+            try {
+                Thread.sleep(10); // 10ms间隔
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                break;
+            }
+        }
+        
+        log.info("长时间运行测试完成: 总共发送 {} 条消息", messageCount);
+    }
+    
+    private void runFailureRecoveryTest() {
+        log.info("场景4：故障恢复测试");
+        
+        // 模拟网络中断
+        simulateNetworkFailure();
+        
+        // 模拟Broker重启
+        simulateBrokerRestart();
+        
+        // 模拟消费者重启
+        simulateConsumerRestart();
+        
+        log.info("故障恢复测试完成");
+    }
+    
+    private String generateLargeMessage(int size) {
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < size; i++) {
+            sb.append('A');
+        }
+        return sb.toString();
+    }
+    
+    private void simulateNetworkFailure() {
+        // 实际实现中需要模拟网络故障
+        log.info("模拟网络故障...");
+    }
+    
+    private void simulateBrokerRestart() {
+        // 实际实现中需要重启Broker
+        log.info("模拟Broker重启...");
+    }
+    
+    private void simulateConsumerRestart() {
+        // 实际实现中需要重启消费者
+        log.info("模拟消费者重启...");
+    }
+}
+```
+
+## 8. Kafka最佳实践与总结
+
+### 8.1 设计原则与最佳实践
 
 **架构设计原则**：
 1. **合理规划分区数**：根据并发需求和数据量设置分区数

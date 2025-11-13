@@ -5,13 +5,41 @@ description: 基于 Spring Cloud 的智能仓库管理系统完整设计方案
 tags: [WMS, 仓库管理, Spring Cloud, 微服务, 系统设计]
 ---
 
-# WMS 仓库管理系统设计
+# WMS 仓库管理系统设计（基于RuoYi-Pro-Mini）
+
+:::tip 📌 重要说明：基于RuoYi-Pro-Mini框架开发
+本系统基于 **RuoYi-Pro-Mini** 框架开发，充分复用框架提供的基础功能模块。
+
+**框架核心优势**：
+- ✅ **开箱即用的权限管理**：用户、角色、菜单、权限一体化
+- ✅ **完善的数据字典**：支持动态配置、多级联动
+- ✅ **操作日志审计**：全链路操作记录、异常追踪
+- ✅ **代码生成器**：快速生成CRUD代码，提升开发效率80%
+- ✅ **轻量级设计**：相比RuoYi-Vue-Pro，更轻量、更简洁
+
+**技术栈**：
+- 后端：Spring Boot 3.2.x + MyBatis-Plus 3.5.x + Spring Security + JWT
+- 前端：Vue 3 + Element Plus + TypeScript + Pinia
+- 数据库：MySQL 8.0 + Redis 7.0
+- 消息队列：RocketMQ 5.x（可选）
+- 工具库：Hutool、Lombok、MapStruct
+
+**表命名规范**：
+- 系统基础表：`system_*`（由RuoYi框架提供，无需创建）
+- WMS业务表：`wms_*`（本系统业务表，需要创建）
+:::
 
 ## 一、项目概述
 
 ### 1.1 系统简介
 
-WMS（Warehouse Management System）仓库管理系统是一个基于 Spring Cloud 微服务架构的智能仓储管理平台，旨在通过数字化手段提升仓库运营效率，实现库存实时可视化、出入库自动化、智能拣货调度等核心功能。
+WMS（Warehouse Management System）仓库管理系统是一个基于 **RuoYi-Pro-Mini** 框架的智能仓储管理平台，旨在通过数字化手段提升仓库运营效率，实现库存实时可视化、出入库自动化、智能拣货调度等核心功能。
+
+**与传统WMS的差异**：
+- 基于成熟框架，开发周期缩短50%
+- 复用权限管理，无需重复开发
+- 统一技术栈，降低维护成本
+- 代码生成器加速开发
 
 ### 1.2 核心价值
 
@@ -1205,7 +1233,7 @@ CREATE TABLE `inbound_order` (
     `id` BIGINT(20) NOT NULL AUTO_INCREMENT COMMENT '主键ID',
     `inbound_no` VARCHAR(50) NOT NULL COMMENT '入库单号',
     `warehouse_id` BIGINT(20) NOT NULL COMMENT '仓库ID',
-    `inbound_type` VARCHAR(20) NOT NULL COMMENT '入库类型:PURCHASE-采购,RETURN-退货,TRANSFER-调拨,OTHER-其他',
+    `inbound_type` VARCHAR(20) NOT NULL COMMENT '入库类型:PURCHASE-采购,RETURN-退货,TRANSFER-调拨,PROFIT-盘盈,PRODUCTION-生产,OTHER-其他',
     `source_no` VARCHAR(50) DEFAULT NULL COMMENT '来源单号',
     `supplier_id` BIGINT(20) DEFAULT NULL COMMENT '供应商ID',
     `supplier_name` VARCHAR(100) DEFAULT NULL COMMENT '供应商名称',
@@ -1250,6 +1278,481 @@ CREATE TABLE `inbound_detail` (
     KEY `idx_inbound` (`inbound_id`),
     KEY `idx_goods` (`goods_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='入库单明细表';
+
+-- ================================
+-- 5. 出库管理表
+-- ================================
+
+-- 出库单表
+CREATE TABLE `outbound_order` (
+    `id` BIGINT(20) NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+    `outbound_no` VARCHAR(50) NOT NULL COMMENT '出库单号',
+    `warehouse_id` BIGINT(20) NOT NULL COMMENT '仓库ID',
+    `outbound_type` VARCHAR(20) NOT NULL COMMENT '出库类型:SALE-销售,TRANSFER-调拨,SCRAP-报损,RETURN-退货,LOSS-盘亏,OTHER-其他',
+    `source_no` VARCHAR(50) DEFAULT NULL COMMENT '来源单号(订单号/调拨单号)',
+    `customer_code` VARCHAR(50) DEFAULT NULL COMMENT '客户编码',
+    `customer_name` VARCHAR(100) DEFAULT NULL COMMENT '客户名称',
+    `delivery_address` VARCHAR(200) DEFAULT NULL COMMENT '收货地址',
+    `contact_person` VARCHAR(50) DEFAULT NULL COMMENT '联系人',
+    `contact_phone` VARCHAR(20) DEFAULT NULL COMMENT '联系电话',
+    `expect_time` DATETIME DEFAULT NULL COMMENT '期望发货时间',
+    `actual_time` DATETIME DEFAULT NULL COMMENT '实际发货时间',
+    `total_quantity` DECIMAL(10,2) DEFAULT 0 COMMENT '总数量',
+    `actual_quantity` DECIMAL(10,2) DEFAULT 0 COMMENT '实发数量',
+    `priority` TINYINT(4) DEFAULT 1 COMMENT '优先级:1-普通,2-紧急,3-特急',
+    `carrier` VARCHAR(50) DEFAULT NULL COMMENT '承运商',
+    `tracking_no` VARCHAR(50) DEFAULT NULL COMMENT '物流单号',
+    `status` TINYINT(4) DEFAULT 1 COMMENT '状态:1-待审核,2-待出库,3-拣货中,4-待复核,5-待发货,6-已发货,7-已取消',
+    `audit_user` VARCHAR(50) DEFAULT NULL COMMENT '审核人',
+    `audit_time` DATETIME DEFAULT NULL COMMENT '审核时间',
+    `audit_remark` VARCHAR(500) DEFAULT NULL COMMENT '审核备注',
+    `picker_id` BIGINT(20) DEFAULT NULL COMMENT '拣货员ID',
+    `picker_name` VARCHAR(50) DEFAULT NULL COMMENT '拣货员姓名',
+    `picking_time` DATETIME DEFAULT NULL COMMENT '拣货完成时间',
+    `reviewer_id` BIGINT(20) DEFAULT NULL COMMENT '复核员ID',
+    `reviewer_name` VARCHAR(50) DEFAULT NULL COMMENT '复核员姓名',
+    `review_time` DATETIME DEFAULT NULL COMMENT '复核时间',
+    `operator` VARCHAR(50) DEFAULT NULL COMMENT '操作人',
+    `remark` VARCHAR(500) DEFAULT NULL COMMENT '备注',
+    `create_time` DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `update_time` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_outbound_no` (`outbound_no`),
+    KEY `idx_warehouse` (`warehouse_id`),
+    KEY `idx_customer` (`customer_code`),
+    KEY `idx_status` (`status`),
+    KEY `idx_priority` (`priority`),
+    KEY `idx_create_time` (`create_time`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='出库单表';
+
+-- 出库单明细表
+CREATE TABLE `outbound_detail` (
+    `id` BIGINT(20) NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+    `outbound_id` BIGINT(20) NOT NULL COMMENT '出库单ID',
+    `outbound_no` VARCHAR(50) NOT NULL COMMENT '出库单号',
+    `goods_id` BIGINT(20) NOT NULL COMMENT '商品ID',
+    `sku_code` VARCHAR(50) NOT NULL COMMENT 'SKU编码',
+    `goods_name` VARCHAR(200) NOT NULL COMMENT '商品名称',
+    `batch_no` VARCHAR(50) DEFAULT NULL COMMENT '批次号',
+    `plan_quantity` DECIMAL(10,2) NOT NULL COMMENT '计划数量',
+    `actual_quantity` DECIMAL(10,2) DEFAULT 0 COMMENT '实发数量',
+    `picked_quantity` DECIMAL(10,2) DEFAULT 0 COMMENT '已拣数量',
+    `location_id` BIGINT(20) DEFAULT NULL COMMENT '拣货库位ID',
+    `location_code` VARCHAR(50) DEFAULT NULL COMMENT '拣货库位编码',
+    `status` TINYINT(4) DEFAULT 1 COMMENT '状态:1-待拣货,2-拣货中,3-已拣货,4-已复核,5-已发货',
+    `remark` VARCHAR(500) DEFAULT NULL COMMENT '备注',
+    `create_time` DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `update_time` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    PRIMARY KEY (`id`),
+    KEY `idx_outbound` (`outbound_id`),
+    KEY `idx_goods` (`goods_id`),
+    KEY `idx_location` (`location_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='出库单明细表';
+
+-- ================================
+-- 6. 拣货管理表
+-- ================================
+
+-- 拣货波次表
+CREATE TABLE `picking_wave` (
+    `id` BIGINT(20) NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+    `wave_no` VARCHAR(50) NOT NULL COMMENT '波次号',
+    `warehouse_id` BIGINT(20) NOT NULL COMMENT '仓库ID',
+    `wave_type` VARCHAR(20) DEFAULT 'BATCH' COMMENT '波次类型:BATCH-批次拣货,ZONE-分区拣货,SINGLE-单品拣货',
+    `order_count` INT(11) DEFAULT 0 COMMENT '订单数量',
+    `item_count` INT(11) DEFAULT 0 COMMENT '商品种类数',
+    `total_quantity` DECIMAL(10,2) DEFAULT 0 COMMENT '总数量',
+    `priority` TINYINT(4) DEFAULT 1 COMMENT '优先级:1-普通,2-紧急,3-特急',
+    `picker_id` BIGINT(20) DEFAULT NULL COMMENT '拣货员ID',
+    `picker_name` VARCHAR(50) DEFAULT NULL COMMENT '拣货员姓名',
+    `estimated_time` INT(11) DEFAULT NULL COMMENT '预计耗时(秒)',
+    `actual_time` INT(11) DEFAULT NULL COMMENT '实际耗时(秒)',
+    `start_time` DATETIME DEFAULT NULL COMMENT '开始时间',
+    `end_time` DATETIME DEFAULT NULL COMMENT '结束时间',
+    `status` TINYINT(4) DEFAULT 1 COMMENT '状态:1-待分配,2-已分配,3-拣货中,4-已完成,5-已取消',
+    `remark` VARCHAR(500) DEFAULT NULL COMMENT '备注',
+    `create_time` DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `update_time` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_wave_no` (`wave_no`),
+    KEY `idx_warehouse` (`warehouse_id`),
+    KEY `idx_status` (`status`),
+    KEY `idx_picker` (`picker_id`),
+    KEY `idx_create_time` (`create_time`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='拣货波次表';
+
+-- 拣货波次订单关联表
+CREATE TABLE `picking_wave_order` (
+    `id` BIGINT(20) NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+    `wave_id` BIGINT(20) NOT NULL COMMENT '波次ID',
+    `wave_no` VARCHAR(50) NOT NULL COMMENT '波次号',
+    `outbound_id` BIGINT(20) NOT NULL COMMENT '出库单ID',
+    `outbound_no` VARCHAR(50) NOT NULL COMMENT '出库单号',
+    `create_time` DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_wave_outbound` (`wave_id`, `outbound_id`),
+    KEY `idx_wave` (`wave_id`),
+    KEY `idx_outbound` (`outbound_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='拣货波次订单关联表';
+
+-- 拣货任务表
+CREATE TABLE `picking_task` (
+    `id` BIGINT(20) NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+    `task_no` VARCHAR(50) NOT NULL COMMENT '任务编号',
+    `wave_id` BIGINT(20) DEFAULT NULL COMMENT '波次ID',
+    `wave_no` VARCHAR(50) DEFAULT NULL COMMENT '波次号',
+    `outbound_id` BIGINT(20) NOT NULL COMMENT '出库单ID',
+    `outbound_no` VARCHAR(50) NOT NULL COMMENT '出库单号',
+    `warehouse_id` BIGINT(20) NOT NULL COMMENT '仓库ID',
+    `goods_id` BIGINT(20) NOT NULL COMMENT '商品ID',
+    `sku_code` VARCHAR(50) NOT NULL COMMENT 'SKU编码',
+    `goods_name` VARCHAR(200) NOT NULL COMMENT '商品名称',
+    `batch_no` VARCHAR(50) DEFAULT NULL COMMENT '批次号',
+    `location_id` BIGINT(20) NOT NULL COMMENT '库位ID',
+    `location_code` VARCHAR(50) NOT NULL COMMENT '库位编码',
+    `plan_quantity` DECIMAL(10,2) NOT NULL COMMENT '计划拣货数量',
+    `actual_quantity` DECIMAL(10,2) DEFAULT 0 COMMENT '实际拣货数量',
+    `sort_order` INT(11) DEFAULT 0 COMMENT '拣货顺序',
+    `picker_id` BIGINT(20) DEFAULT NULL COMMENT '拣货员ID',
+    `picker_name` VARCHAR(50) DEFAULT NULL COMMENT '拣货员姓名',
+    `picking_time` DATETIME DEFAULT NULL COMMENT '拣货时间',
+    `status` TINYINT(4) DEFAULT 1 COMMENT '状态:1-待拣货,2-拣货中,3-已完成,4-异常',
+    `exception_type` VARCHAR(20) DEFAULT NULL COMMENT '异常类型:EMPTY-库位空,SHORT-库存不足,DAMAGED-商品损坏',
+    `exception_remark` VARCHAR(500) DEFAULT NULL COMMENT '异常说明',
+    `remark` VARCHAR(500) DEFAULT NULL COMMENT '备注',
+    `create_time` DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `update_time` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_task_no` (`task_no`),
+    KEY `idx_wave` (`wave_id`),
+    KEY `idx_outbound` (`outbound_id`),
+    KEY `idx_picker` (`picker_id`),
+    KEY `idx_location` (`location_id`),
+    KEY `idx_status` (`status`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='拣货任务表';
+
+-- ================================
+-- 7. 盘点管理表
+-- ================================
+
+-- 盘点计划表
+CREATE TABLE `stock_taking_plan` (
+    `id` BIGINT(20) NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+    `plan_no` VARCHAR(50) NOT NULL COMMENT '盘点计划编号',
+    `plan_name` VARCHAR(100) NOT NULL COMMENT '盘点计划名称',
+    `warehouse_id` BIGINT(20) NOT NULL COMMENT '仓库ID',
+    `taking_type` VARCHAR(20) NOT NULL COMMENT '盘点类型:FULL-全盘,CYCLE-循环盘,SPOT-抽盘,DYNAMIC-动态盘',
+    `scope_type` VARCHAR(20) NOT NULL COMMENT '盘点范围:WAREHOUSE-全仓,AREA-库区,LOCATION-库位,GOODS-商品',
+    `scope_value` VARCHAR(500) DEFAULT NULL COMMENT '范围值(JSON数组)',
+    `plan_start_time` DATETIME NOT NULL COMMENT '计划开始时间',
+    `plan_end_time` DATETIME NOT NULL COMMENT '计划结束时间',
+    `actual_start_time` DATETIME DEFAULT NULL COMMENT '实际开始时间',
+    `actual_end_time` DATETIME DEFAULT NULL COMMENT '实际结束时间',
+    `total_count` INT(11) DEFAULT 0 COMMENT '盘点总数',
+    `completed_count` INT(11) DEFAULT 0 COMMENT '已完成数',
+    `diff_count` INT(11) DEFAULT 0 COMMENT '差异数',
+    `creator` VARCHAR(50) DEFAULT NULL COMMENT '创建人',
+    `status` TINYINT(4) DEFAULT 1 COMMENT '状态:1-待审核,2-待执行,3-执行中,4-已完成,5-已取消',
+    `audit_user` VARCHAR(50) DEFAULT NULL COMMENT '审核人',
+    `audit_time` DATETIME DEFAULT NULL COMMENT '审核时间',
+    `remark` VARCHAR(500) DEFAULT NULL COMMENT '备注',
+    `create_time` DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `update_time` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_plan_no` (`plan_no`),
+    KEY `idx_warehouse` (`warehouse_id`),
+    KEY `idx_status` (`status`),
+    KEY `idx_plan_time` (`plan_start_time`, `plan_end_time`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='盘点计划表';
+
+-- 盘点单表
+CREATE TABLE `stock_taking` (
+    `id` BIGINT(20) NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+    `taking_no` VARCHAR(50) NOT NULL COMMENT '盘点单号',
+    `plan_id` BIGINT(20) DEFAULT NULL COMMENT '盘点计划ID',
+    `plan_no` VARCHAR(50) DEFAULT NULL COMMENT '盘点计划编号',
+    `warehouse_id` BIGINT(20) NOT NULL COMMENT '仓库ID',
+    `location_id` BIGINT(20) DEFAULT NULL COMMENT '库位ID',
+    `location_code` VARCHAR(50) DEFAULT NULL COMMENT '库位编码',
+    `goods_id` BIGINT(20) NOT NULL COMMENT '商品ID',
+    `sku_code` VARCHAR(50) NOT NULL COMMENT 'SKU编码',
+    `goods_name` VARCHAR(200) NOT NULL COMMENT '商品名称',
+    `batch_no` VARCHAR(50) DEFAULT NULL COMMENT '批次号',
+    `book_quantity` DECIMAL(10,2) DEFAULT 0 COMMENT '账面数量',
+    `actual_quantity` DECIMAL(10,2) DEFAULT NULL COMMENT '实盘数量',
+    `diff_quantity` DECIMAL(10,2) GENERATED ALWAYS AS (`actual_quantity` - `book_quantity`) STORED COMMENT '差异数量',
+    `diff_reason` VARCHAR(200) DEFAULT NULL COMMENT '差异原因',
+    `operator` VARCHAR(50) DEFAULT NULL COMMENT '盘点人',
+    `operate_time` DATETIME DEFAULT NULL COMMENT '盘点时间',
+    `reviewer` VARCHAR(50) DEFAULT NULL COMMENT '复核人',
+    `review_time` DATETIME DEFAULT NULL COMMENT '复核时间',
+    `status` TINYINT(4) DEFAULT 1 COMMENT '状态:1-待盘点,2-已盘点,3-已复核,4-已调整',
+    `remark` VARCHAR(500) DEFAULT NULL COMMENT '备注',
+    `create_time` DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `update_time` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_taking_no` (`taking_no`),
+    KEY `idx_plan` (`plan_id`),
+    KEY `idx_warehouse_goods` (`warehouse_id`, `goods_id`),
+    KEY `idx_location` (`location_id`),
+    KEY `idx_status` (`status`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='盘点单表';
+
+-- ================================
+-- 8. 库位调整表
+-- ================================
+
+-- 移库单表
+CREATE TABLE `stock_move` (
+    `id` BIGINT(20) NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+    `move_no` VARCHAR(50) NOT NULL COMMENT '移库单号',
+    `warehouse_id` BIGINT(20) NOT NULL COMMENT '仓库ID',
+    `move_type` VARCHAR(20) NOT NULL COMMENT '移库类型:LOCATION-库位调整,AREA-库区调整,WAREHOUSE-仓库调拨',
+    `goods_id` BIGINT(20) NOT NULL COMMENT '商品ID',
+    `sku_code` VARCHAR(50) NOT NULL COMMENT 'SKU编码',
+    `goods_name` VARCHAR(200) NOT NULL COMMENT '商品名称',
+    `batch_no` VARCHAR(50) DEFAULT NULL COMMENT '批次号',
+    `from_location_id` BIGINT(20) NOT NULL COMMENT '源库位ID',
+    `from_location_code` VARCHAR(50) NOT NULL COMMENT '源库位编码',
+    `to_location_id` BIGINT(20) NOT NULL COMMENT '目标库位ID',
+    `to_location_code` VARCHAR(50) NOT NULL COMMENT '目标库位编码',
+    `quantity` DECIMAL(10,2) NOT NULL COMMENT '移库数量',
+    `move_reason` VARCHAR(200) DEFAULT NULL COMMENT '移库原因',
+    `operator` VARCHAR(50) DEFAULT NULL COMMENT '操作人',
+    `operate_time` DATETIME DEFAULT NULL COMMENT '操作时间',
+    `status` TINYINT(4) DEFAULT 1 COMMENT '状态:1-待执行,2-执行中,3-已完成,4-已取消',
+    `remark` VARCHAR(500) DEFAULT NULL COMMENT '备注',
+    `create_time` DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `update_time` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_move_no` (`move_no`),
+    KEY `idx_warehouse` (`warehouse_id`),
+    KEY `idx_goods` (`goods_id`),
+    KEY `idx_from_location` (`from_location_id`),
+    KEY `idx_to_location` (`to_location_id`),
+    KEY `idx_status` (`status`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='移库单表';
+
+-- ================================
+-- 9. 供应商/客户管理表
+-- ================================
+
+-- 供应商表
+CREATE TABLE `supplier` (
+    `id` BIGINT(20) NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+    `supplier_code` VARCHAR(50) NOT NULL COMMENT '供应商编码',
+    `supplier_name` VARCHAR(100) NOT NULL COMMENT '供应商名称',
+    `supplier_type` VARCHAR(20) DEFAULT 'NORMAL' COMMENT '供应商类型:NORMAL-普通,VIP-VIP,STRATEGIC-战略',
+    `contact_person` VARCHAR(50) DEFAULT NULL COMMENT '联系人',
+    `contact_phone` VARCHAR(20) DEFAULT NULL COMMENT '联系电话',
+    `contact_email` VARCHAR(50) DEFAULT NULL COMMENT '邮箱',
+    `province` VARCHAR(50) DEFAULT NULL COMMENT '省份',
+    `city` VARCHAR(50) DEFAULT NULL COMMENT '城市',
+    `district` VARCHAR(50) DEFAULT NULL COMMENT '区县',
+    `address` VARCHAR(200) DEFAULT NULL COMMENT '详细地址',
+    `credit_level` VARCHAR(20) DEFAULT 'B' COMMENT '信用等级:A-优秀,B-良好,C-一般,D-较差',
+    `cooperation_start_date` DATE DEFAULT NULL COMMENT '合作开始日期',
+    `status` TINYINT(4) DEFAULT 1 COMMENT '状态:1-启用,0-禁用',
+    `remark` VARCHAR(500) DEFAULT NULL COMMENT '备注',
+    `create_time` DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `update_time` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_supplier_code` (`supplier_code`),
+    KEY `idx_supplier_type` (`supplier_type`),
+    KEY `idx_status` (`status`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='供应商表';
+
+-- 客户表
+CREATE TABLE `customer` (
+    `id` BIGINT(20) NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+    `customer_code` VARCHAR(50) NOT NULL COMMENT '客户编码',
+    `customer_name` VARCHAR(100) NOT NULL COMMENT '客户名称',
+    `customer_type` VARCHAR(20) DEFAULT 'RETAIL' COMMENT '客户类型:RETAIL-零售,WHOLESALE-批发,ENTERPRISE-企业',
+    `customer_level` VARCHAR(20) DEFAULT 'NORMAL' COMMENT '客户等级:VIP,GOLD,SILVER,NORMAL',
+    `contact_person` VARCHAR(50) DEFAULT NULL COMMENT '联系人',
+    `contact_phone` VARCHAR(20) DEFAULT NULL COMMENT '联系电话',
+    `contact_email` VARCHAR(50) DEFAULT NULL COMMENT '邮箱',
+    `delivery_province` VARCHAR(50) DEFAULT NULL COMMENT '收货省份',
+    `delivery_city` VARCHAR(50) DEFAULT NULL COMMENT '收货城市',
+    `delivery_district` VARCHAR(50) DEFAULT NULL COMMENT '收货区县',
+    `delivery_address` VARCHAR(200) DEFAULT NULL COMMENT '收货地址',
+    `credit_limit` DECIMAL(15,2) DEFAULT 0 COMMENT '信用额度',
+    `total_orders` INT(11) DEFAULT 0 COMMENT '累计订单数',
+    `total_amount` DECIMAL(15,2) DEFAULT 0 COMMENT '累计金额',
+    `status` TINYINT(4) DEFAULT 1 COMMENT '状态:1-启用,0-禁用',
+    `remark` VARCHAR(500) DEFAULT NULL COMMENT '备注',
+    `create_time` DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `update_time` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_customer_code` (`customer_code`),
+    KEY `idx_customer_type` (`customer_type`),
+    KEY `idx_customer_level` (`customer_level`),
+    KEY `idx_status` (`status`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='客户表';
+
+-- 承运商表
+CREATE TABLE `carrier` (
+    `id` BIGINT(20) NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+    `carrier_code` VARCHAR(50) NOT NULL COMMENT '承运商编码',
+    `carrier_name` VARCHAR(100) NOT NULL COMMENT '承运商名称',
+    `carrier_type` VARCHAR(20) DEFAULT 'EXPRESS' COMMENT '承运商类型:EXPRESS-快递,LOGISTICS-物流,SPECIAL-专线',
+    `contact_person` VARCHAR(50) DEFAULT NULL COMMENT '联系人',
+    `contact_phone` VARCHAR(20) DEFAULT NULL COMMENT '联系电话',
+    `contact_email` VARCHAR(50) DEFAULT NULL COMMENT '邮箱',
+    `service_area` VARCHAR(500) DEFAULT NULL COMMENT '服务区域',
+    `price_standard` VARCHAR(500) DEFAULT NULL COMMENT '收费标准',
+    `time_limit` VARCHAR(100) DEFAULT NULL COMMENT '时效要求',
+    `rating` DECIMAL(3,2) DEFAULT 5.00 COMMENT '服务评分(1-5分)',
+    `cooperation_start_date` DATE DEFAULT NULL COMMENT '合作开始日期',
+    `status` TINYINT(4) DEFAULT 1 COMMENT '状态:1-启用,0-禁用',
+    `remark` VARCHAR(500) DEFAULT NULL COMMENT '备注',
+    `create_time` DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `update_time` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_carrier_code` (`carrier_code`),
+    KEY `idx_carrier_type` (`carrier_type`),
+    KEY `idx_status` (`status`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='承运商表';
+
+-- ================================
+-- 10. 系统配置表
+-- ================================
+
+-- 数据字典表
+CREATE TABLE `sys_dict` (
+    `id` BIGINT(20) NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+    `dict_code` VARCHAR(50) NOT NULL COMMENT '字典编码',
+    `dict_name` VARCHAR(100) NOT NULL COMMENT '字典名称',
+    `parent_code` VARCHAR(50) DEFAULT NULL COMMENT '父字典编码',
+    `dict_value` VARCHAR(100) DEFAULT NULL COMMENT '字典值',
+    `dict_label` VARCHAR(100) DEFAULT NULL COMMENT '字典标签',
+    `sort_order` INT(11) DEFAULT 0 COMMENT '排序',
+    `css_class` VARCHAR(50) DEFAULT NULL COMMENT '样式类',
+    `list_class` VARCHAR(50) DEFAULT NULL COMMENT '列表类',
+    `is_default` TINYINT(4) DEFAULT 0 COMMENT '是否默认:1-是,0-否',
+    `status` TINYINT(4) DEFAULT 1 COMMENT '状态:1-启用,0-禁用',
+    `remark` VARCHAR(500) DEFAULT NULL COMMENT '备注',
+    `create_time` DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `update_time` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_dict` (`dict_code`, `dict_value`),
+    KEY `idx_parent` (`parent_code`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='数据字典表';
+
+-- 用户表
+CREATE TABLE `sys_user` (
+    `id` BIGINT(20) NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+    `username` VARCHAR(50) NOT NULL COMMENT '用户名',
+    `password` VARCHAR(100) NOT NULL COMMENT '密码',
+    `real_name` VARCHAR(50) NOT NULL COMMENT '真实姓名',
+    `nickname` VARCHAR(50) DEFAULT NULL COMMENT '昵称',
+    `user_type` VARCHAR(20) DEFAULT 'EMPLOYEE' COMMENT '用户类型:ADMIN-管理员,EMPLOYEE-员工,PICKER-拣货员',
+    `phone` VARCHAR(20) DEFAULT NULL COMMENT '手机号',
+    `email` VARCHAR(50) DEFAULT NULL COMMENT '邮箱',
+    `avatar` VARCHAR(200) DEFAULT NULL COMMENT '头像',
+    `dept_id` BIGINT(20) DEFAULT NULL COMMENT '部门ID',
+    `dept_name` VARCHAR(100) DEFAULT NULL COMMENT '部门名称',
+    `warehouse_id` BIGINT(20) DEFAULT NULL COMMENT '所属仓库ID',
+    `status` TINYINT(4) DEFAULT 1 COMMENT '状态:1-正常,0-禁用',
+    `login_date` DATETIME DEFAULT NULL COMMENT '最后登录时间',
+    `login_ip` VARCHAR(50) DEFAULT NULL COMMENT '最后登录IP',
+    `create_time` DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `update_time` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_username` (`username`),
+    KEY `idx_phone` (`phone`),
+    KEY `idx_dept` (`dept_id`),
+    KEY `idx_warehouse` (`warehouse_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='用户表';
+
+-- 角色表
+CREATE TABLE `sys_role` (
+    `id` BIGINT(20) NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+    `role_code` VARCHAR(50) NOT NULL COMMENT '角色编码',
+    `role_name` VARCHAR(100) NOT NULL COMMENT '角色名称',
+    `role_type` VARCHAR(20) DEFAULT 'CUSTOM' COMMENT '角色类型:SYSTEM-系统,CUSTOM-自定义',
+    `data_scope` TINYINT(4) DEFAULT 1 COMMENT '数据范围:1-全部,2-自定义,3-本部门,4-本人',
+    `sort_order` INT(11) DEFAULT 0 COMMENT '排序',
+    `status` TINYINT(4) DEFAULT 1 COMMENT '状态:1-正常,0-禁用',
+    `remark` VARCHAR(500) DEFAULT NULL COMMENT '备注',
+    `create_time` DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `update_time` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_role_code` (`role_code`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='角色表';
+
+-- 菜单表
+CREATE TABLE `sys_menu` (
+    `id` BIGINT(20) NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+    `menu_code` VARCHAR(50) NOT NULL COMMENT '菜单编码',
+    `menu_name` VARCHAR(100) NOT NULL COMMENT '菜单名称',
+    `parent_id` BIGINT(20) DEFAULT 0 COMMENT '父菜单ID',
+    `menu_type` VARCHAR(20) DEFAULT 'MENU' COMMENT '菜单类型:CATALOG-目录,MENU-菜单,BUTTON-按钮',
+    `path` VARCHAR(200) DEFAULT NULL COMMENT '路由地址',
+    `component` VARCHAR(200) DEFAULT NULL COMMENT '组件路径',
+    `permission` VARCHAR(100) DEFAULT NULL COMMENT '权限标识',
+    `icon` VARCHAR(100) DEFAULT NULL COMMENT '图标',
+    `sort_order` INT(11) DEFAULT 0 COMMENT '排序',
+    `visible` TINYINT(4) DEFAULT 1 COMMENT '是否显示:1-显示,0-隐藏',
+    `status` TINYINT(4) DEFAULT 1 COMMENT '状态:1-正常,0-禁用',
+    `remark` VARCHAR(500) DEFAULT NULL COMMENT '备注',
+    `create_time` DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `update_time` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_menu_code` (`menu_code`),
+    KEY `idx_parent` (`parent_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='菜单表';
+
+-- 用户角色关联表
+CREATE TABLE `sys_user_role` (
+    `id` BIGINT(20) NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+    `user_id` BIGINT(20) NOT NULL COMMENT '用户ID',
+    `role_id` BIGINT(20) NOT NULL COMMENT '角色ID',
+    `create_time` DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_user_role` (`user_id`, `role_id`),
+    KEY `idx_user` (`user_id`),
+    KEY `idx_role` (`role_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='用户角色关联表';
+
+-- 角色菜单关联表
+CREATE TABLE `sys_role_menu` (
+    `id` BIGINT(20) NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+    `role_id` BIGINT(20) NOT NULL COMMENT '角色ID',
+    `menu_id` BIGINT(20) NOT NULL COMMENT '菜单ID',
+    `create_time` DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_role_menu` (`role_id`, `menu_id`),
+    KEY `idx_role` (`role_id`),
+    KEY `idx_menu` (`menu_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='角色菜单关联表';
+
+-- 操作日志表
+CREATE TABLE `sys_operation_log` (
+    `id` BIGINT(20) NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+    `module` VARCHAR(50) DEFAULT NULL COMMENT '操作模块',
+    `business_type` VARCHAR(50) DEFAULT NULL COMMENT '业务类型',
+    `business_id` BIGINT(20) DEFAULT NULL COMMENT '业务ID',
+    `method` VARCHAR(200) DEFAULT NULL COMMENT '请求方法',
+    `request_method` VARCHAR(10) DEFAULT NULL COMMENT '请求方式',
+    `operator_type` VARCHAR(20) DEFAULT 'WEB' COMMENT '操作类型:WEB-后台,MOBILE-手机,API-接口',
+    `operator` VARCHAR(50) DEFAULT NULL COMMENT '操作人',
+    `dept_name` VARCHAR(100) DEFAULT NULL COMMENT '部门名称',
+    `url` VARCHAR(500) DEFAULT NULL COMMENT '请求URL',
+    `ip` VARCHAR(50) DEFAULT NULL COMMENT '操作IP',
+    `location` VARCHAR(200) DEFAULT NULL COMMENT '操作地点',
+    `param` TEXT DEFAULT NULL COMMENT '请求参数',
+    `result` TEXT DEFAULT NULL COMMENT '返回结果',
+    `status` TINYINT(4) DEFAULT 1 COMMENT '状态:1-成功,0-失败',
+    `error_msg` TEXT DEFAULT NULL COMMENT '错误消息',
+    `cost_time` INT(11) DEFAULT NULL COMMENT '消耗时间(毫秒)',
+    `create_time` DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    PRIMARY KEY (`id`),
+    KEY `idx_module` (`module`),
+    KEY `idx_business` (`business_type`, `business_id`),
+    KEY `idx_operator` (`operator`),
+    KEY `idx_create_time` (`create_time`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='操作日志表';
 
 ---
 
@@ -3062,6 +3565,1240 @@ A: 采用分布式事务（Seata）+ 最终一致性（消息队列补偿）。
 - **作者**: 系统架构团队
 - **标签**: WMS, 仓库管理, Spring Cloud, 微服务架构
 :::
+
+---
+
+## 九、完整数据字典
+
+### 9.1 状态码字典
+
+#### 入库单状态 (inbound_status)
+
+| 状态值 | 状态名称 | 说明 | 可操作 |
+|-------|---------|------|--------|
+| 1 | 待审核 | 入库单已创建,等待审核 | 审核通过/驳回 |
+| 2 | 待入库 | 审核通过,等待收货 | 开始收货 |
+| 3 | 入库中 | 正在收货上架 | 继续入库/完成入库 |
+| 4 | 已完成 | 入库完成 | 查看 |
+| 5 | 已取消 | 入库单已取消 | 查看 |
+
+#### 出库单状态 (outbound_status)
+
+| 状态值 | 状态名称 | 说明 | 可操作 |
+|-------|---------|------|--------|
+| 1 | 待审核 | 出库单已创建,等待审核 | 审核通过/驳回 |
+| 2 | 待出库 | 审核通过,等待创建拣货任务 | 创建波次 |
+| 3 | 拣货中 | 正在执行拣货 | 查看进度 |
+| 4 | 待复核 | 拣货完成,等待复核 | 开始复核 |
+| 5 | 待发货 | 复核完成,等待打包发货 | 确认发货 |
+| 6 | 已发货 | 商品已发出 | 查看物流 |
+| 7 | 已取消 | 出库单已取消 | 查看 |
+
+#### 库存状态 (inventory_status)
+
+| 状态值 | 状态名称 | 颜色标识 | 说明 |
+|-------|---------|---------|------|
+| 1 | 正常 | success | 可正常出库 |
+| 2 | 冻结 | danger | 不可出库,待处理 |
+| 3 | 待检 | warning | 质检中,不可出库 |
+| 4 | 损坏 | info | 已损坏,待报损 |
+
+#### 拣货任务状态 (picking_task_status)
+
+| 状态值 | 状态名称 | 说明 |
+|-------|---------|------|
+| 1 | 待拣货 | 任务已分配,未开始 |
+| 2 | 拣货中 | 拣货员正在执行 |
+| 3 | 已完成 | 拣货完成 |
+| 4 | 异常 | 拣货异常(库位空/库存不足/商品损坏) |
+
+#### 盘点单状态 (stock_taking_status)
+
+| 状态值 | 状态名称 | 说明 |
+|-------|---------|------|
+| 1 | 待盘点 | 盘点单已生成,未盘点 |
+| 2 | 已盘点 | 实盘完成,待复核 |
+| 3 | 已复核 | 复核完成,待调整库存 |
+| 4 | 已调整 | 库存已调整 |
+
+### 9.2 类型字典
+
+#### 入库类型 (inbound_type)
+
+| 类型值 | 类型名称 | 图标 | 业务场景 |
+|-------|---------|------|---------|
+| PURCHASE | 采购入库 | 📦 | 供应商采购到货 |
+| RETURN | 退货入库 | 🔙 | 客户退货入仓 |
+| TRANSFER | 调拨入库 | 🔄 | 其他仓库调入 |
+| PROFIT | 盘盈入库 | ➕ | 盘点发现多余库存 |
+| PRODUCTION | 生产入库 | 🏭 | 生产完工入库 |
+| OTHER | 其他入库 | 📝 | 其他入库场景 |
+
+#### 出库类型 (outbound_type)
+
+| 类型值 | 类型名称 | 图标 | 业务场景 |
+|-------|---------|------|---------|
+| SALE | 销售出库 | 🛒 | 客户订单发货 |
+| TRANSFER | 调拨出库 | 🔄 | 调拨到其他仓库 |
+| SCRAP | 报损出库 | ❌ | 损坏商品报损 |
+| RETURN | 退货出库 | 🔙 | 退货给供应商 |
+| LOSS | 盘亏出库 | ➖ | 盘点发现短缺 |
+| OTHER | 其他出库 | 📝 | 其他出库场景 |
+
+#### 盘点类型 (stock_taking_type)
+
+| 类型值 | 类型名称 | 适用场景 | 频率建议 |
+|-------|---------|---------|---------|
+| FULL | 全盘 | 全仓所有商品盘点 | 每年1-2次 |
+| CYCLE | 循环盘 | 按ABC分类分批盘点 | 每月1次 |
+| SPOT | 抽盘 | 随机抽取部分商品 | 每周1次 |
+| DYNAMIC | 动态盘 | 零库存商品盘点 | 随时 |
+
+#### 移库类型 (stock_move_type)
+
+| 类型值 | 类型名称 | 说明 |
+|-------|---------|------|
+| LOCATION | 库位调整 | 同一库区内库位间移动 |
+| AREA | 库区调整 | 同一仓库内库区间移动 |
+| WAREHOUSE | 仓库调拨 | 不同仓库间调拨 |
+
+### 9.3 枚举字典
+
+#### 优先级 (priority)
+
+| 优先级值 | 优先级名称 | 颜色 | 处理时效 |
+|---------|-----------|-----|---------|
+| 1 | 普通 | default | 24小时内 |
+| 2 | 紧急 | warning | 8小时内 |
+| 3 | 特急 | danger | 2小时内 |
+
+#### 计量单位 (unit)
+
+| 单位代码 | 单位名称 | 英文 |
+|---------|---------|------|
+| PCS | 个/件 | Piece |
+| BOX | 箱 | Box |
+| CTN | 纸箱 | Carton |
+| PLT | 托盘 | Pallet |
+| KG | 千克 | Kilogram |
+| METER | 米 | Meter |
+| LITER | 升 | Liter |
+
+#### 异常类型 (exception_type)
+
+| 异常代码 | 异常名称 | 处理方式 |
+|---------|---------|---------|
+| EMPTY | 库位空缺 | 触发盘点,查找替代库位 |
+| SHORT | 库存不足 | 减单或等待补货 |
+| DAMAGED | 商品损坏 | 标记残次,查找替代批次 |
+| EXPIRED | 商品过期 | 冻结库存,安排报损 |
+| WRONG | 拣错商品 | 回退重拣,记录错误率 |
+
+### 9.4 补充字典
+
+#### 仓库类型 (warehouse_type)
+
+| 类型值 | 类型名称 | 说明 |
+|-------|---------|------|
+| 1 | 成品仓 | 存储成品商品 |
+| 2 | 原料仓 | 存储原材料 |
+| 3 | 半成品仓 | 存储半成品 |
+
+#### 库区类型 (warehouse_area_type)
+
+| 类型值 | 类型名称 | 说明 |
+|-------|---------|------|
+| STORAGE | 存储区 | 长期存储区域 |
+| PICKING | 拣货区 | 高频出库商品存储 |
+| STAGING | 暂存区 | 临时存放区域 |
+| RECEIVING | 收货区 | 收货验收区域 |
+| SHIPPING | 发货区 | 打包发货区域 |
+
+#### 库位类型 (location_type)
+
+| 类型值 | 类型名称 | 说明 |
+|-------|---------|------|
+| NORMAL | 普通库位 | 标准存储库位 |
+| TEMP | 临时库位 | 临时存放 |
+| DEFECT | 残次品库位 | 存放残次品 |
+| FROZEN | 冷冻库位 | 需冷藏商品 |
+
+#### 库位状态 (location_status)
+
+| 状态值 | 状态名称 | 说明 |
+|-------|---------|------|
+| 1 | 空闲 | 库位空闲可用 |
+| 2 | 占用 | 库位已存放商品 |
+| 3 | 锁定 | 库位锁定不可用 |
+| 0 | 禁用 | 库位禁用 |
+
+#### 拣货波次类型 (wave_type)
+
+| 类型值 | 类型名称 | 说明 |
+|-------|---------|------|
+| BATCH | 批次拣货 | 多订单批量拣货 |
+| ZONE | 分区拣货 | 按库区分区拣货 |
+| SINGLE | 单品拣货 | 单个订单拣货 |
+
+#### 拣货波次状态 (wave_status)
+
+| 状态值 | 状态名称 | 说明 |
+|-------|---------|------|
+| 1 | 待分配 | 波次已生成,待分配拣货员 |
+| 2 | 已分配 | 已分配拣货员,待开始 |
+| 3 | 拣货中 | 正在执行拣货 |
+| 4 | 已完成 | 拣货完成 |
+| 5 | 已取消 | 波次取消 |
+
+#### 盘点计划状态 (stock_taking_plan_status)
+
+| 状态值 | 状态名称 | 说明 |
+|-------|---------|------|
+| 1 | 待审核 | 计划已创建,待审核 |
+| 2 | 待执行 | 审核通过,待执行 |
+| 3 | 执行中 | 正在盘点 |
+| 4 | 已完成 | 盘点完成 |
+| 5 | 已取消 | 计划取消 |
+
+#### 移库单状态 (stock_move_status)
+
+| 状态值 | 状态名称 | 说明 |
+|-------|---------|------|
+| 1 | 待执行 | 移库单已创建,待执行 |
+| 2 | 执行中 | 正在移库 |
+| 3 | 已完成 | 移库完成 |
+| 4 | 已取消 | 移库取消 |
+
+#### 入库单明细状态 (inbound_detail_status)
+
+| 状态值 | 状态名称 | 说明 |
+|-------|---------|------|
+| 1 | 待收货 | 待收货验收 |
+| 2 | 已收货 | 已收货待上架 |
+| 3 | 已上架 | 已上架完成 |
+
+#### 出库单明细状态 (outbound_detail_status)
+
+| 状态值 | 状态名称 | 说明 |
+|-------|---------|------|
+| 1 | 待拣货 | 待拣货 |
+| 2 | 拣货中 | 正在拣货 |
+| 3 | 已拣货 | 拣货完成待复核 |
+| 4 | 已复核 | 复核完成待发货 |
+| 5 | 已发货 | 已发货 |
+
+#### 供应商类型 (supplier_type)
+
+| 类型值 | 类型名称 | 说明 |
+|-------|---------|------|
+| NORMAL | 普通供应商 | 一般合作供应商 |
+| VIP | VIP供应商 | 重要合作伙伴 |
+| STRATEGIC | 战略供应商 | 战略合作伙伴 |
+
+#### 客户类型 (customer_type)
+
+| 类型值 | 类型名称 | 说明 |
+|-------|---------|------|
+| RETAIL | 零售客户 | 零售终端客户 |
+| WHOLESALE | 批发客户 | 批发商客户 |
+| ENTERPRISE | 企业客户 | 企业级客户 |
+
+#### 客户等级 (customer_level)
+
+| 等级值 | 等级名称 | 说明 |
+|-------|---------|------|
+| VIP | VIP客户 | 最高级客户 |
+| GOLD | 金牌客户 | 高价值客户 |
+| SILVER | 银牌客户 | 中等价值客户 |
+| NORMAL | 普通客户 | 一般客户 |
+
+#### 承运商类型 (carrier_type)
+
+| 类型值 | 类型名称 | 说明 |
+|-------|---------|------|
+| EXPRESS | 快递 | 快递公司 |
+| LOGISTICS | 物流 | 物流公司 |
+| SPECIAL | 专线 | 专线物流 |
+
+## 十、完整系统功能清单
+
+### 10.1 菜单结构树
+
+```
+WMS 仓库管理系统
+├── 📊 工作台
+│   ├── 首页仪表盘
+│   ├── 待办任务
+│   └── 数据大屏
+├── 📦 库存管理
+│   ├── 库存查询
+│   ├── 库存预警
+│   ├── 库存流水
+│   ├── 库存快照
+│   └── 库存对账
+├── 📥 入库管理
+│   ├── 入库单管理
+│   ├── 采购入库
+│   ├── 退货入库
+│   ├── 调拨入库
+│   └── 收货记录
+├── 📤 出库管理
+│   ├── 出库单管理
+│   ├── 销售出库
+│   ├── 调拨出库
+│   ├── 报损出库
+│   └── 发货记录
+├── 🎯 拣货管理
+│   ├── 拣货波次
+│   ├── 拣货任务
+│   ├── 拣货绩效
+│   └── 路径优化配置
+├── 🔍 盘点管理
+│   ├── 盘点计划
+│   ├── 盘点执行
+│   ├── 盘点结果
+│   └── 库存调整
+├── 🏢 仓库管理
+│   ├── 仓库信息
+│   ├── 库区管理
+│   ├── 库位管理
+│   └── 容量规划
+├── 🎁 商品管理
+│   ├── 商品档案
+│   ├── 商品分类
+│   ├── 商品导入
+│   └── 商品标签打印
+├── 🔄 移库管理
+│   ├── 移库单管理
+│   ├── 库位调整
+│   ├── 库区调整
+│   └── 移库记录
+├── 👥 往来单位
+│   ├── 供应商管理
+│   ├── 客户管理
+│   └── 承运商管理
+├── 📈 报表中心
+│   ├── 库存报表
+│   ├── 出入库统计
+│   ├── 周转率分析
+│   ├── 库龄分析
+│   ├── ABC分类
+│   └── 自定义报表
+├── ⚙️ 系统管理
+│   ├── 用户管理
+│   ├── 角色管理
+│   ├── 菜单管理
+│   ├── 部门管理
+│   ├── 数据字典
+│   ├── 系统配置
+│   └── 操作日志
+└── 📱 移动端(PDA)
+    ├── 收货上架
+    ├── 拣货出库
+    ├── 库存盘点
+    ├── 库存移动
+    └── 标签打印
+```
+
+### 10.2 核心功能页面详细设计
+
+#### 10.2.1 库存查询页面
+
+**页面路径**: `/inventory/list`
+
+**功能说明**: 查询和管理所有库存信息
+
+**检索条件**:
+
+| 字段名 | 字段类型 | 是否必填 | 说明 |
+|-------|---------|---------|------|
+| 仓库 | 下拉选择 | 否 | 支持多选 |
+| 商品名称 | 文本输入 | 否 | 支持模糊查询 |
+| SKU编码 | 文本输入 | 否 | 精确查询 |
+| 商品分类 | 树形选择 | 否 | 支持多级分类 |
+| 库位编码 | 文本输入 | 否 | 支持模糊查询 |
+| 批次号 | 文本输入 | 否 | 精确查询 |
+| 库存状态 | 下拉选择 | 否 | 正常/冻结/待检/损坏 |
+| 库存预警 | 复选框 | 否 | 勾选显示低于安全库存的商品 |
+| 库龄范围 | 日期区间 | 否 | 入库日期范围 |
+
+**表格列**:
+
+| 列名 | 宽度 | 是否固定 | 排序 | 说明 |
+|-----|------|---------|-----|------|
+| 序号 | 60px | 左 | - | 自增序号 |
+| 仓库名称 | 120px | - | ✅ | - |
+| 库区 | 100px | - | ✅ | - |
+| 库位编码 | 120px | - | ✅ | 可点击查看库位详情 |
+| SKU编码 | 150px | - | ✅ | - |
+| 商品名称 | 200px | - | ✅ | 悬浮显示完整名称 |
+| 规格型号 | 150px | - | - | - |
+| 批次号 | 120px | - | - | - |
+| 总库存 | 100px | 右对齐 | ✅ | 低于安全库存红色显示 |
+| 锁定数量 | 100px | 右对齐 | ✅ | - |
+| 可用库存 | 100px | 右对齐 | ✅ | Tag标签样式 |
+| 计量单位 | 80px | - | - | - |
+| 库存状态 | 80px | - | ✅ | Tag标签样式 |
+| 入库日期 | 150px | - | ✅ | - |
+| 库龄(天) | 80px | 右对齐 | ✅ | 超过90天黄色提示 |
+| 操作 | 180px | 右 | - | 详情/移库/冻结/调整 |
+
+**操作按钮**:
+
+- **详情**: 查看库存详细信息(含流水记录)
+- **移库**: 跳转到移库单创建页面,自动填充商品信息
+- **冻结**: 冻结该库存,弹窗输入冻结原因
+- **调整**: 手动调整库存(需权限,记录操作日志)
+
+**批量操作**:
+
+- 批量导出(Excel)
+- 批量冻结
+- 批量打印标签
+
+**统计信息**(页面顶部卡片):
+
+- 总库存量
+- 可用库存量
+- 锁定库存量
+- 预警商品数
+
+---
+
+#### 10.2.2 入库单管理页面
+
+**页面路径**: `/inbound/list`
+
+**功能说明**: 管理所有入库单据
+
+**检索条件**:
+
+| 字段名 | 字段类型 | 是否必填 | 说明 |
+|-------|---------|---------|------|
+| 入库单号 | 文本输入 | 否 | 精确查询 |
+| 入库类型 | 下拉选择 | 否 | 采购/退货/调拨/盘盈/生产/其他 |
+| 仓库 | 下拉选择 | 否 | - |
+| 供应商 | 下拉选择 | 否 | 支持搜索 |
+| 状态 | 下拉选择 | 否 | 待审核/待入库/入库中/已完成/已取消 |
+| 创建日期 | 日期区间 | 否 | - |
+| 入库日期 | 日期区间 | 否 | - |
+| 创建人 | 文本输入 | 否 | - |
+
+**表格列**:
+
+| 列名 | 宽度 | 是否固定 | 排序 | 说明 |
+|-----|------|---------|-----|------|
+| 序号 | 60px | 左 | - | - |
+| 入库单号 | 180px | 左 | - | 点击跳转详情页 |
+| 入库类型 | 100px | - | ✅ | Tag标签 |
+| 仓库名称 | 120px | - | ✅ | - |
+| 供应商 | 150px | - | - | - |
+| 来源单号 | 150px | - | - | 采购订单号等 |
+| 商品种类 | 80px | 右对齐 | ✅ | - |
+| 计划数量 | 100px | 右对齐 | ✅ | - |
+| 实收数量 | 100px | 右对齐 | ✅ | - |
+| 状态 | 90px | - | ✅ | Tag标签 |
+| 创建人 | 100px | - | - | - |
+| 创建时间 | 150px | - | ✅ | - |
+| 审核人 | 100px | - | - | - |
+| 审核时间 | 150px | - | ✅ | - |
+| 操作 | 200px | 右 | - | 查看/编辑/审核/开始入库/取消 |
+
+**操作按钮**:
+
+- **查看**: 查看入库单详情(只读)
+- **编辑**: 编辑入库单(仅待审核状态可编辑)
+- **审核**: 审核入库单(弹窗,通过/驳回)
+- **开始入库**: 进入收货上架流程
+- **打印**: 打印入库单
+- **取消**: 取消入库单(需输入原因)
+
+**新增入库单表单**:
+
+| 字段名 | 字段类型 | 是否必填 | 校验规则 |
+|-------|---------|---------|---------|
+| 入库类型 | 单选 | 是 | - |
+| 仓库 | 下拉选择 | 是 | - |
+| 供应商 | 下拉选择 | 否 | 采购入库时必填 |
+| 来源单号 | 文本输入 | 否 | - |
+| 预计到货时间 | 日期时间选择器 | 否 | 不能早于当前时间 |
+| 备注 | 多行文本 | 否 | 最多500字 |
+| **商品明细** | 表格编辑 | 是 | 至少一条明细 |
+
+**商品明细表格列**:
+
+| 列名 | 字段类型 | 是否必填 | 说明 |
+|-----|---------|---------|------|
+| SKU编码 | 搜索选择 | 是 | 搜索商品,自动带出商品信息 |
+| 商品名称 | 显示 | - | 自动带出 |
+| 规格 | 显示 | - | 自动带出 |
+| 单位 | 显示 | - | 自动带出 |
+| 批次号 | 文本输入 | 否 | 需批次管理商品必填 |
+| 生产日期 | 日期选择器 | 否 | - |
+| 过期日期 | 日期选择器 | 否 | 自动校验是否过期 |
+| 计划数量 | 数字输入 | 是 | 必须>0 |
+| 备注 | 文本输入 | 否 | - |
+| 操作 | 按钮 | - | 删除行 |
+
+---
+
+#### 10.2.3 出库单管理页面
+
+**页面路径**: `/outbound/list`
+
+**功能说明**: 管理所有出库单据
+
+**检索条件**:
+
+| 字段名 | 字段类型 | 是否必填 | 说明 |
+|-------|---------|---------|------|
+| 出库单号 | 文本输入 | 否 | 精确查询 |
+| 出库类型 | 下拉选择 | 否 | 销售/调拨/报损/退货/盘亏/其他 |
+| 仓库 | 下拉选择 | 否 | - |
+| 客户 | 下拉选择 | 否 | 支持搜索 |
+| 优先级 | 下拉选择 | 否 | 普通/紧急/特急 |
+| 状态 | 下拉选择 | 否 | 待审核/待出库/拣货中/待复核/待发货/已发货/已取消 |
+| 创建日期 | 日期区间 | 否 | - |
+| 期望发货时间 | 日期区间 | 否 | - |
+
+**表格列**:
+
+| 列名 | 宽度 | 是否固定 | 排序 | 说明 |
+|-----|------|---------|-----|------|
+| 序号 | 60px | 左 | - | - |
+| 出库单号 | 180px | 左 | - | 点击跳转详情页 |
+| 出库类型 | 100px | - | ✅ | Tag标签 |
+| 仓库名称 | 120px | - | ✅ | - |
+| 客户名称 | 150px | - | - | - |
+| 收货地址 | 200px | - | - | 悬浮显示完整地址 |
+| 商品种类 | 80px | 右对齐 | ✅ | - |
+| 计划数量 | 100px | 右对齐 | ✅ | - |
+| 实发数量 | 100px | 右对齐 | ✅ | - |
+| 优先级 | 80px | - | ✅ | Tag标签,特急红色 |
+| 状态 | 90px | - | ✅ | Tag标签 |
+| 承运商 | 100px | - | - | - |
+| 物流单号 | 150px | - | - | 点击跳转物流追踪 |
+| 期望发货时间 | 150px | - | ✅ | 超时红色标注 |
+| 创建时间 | 150px | - | ✅ | - |
+| 操作 | 220px | 右 | - | 查看/编辑/审核/创建波次/发货/取消 |
+
+**状态流转**:
+
+```mermaid
+stateDiagram-v2
+    [*] --> 待审核
+    待审核 --> 待出库: 审核通过
+    待审核 --> 已取消: 审核驳回
+    待出库 --> 拣货中: 创建波次
+    拣货中 --> 待复核: 拣货完成
+    待复核 --> 待发货: 复核通过
+    待复核 --> 拣货中: 复核不通过
+    待发货 --> 已发货: 确认发货
+    已发货 --> [*]
+    已取消 --> [*]
+```
+
+---
+
+#### 10.2.4 拣货波次管理页面
+
+**页面路径**: `/picking/wave/list`
+
+**功能说明**: 管理拣货波次,智能生成和分配拣货任务
+
+**检索条件**:
+
+| 字段名 | 字段类型 | 是否必填 | 说明 |
+|-------|---------|---------|------|
+| 波次号 | 文本输入 | 否 | 精确查询 |
+| 仓库 | 下拉选择 | 否 | - |
+| 波次类型 | 下拉选择 | 否 | 批次拣货/分区拣货/单品拣货 |
+| 拣货员 | 下拉选择 | 否 | - |
+| 状态 | 下拉选择 | 否 | 待分配/已分配/拣货中/已完成/已取消 |
+| 创建日期 | 日期区间 | 否 | - |
+
+**表格列**:
+
+| 列名 | 宽度 | 说明 |
+|-----|------|------|
+| 波次号 | 180px | 点击查看详情 |
+| 波次类型 | 100px | Tag标签 |
+| 订单数量 | 80px | - |
+| 商品种类 | 80px | - |
+| 总数量 | 100px | - |
+| 优先级 | 80px | Tag标签 |
+| 拣货员 | 100px | - |
+| 预计耗时 | 100px | 分钟 |
+| 实际耗时 | 100px | 分钟,超时红色 |
+| 拣货进度 | 120px | 进度条 |
+| 状态 | 90px | Tag标签 |
+| 开始时间 | 150px | - |
+| 完成时间 | 150px | - |
+| 操作 | 180px | 查看/分配/开始/取消 |
+
+**智能生成波次配置**:
+
+- 波次大小: 30-50单/波次
+- 时间窗口: 30分钟内订单聚合
+- 聚类算法: 按库区和商品位置聚类
+- 优先级规则: 特急订单优先处理
+
+**波次详情页**包含:
+
+1. 波次基本信息
+2. 包含的出库单列表
+3. 拣货路径可视化(库位地图)
+4. 拣货任务明细
+5. 拣货进度实时监控
+
+---
+
+#### 10.2.5 盘点计划管理页面
+
+**页面路径**: `/stock-taking/plan/list`
+
+**功能说明**: 创建和管理盘点计划
+
+**检索条件**:
+
+| 字段名 | 字段类型 | 是否必填 | 说明 |
+|-------|---------|---------|------|
+| 计划编号 | 文本输入 | 否 | - |
+| 计划名称 | 文本输入 | 否 | 模糊查询 |
+| 仓库 | 下拉选择 | 否 | - |
+| 盘点类型 | 下拉选择 | 否 | 全盘/循环盘/抽盘/动态盘 |
+| 状态 | 下拉选择 | 否 | 待审核/待执行/执行中/已完成/已取消 |
+| 计划时间 | 日期区间 | 否 | - |
+
+**新增盘点计划表单**:
+
+| 字段名 | 字段类型 | 是否必填 | 说明 |
+|-------|---------|---------|------|
+| 计划名称 | 文本输入 | 是 | 如:"2025年第一季度全盘" |
+| 仓库 | 下拉选择 | 是 | - |
+| 盘点类型 | 单选 | 是 | 全盘/循环盘/抽盘/动态盘 |
+| 盘点范围 | 动态表单 | 是 | 根据盘点类型显示不同配置 |
+| 计划开始时间 | 日期时间选择器 | 是 | - |
+| 计划结束时间 | 日期时间选择器 | 是 | 必须晚于开始时间 |
+| 盘点人员 | 多选 | 是 | 选择参与盘点的人员 |
+| 备注 | 多行文本 | 否 | - |
+
+**盘点范围配置**:
+
+- **全盘**: 自动包含仓库内所有商品
+- **循环盘**: 选择商品分类或ABC分类
+- **抽盘**: 输入抽样比例(如10%)和随机种子
+- **动态盘**: 选择零库存或指定商品
+
+**盘点执行流程**:
+
+1. 审核通过后生成盘点单
+2. 盘点人员PDA扫描盘点
+3. 提交盘点结果
+4. 复核差异数据
+5. 生成盘盈盘亏单
+6. 调整库存
+
+---
+
+### 10.3 移动端(PDA)功能设计
+
+#### 10.3.1 收货上架
+
+**流程步骤**:
+
+1. 扫描入库单号 → 显示商品明细
+2. 逐个扫描商品条码 → 输入实收数量
+3. 扫描目标库位 → 确认上架
+4. 打印库位标签
+5. 完成入库
+
+**页面元素**:
+
+- 大号输入框(支持扫码枪)
+- 商品图片显示
+- 数量调整按钮(+/-)
+- 异常上报按钮
+
+#### 10.3.2 拣货出库
+
+**流程步骤**:
+
+1. 登录 → 查看待拣货任务列表
+2. 选择任务 → 显示优化后的拣货路径
+3. 按顺序到达库位 → 扫描库位码
+4. 扫描商品条码 → 输入拣货数量
+5. 扫描集货容器 → 完成拣货
+6. 提交复核
+
+**特色功能**:
+
+- 路径导航(AR箭头指引)
+- 语音播报库位和数量
+- 拣货进度实时同步
+- 异常一键上报
+
+#### 10.3.3 库存盘点
+
+**流程步骤**:
+
+1. 扫描盘点单号 → 显示待盘点库位列表
+2. 到达库位 → 扫描库位码
+3. 逐个扫描商品条码 → 输入实盘数量
+4. 对比账面数量 → 标记差异
+5. 拍照上传(异常情况)
+6. 提交盘点结果
+
+**智能提示**:
+
+- 账面数量实时对比
+- 差异自动标红
+- 遗漏提示
+- 盘点进度显示
+
+---
+
+## 十一、数据库设计补充(关联关系图)
+
+### 11.1 完整ER图
+
+```mermaid
+erDiagram
+    %% 核心实体关系
+    WAREHOUSE ||--o{ WAREHOUSE_AREA : "包含"
+    WAREHOUSE_AREA ||--o{ WAREHOUSE_LOCATION : "包含"
+    WAREHOUSE_LOCATION ||--o{ INVENTORY : "存储"
+    
+    GOODS_CATEGORY ||--o{ GOODS : "分类"
+    GOODS ||--o{ INVENTORY : "库存"
+    GOODS ||--o{ INBOUND_DETAIL : "入库明细"
+    GOODS ||--o{ OUTBOUND_DETAIL : "出库明细"
+    
+    SUPPLIER ||--o{ INBOUND_ORDER : "供应"
+    CUSTOMER ||--o{ OUTBOUND_ORDER : "订购"
+    
+    WAREHOUSE ||--o{ INBOUND_ORDER : "入库"
+    WAREHOUSE ||--o{ OUTBOUND_ORDER : "出库"
+    INBOUND_ORDER ||--o{ INBOUND_DETAIL : "明细"
+    OUTBOUND_ORDER ||--o{ OUTBOUND_DETAIL : "明细"
+    
+    OUTBOUND_ORDER ||--o{ PICKING_WAVE_ORDER : "生成波次"
+    PICKING_WAVE ||--o{ PICKING_WAVE_ORDER : "关联"
+    PICKING_WAVE ||--o{ PICKING_TASK : "包含任务"
+    OUTBOUND_ORDER ||--o{ PICKING_TASK : "拣货任务"
+    
+    WAREHOUSE ||--o{ STOCK_TAKING_PLAN : "盘点计划"
+    STOCK_TAKING_PLAN ||--o{ STOCK_TAKING : "盘点单"
+    
+    WAREHOUSE ||--o{ STOCK_MOVE : "移库"
+    GOODS ||--o{ STOCK_MOVE : "移库商品"
+    
+    SYS_USER ||--o{ SYS_USER_ROLE : "用户角色"
+    SYS_ROLE ||--o{ SYS_USER_ROLE : "角色用户"
+    SYS_ROLE ||--o{ SYS_ROLE_MENU : "角色菜单"
+    SYS_MENU ||--o{ SYS_ROLE_MENU : "菜单角色"
+```
+
+### 11.2 核心表关联关系说明
+
+| 主表 | 从表 | 关联字段 | 关系类型 | 约束 |
+|-----|------|---------|---------|------|
+| warehouse | warehouse_area | warehouse_id | 1:N | CASCADE |
+| warehouse_area | warehouse_location | area_id | 1:N | CASCADE |
+| warehouse_location | inventory | location_id | 1:N | RESTRICT |
+| goods | inventory | goods_id | 1:N | RESTRICT |
+| goods_category | goods | category_id | 1:N | SET NULL |
+| supplier | inbound_order | supplier_id | 1:N | SET NULL |
+| customer | outbound_order | customer_code | 1:N | SET NULL |
+| inbound_order | inbound_detail | inbound_id | 1:N | CASCADE |
+| outbound_order | outbound_detail | outbound_id | 1:N | CASCADE |
+| picking_wave | picking_wave_order | wave_id | 1:N | CASCADE |
+| picking_wave | picking_task | wave_id | 1:N | CASCADE |
+| stock_taking_plan | stock_taking | plan_id | 1:N | CASCADE |
+
+**约束说明**:
+
+- **CASCADE**: 主表记录删除时,从表记录同步删除
+- **RESTRICT**: 存在从表记录时,主表记录不可删除
+- **SET NULL**: 主表记录删除时,从表外键字段设为NULL
+
+---
+
+## 十二、初始化数据SQL
+
+### 12.1 数据字典初始化
+
+```sql
+-- 清空字典表
+TRUNCATE TABLE sys_dict;
+
+-- 入库类型字典
+INSERT INTO sys_dict (dict_code, dict_name, dict_value, dict_label, sort_order, css_class, status) VALUES
+('inbound_type', '入库类型', 'PURCHASE', '采购入库', 1, 'success', 1),
+('inbound_type', '入库类型', 'RETURN', '退货入库', 2, 'warning', 1),
+('inbound_type', '入库类型', 'TRANSFER', '调拨入库', 3, 'info', 1),
+('inbound_type', '入库类型', 'PROFIT', '盘盈入库', 4, 'success', 1),
+('inbound_type', '入库类型', 'PRODUCTION', '生产入库', 5, 'primary', 1),
+('inbound_type', '入库类型', 'OTHER', '其他入库', 6, 'default', 1);
+
+-- 出库类型字典
+INSERT INTO sys_dict (dict_code, dict_name, dict_value, dict_label, sort_order, css_class, status) VALUES
+('outbound_type', '出库类型', 'SALE', '销售出库', 1, 'success', 1),
+('outbound_type', '出库类型', 'TRANSFER', '调拨出库', 2, 'info', 1),
+('outbound_type', '出库类型', 'SCRAP', '报损出库', 3, 'danger', 1),
+('outbound_type', '出库类型', 'RETURN', '退货出库', 4, 'warning', 1),
+('outbound_type', '出库类型', 'LOSS', '盘亏出库', 5, 'danger', 1),
+('outbound_type', '出库类型', 'OTHER', '其他出库', 6, 'default', 1);
+
+-- 入库单状态字典
+INSERT INTO sys_dict (dict_code, dict_name, dict_value, dict_label, sort_order, css_class, status) VALUES
+('inbound_status', '入库单状态', '1', '待审核', 1, 'info', 1),
+('inbound_status', '入库单状态', '2', '待入库', 2, 'warning', 1),
+('inbound_status', '入库单状态', '3', '入库中', 3, 'primary', 1),
+('inbound_status', '入库单状态', '4', '已完成', 4, 'success', 1),
+('inbound_status', '入库单状态', '5', '已取消', 5, 'danger', 1);
+
+-- 出库单状态字典
+INSERT INTO sys_dict (dict_code, dict_name, dict_value, dict_label, sort_order, css_class, status) VALUES
+('outbound_status', '出库单状态', '1', '待审核', 1, 'info', 1),
+('outbound_status', '出库单状态', '2', '待出库', 2, 'warning', 1),
+('outbound_status', '出库单状态', '3', '拣货中', 3, 'primary', 1),
+('outbound_status', '出库单状态', '4', '待复核', 4, 'primary', 1),
+('outbound_status', '出库单状态', '5', '待发货', 5, 'warning', 1),
+('outbound_status', '出库单状态', '6', '已发货', 6, 'success', 1),
+('outbound_status', '出库单状态', '7', '已取消', 7, 'danger', 1);
+
+-- 库存状态字典
+INSERT INTO sys_dict (dict_code, dict_name, dict_value, dict_label, sort_order, css_class, status) VALUES
+('inventory_status', '库存状态', '1', '正常', 1, 'success', 1),
+('inventory_status', '库存状态', '2', '冻结', 2, 'danger', 1),
+('inventory_status', '库存状态', '3', '待检', 3, 'warning', 1),
+('inventory_status', '库存状态', '4', '损坏', 4, 'info', 1);
+
+-- 优先级字典
+INSERT INTO sys_dict (dict_code, dict_name, dict_value, dict_label, sort_order, css_class, status) VALUES
+('priority', '优先级', '1', '普通', 1, 'default', 1),
+('priority', '优先级', '2', '紧急', 2, 'warning', 1),
+('priority', '优先级', '3', '特急', 3, 'danger', 1);
+
+-- 计量单位字典
+INSERT INTO sys_dict (dict_code, dict_name, dict_value, dict_label, sort_order, status) VALUES
+('unit', '计量单位', 'PCS', '个/件', 1, 1),
+('unit', '计量单位', 'BOX', '箱', 2, 1),
+('unit', '计量单位', 'CTN', '纸箱', 3, 1),
+('unit', '计量单位', 'PLT', '托盘', 4, 1),
+('unit', '计量单位', 'KG', '千克', 5, 1),
+('unit', '计量单位', 'METER', '米', 6, 1),
+('unit', '计量单位', 'LITER', '升', 7, 1);
+
+-- 仓库类型字典
+INSERT INTO sys_dict (dict_code, dict_name, dict_value, dict_label, sort_order, status) VALUES
+('warehouse_type', '仓库类型', '1', '成品仓', 1, 1),
+('warehouse_type', '仓库类型', '2', '原料仓', 2, 1),
+('warehouse_type', '仓库类型', '3', '半成品仓', 3, 1);
+
+-- 库区类型字典
+INSERT INTO sys_dict (dict_code, dict_name, dict_value, dict_label, sort_order, status) VALUES
+('warehouse_area_type', '库区类型', 'STORAGE', '存储区', 1, 1),
+('warehouse_area_type', '库区类型', 'PICKING', '拣货区', 2, 1),
+('warehouse_area_type', '库区类型', 'STAGING', '暂存区', 3, 1),
+('warehouse_area_type', '库区类型', 'RECEIVING', '收货区', 4, 1),
+('warehouse_area_type', '库区类型', 'SHIPPING', '发货区', 5, 1);
+
+-- 库位类型字典
+INSERT INTO sys_dict (dict_code, dict_name, dict_value, dict_label, sort_order, status) VALUES
+('location_type', '库位类型', 'NORMAL', '普通库位', 1, 1),
+('location_type', '库位类型', 'TEMP', '临时库位', 2, 1),
+('location_type', '库位类型', 'DEFECT', '残次品库位', 3, 1),
+('location_type', '库位类型', 'FROZEN', '冷冻库位', 4, 1);
+
+-- 库位状态字典
+INSERT INTO sys_dict (dict_code, dict_name, dict_value, dict_label, sort_order, css_class, status) VALUES
+('location_status', '库位状态', '1', '空闲', 1, 'success', 1),
+('location_status', '库位状态', '2', '占用', 2, 'warning', 1),
+('location_status', '库位状态', '3', '锁定', 3, 'danger', 1),
+('location_status', '库位状态', '0', '禁用', 4, 'info', 1);
+
+-- 波次类型字典
+INSERT INTO sys_dict (dict_code, dict_name, dict_value, dict_label, sort_order, status) VALUES
+('wave_type', '波次类型', 'BATCH', '批次拣货', 1, 1),
+('wave_type', '波次类型', 'ZONE', '分区拣货', 2, 1),
+('wave_type', '波次类型', 'SINGLE', '单品拣货', 3, 1);
+
+-- 波次状态字典
+INSERT INTO sys_dict (dict_code, dict_name, dict_value, dict_label, sort_order, css_class, status) VALUES
+('wave_status', '波次状态', '1', '待分配', 1, 'info', 1),
+('wave_status', '波次状态', '2', '已分配', 2, 'warning', 1),
+('wave_status', '波次状态', '3', '拣货中', 3, 'primary', 1),
+('wave_status', '波次状态', '4', '已完成', 4, 'success', 1),
+('wave_status', '波次状态', '5', '已取消', 5, 'danger', 1);
+
+-- 盘点计划状态字典
+INSERT INTO sys_dict (dict_code, dict_name, dict_value, dict_label, sort_order, css_class, status) VALUES
+('stock_taking_plan_status', '盘点计划状态', '1', '待审核', 1, 'info', 1),
+('stock_taking_plan_status', '盘点计划状态', '2', '待执行', 2, 'warning', 1),
+('stock_taking_plan_status', '盘点计划状态', '3', '执行中', 3, 'primary', 1),
+('stock_taking_plan_status', '盘点计划状态', '4', '已完成', 4, 'success', 1),
+('stock_taking_plan_status', '盘点计划状态', '5', '已取消', 5, 'danger', 1);
+
+-- 盘点类型字典
+INSERT INTO sys_dict (dict_code, dict_name, dict_value, dict_label, sort_order, status) VALUES
+('stock_taking_type', '盘点类型', 'FULL', '全盘', 1, 1),
+('stock_taking_type', '盘点类型', 'CYCLE', '循环盘', 2, 1),
+('stock_taking_type', '盘点类型', 'SPOT', '抽盘', 3, 1),
+('stock_taking_type', '盘点类型', 'DYNAMIC', '动态盘', 4, 1);
+
+-- 盘点单状态字典
+INSERT INTO sys_dict (dict_code, dict_name, dict_value, dict_label, sort_order, css_class, status) VALUES
+('stock_taking_status', '盘点单状态', '1', '待盘点', 1, 'info', 1),
+('stock_taking_status', '盘点单状态', '2', '已盘点', 2, 'warning', 1),
+('stock_taking_status', '盘点单状态', '3', '已复核', 3, 'primary', 1),
+('stock_taking_status', '盘点单状态', '4', '已调整', 4, 'success', 1);
+
+-- 移库类型字典
+INSERT INTO sys_dict (dict_code, dict_name, dict_value, dict_label, sort_order, status) VALUES
+('stock_move_type', '移库类型', 'LOCATION', '库位调整', 1, 1),
+('stock_move_type', '移库类型', 'AREA', '库区调整', 2, 1),
+('stock_move_type', '移库类型', 'WAREHOUSE', '仓库调拨', 3, 1);
+
+-- 移库单状态字典
+INSERT INTO sys_dict (dict_code, dict_name, dict_value, dict_label, sort_order, css_class, status) VALUES
+('stock_move_status', '移库单状态', '1', '待执行', 1, 'info', 1),
+('stock_move_status', '移库单状态', '2', '执行中', 2, 'primary', 1),
+('stock_move_status', '移库单状态', '3', '已完成', 3, 'success', 1),
+('stock_move_status', '移库单状态', '4', '已取消', 4, 'danger', 1);
+
+-- 供应商类型字典
+INSERT INTO sys_dict (dict_code, dict_name, dict_value, dict_label, sort_order, status) VALUES
+('supplier_type', '供应商类型', 'NORMAL', '普通供应商', 1, 1),
+('supplier_type', '供应商类型', 'VIP', 'VIP供应商', 2, 1),
+('supplier_type', '供应商类型', 'STRATEGIC', '战略供应商', 3, 1);
+
+-- 客户类型字典
+INSERT INTO sys_dict (dict_code, dict_name, dict_value, dict_label, sort_order, status) VALUES
+('customer_type', '客户类型', 'RETAIL', '零售客户', 1, 1),
+('customer_type', '客户类型', 'WHOLESALE', '批发客户', 2, 1),
+('customer_type', '客户类型', 'ENTERPRISE', '企业客户', 3, 1);
+
+-- 客户等级字典
+INSERT INTO sys_dict (dict_code, dict_name, dict_value, dict_label, sort_order, status) VALUES
+('customer_level', '客户等级', 'VIP', 'VIP客户', 1, 1),
+('customer_level', '客户等级', 'GOLD', '金牌客户', 2, 1),
+('customer_level', '客户等级', 'SILVER', '银牌客户', 3, 1),
+('customer_level', '客户等级', 'NORMAL', '普通客户', 4, 1);
+
+-- 承运商类型字典
+INSERT INTO sys_dict (dict_code, dict_name, dict_value, dict_label, sort_order, status) VALUES
+('carrier_type', '承运商类型', 'EXPRESS', '快递', 1, 1),
+('carrier_type', '承运商类型', 'LOGISTICS', '物流', 2, 1),
+('carrier_type', '承运商类型', 'SPECIAL', '专线', 3, 1);
+
+-- 入库单明细状态字典
+INSERT INTO sys_dict (dict_code, dict_name, dict_value, dict_label, sort_order, css_class, status) VALUES
+('inbound_detail_status', '入库单明细状态', '1', '待收货', 1, 'info', 1),
+('inbound_detail_status', '入库单明细状态', '2', '已收货', 2, 'warning', 1),
+('inbound_detail_status', '入库单明细状态', '3', '已上架', 3, 'success', 1);
+
+-- 出库单明细状态字典
+INSERT INTO sys_dict (dict_code, dict_name, dict_value, dict_label, sort_order, css_class, status) VALUES
+('outbound_detail_status', '出库单明细状态', '1', '待拣货', 1, 'info', 1),
+('outbound_detail_status', '出库单明细状态', '2', '拣货中', 2, 'primary', 1),
+('outbound_detail_status', '出库单明细状态', '3', '已拣货', 3, 'warning', 1),
+('outbound_detail_status', '出库单明细状态', '4', '已复核', 4, 'warning', 1),
+('outbound_detail_status', '出库单明细状态', '5', '已发货', 5, 'success', 1);
+
+-- 异常类型字典
+INSERT INTO sys_dict (dict_code, dict_name, dict_value, dict_label, sort_order, status) VALUES
+('exception_type', '异常类型', 'EMPTY', '库位空缺', 1, 1),
+('exception_type', '异常类型', 'SHORT', '库存不足', 2, 1),
+('exception_type', '异常类型', 'DAMAGED', '商品损坏', 3, 1),
+('exception_type', '异常类型', 'EXPIRED', '商品过期', 4, 1),
+('exception_type', '异常类型', 'WRONG', '拣错商品', 5, 1);
+```
+
+### 12.2 示例数据初始化
+
+```sql
+-- 插入测试仓库
+INSERT INTO warehouse (warehouse_code, warehouse_name, warehouse_type, province, city, district, address, contact_person, contact_phone, total_area, status) VALUES
+('WH001', '北京总仓', 1, '北京市', '朝阳区', '望京街道', '望京SOHO T1座', '张三', '13800138000', 50000.00, 1),
+('WH002', '上海分仓', 1, '上海市', '浦东新区', '张江', '张江高科技园区', '李四', '13900139000', 30000.00, 1);
+
+-- 插入库区
+INSERT INTO warehouse_area (warehouse_id, area_code, area_name, area_type, floor, area_size, status) VALUES
+(1, 'A01', 'A区存储区', 'STORAGE', 1, 10000.00, 1),
+(1, 'B01', 'B区拣货区', 'PICKING', 1, 8000.00, 1),
+(1, 'C01', 'C区暂存区', 'STAGING', 1, 5000.00, 1);
+
+-- 插入示例库位
+INSERT INTO warehouse_location (warehouse_id, area_id, location_code, location_type, row_no, column_no, layer_no, capacity, max_weight, status) VALUES
+(1, 1, 'A01-01-01-01', 'NORMAL', 1, 1, 1, 1000.00, 500.00, 1),
+(1, 1, 'A01-01-01-02', 'NORMAL', 1, 1, 2, 1000.00, 500.00, 1),
+(1, 1, 'A01-01-02-01', 'NORMAL', 1, 2, 1, 1000.00, 500.00, 1);
+
+-- 插入商品分类
+INSERT INTO goods_category (category_code, category_name, parent_id, level, sort_order) VALUES
+('ELEC', '电子产品', 0, 1, 1),
+('DAILY', '日用品', 0, 1, 2),
+('FOOD', '食品', 0, 1, 3);
+
+-- 插入示例商品
+INSERT INTO goods (sku_code, goods_name, category_id, brand, unit, weight, need_batch, safety_stock, status) VALUES
+('SKU001', 'iPhone 15 Pro Max 256GB 黑色', 1, 'Apple', 'PCS', 0.240, 1, 10, 1),
+('SKU002', '小米13 Ultra 16GB+1TB 黑色', 1, '小米', 'PCS', 0.227, 1, 20, 1),
+('SKU003', '得力(Deli)签字笔 0.5mm 黑色', 2, '得力', 'BOX', 0.200, 0, 50, 1);
+
+-- 插入供应商
+INSERT INTO supplier (supplier_code, supplier_name, supplier_type, contact_person, contact_phone, province, city, address, credit_level, status) VALUES
+('SUP001', '苹果官方供应商', 'VIP', '王五', '13700137000', '北京市', '海淀区', '中关村软件园', 'A', 1),
+('SUP002', '小米官方供应商', 'VIP', '赵六', '13600136000', '北京市', '海淀区', '小米科技园', 'A', 1);
+
+-- 插入客户
+INSERT INTO customer (customer_code, customer_name, customer_type, customer_level, contact_person, contact_phone, delivery_city, delivery_address, credit_limit, status) VALUES
+('CUS001', '京东商城', 'WHOLESALE', 'VIP', '刘七', '13500135000', '北京市', '北京市朝阳区京东总部', 1000000.00, 1),
+('CUS002', '天猫旗舰店', 'WHOLESALE', 'VIP', '陈八', '13400134000', '杭州市', '浙江省杭州市滨江区阿里巴巴', 1000000.00, 1);
+```
+
+---
+
+## 十三、业务流程补充
+
+### 13.1 完整入库业务流程
+
+```mermaid
+flowchart TD
+    Start([采购订单生成]) --> CreateInbound[创建入库单]
+    CreateInbound --> InputDetails[录入商品明细]
+    InputDetails --> Submit[提交审核]
+    
+    Submit --> Audit{审核}
+    Audit -->|驳回| Modify[修改入库单]
+    Modify --> Submit
+    Audit -->|通过| WaitArrival[等待到货]
+    
+    WaitArrival --> Arrival[货物到达]
+    Arrival --> StartReceive[开始收货]
+    StartReceive --> ScanGoods[扫描商品条码]
+    ScanGoods --> CheckQuality{质检}
+    
+    CheckQuality -->|不合格| Reject[拒收/退货]
+    CheckQuality -->|合格| InputQty[录入实收数量]
+    InputQty --> AllocateLocation[分配上架库位]
+    AllocateLocation --> PutAway[上架]
+    PutAway --> PrintLabel[打印库位标签]
+    PrintLabel --> UpdateInventory[更新库存]
+    
+    UpdateInventory --> CheckComplete{明细是否全部完成}
+    CheckComplete -->|否| ScanGoods
+    CheckComplete -->|是| Complete[入库完成]
+    
+    Complete --> GenerateLog[生成库存流水]
+    GenerateLog --> NotifyFinance[通知财务]
+    NotifyFinance --> End([结束])
+    
+    Reject --> End
+    
+    style Start fill:#e1f5fe
+    style End fill:#c8e6c9
+    style CheckQuality fill:#fff3e0
+    style Audit fill:#fff3e0
+```
+
+### 13.2 完整出库业务流程
+
+```mermaid
+flowchart TD
+    Start([销售订单生成]) --> CreateOutbound[创建出库单]
+    CreateOutbound --> Submit[提交审核]
+    
+    Submit --> Audit{审核}
+    Audit -->|驳回| Modify[修改出库单]
+    Modify --> Submit
+    Audit -->|通过| LockInventory[锁定库存]
+    
+    LockInventory --> CheckStock{库存是否充足}
+    CheckStock -->|否| WaitStock[等待补货]
+    WaitStock --> CheckStock
+    CheckStock -->|是| GenerateWave[生成拣货波次]
+    
+    GenerateWave --> OptimizePath[优化拣货路径]
+    OptimizePath --> AssignPicker[分配拣货员]
+    AssignPicker --> StartPicking[开始拣货]
+    
+    StartPicking --> ScanLocation[扫描库位]
+    ScanLocation --> ScanGoods[扫描商品]
+    ScanGoods --> CheckMatch{商品是否匹配}
+    
+    CheckMatch -->|否| HandleException[处理异常]
+    HandleException --> ReportException[上报异常]
+    ReportException --> ScanLocation
+    
+    CheckMatch -->|是| InputQty[录入拣货数量]
+    InputQty --> NextTask{是否还有任务}
+    NextTask -->|是| ScanLocation
+    NextTask -->|否| SubmitPicking[提交拣货]
+    
+    SubmitPicking --> StartReview[开始复核]
+    StartReview --> ReviewGoods[复核商品和数量]
+    ReviewGoods --> ReviewResult{复核结果}
+    
+    ReviewResult -->|不通过| ReturnPicking[退回重拣]
+    ReturnPicking --> StartPicking
+    ReviewResult -->|通过| Pack[打包]
+    
+    Pack --> PrintWaybill[打印面单]
+    PrintWaybill --> ArrangeShipping[安排发货]
+    ArrangeShipping --> Ship[确认发货]
+    Ship --> DeductInventory[扣减库存]
+    DeductInventory --> UpdateStatus[更新订单状态]
+    UpdateStatus --> NotifyCustomer[通知客户]
+    NotifyCustomer --> End([出库完成])
+    
+    style Start fill:#e1f5fe
+    style End fill:#c8e6c9
+    style CheckStock fill:#fff3e0
+    style CheckMatch fill:#fff3e0
+    style ReviewResult fill:#fff3e0
+```
+
+### 13.3 盘点业务流程
+
+```mermaid
+flowchart TD
+    Start([创建盘点计划]) --> ConfigScope[配置盘点范围]
+    ConfigScope --> Submit[提交审核]
+    Submit --> Audit{审核}
+    
+    Audit -->|驳回| Modify[修改计划]
+    Modify --> Submit
+    Audit -->|通过| GenerateTasks[生成盘点任务]
+    
+    GenerateTasks --> AssignUsers[分配盘点人员]
+    AssignUsers --> StartTaking[开始盘点]
+    
+    StartTaking --> ScanLocation[扫描库位]
+    ScanLocation --> ScanGoods[扫描商品]
+    ScanGoods --> InputActual[录入实盘数量]
+    InputActual --> Compare{对比账面数量}
+    
+    Compare -->|有差异| MarkDiff[标记差异]
+    Compare -->|无差异| NextLocation{下一个库位}
+    MarkDiff --> TakePhoto[拍照记录]
+    TakePhoto --> NextLocation
+    
+    NextLocation -->|是| ScanLocation
+    NextLocation -->|否| SubmitResult[提交盘点结果]
+    
+    SubmitResult --> Review[复核差异]
+    Review --> AnalyzeDiff{差异分析}
+    
+    AnalyzeDiff --> InputReason[输入差异原因]
+    InputReason --> GenerateAdjust[生成调整单]
+    GenerateAdjust --> AuditAdjust{审核调整单}
+    
+    AuditAdjust -->|驳回| Review
+    AuditAdjust -->|通过| AdjustInventory[调整库存]
+    AdjustInventory --> GenerateReport[生成盘点报告]
+    GenerateReport --> End([盘点完成])
+    
+    style Start fill:#e1f5fe
+    style End fill:#c8e6c9
+    style Compare fill:#fff3e0
+    style AnalyzeDiff fill:#fff3e0
+```
+
+---
+
+## 十四、报表设计
+
+### 14.1 库存报表
+
+**报表名称**: 库存汇总表  
+**更新频率**: 实时  
+**导出格式**: Excel/PDF
+
+**报表列**:
+
+| 列名 | 说明 | 计算公式 |
+|-----|------|---------|
+| 仓库名称 | - | - |
+| 商品分类 | - | - |
+| SKU编码 | - | - |
+| 商品名称 | - | - |
+| 总库存 | - | SUM(quantity) |
+| 锁定数量 | - | SUM(lock_quantity) |
+| 可用库存 | - | 总库存 - 锁定数量 |
+| 安全库存 | - | - |
+| 库存状态 | - | 预警/正常/充足 |
+| 库存金额 | 按成本价计算 | 总库存 × 成本价 |
+| 占用库位数 | - | COUNT(DISTINCT location_id) |
+| 平均库龄 | 天数 | AVG(DATEDIFF(NOW(), inbound_date)) |
+
+**筛选条件**:
+
+- 仓库(多选)
+- 商品分类(树形)
+- 库存状态(正常/预警/零库存)
+- 库龄范围
+
+---
+
+### 14.2 出入库统计报表
+
+**报表名称**: 出入库日报/月报  
+**更新频率**: 每日凌晨  
+**导出格式**: Excel/PDF
+
+**报表列**:
+
+| 列名 | 说明 | 计算公式 |
+|-----|------|---------|
+| 日期 | - | - |
+| 仓库名称 | - | - |
+| 入库单数 | - | COUNT(入库单) |
+| 入库商品种类 | - | COUNT(DISTINCT goods_id) |
+| 入库总数量 | - | SUM(actual_quantity) |
+| 出库单数 | - | COUNT(出库单) |
+| 出库商品种类 | - | COUNT(DISTINCT goods_id) |
+| 出库总数量 | - | SUM(actual_quantity) |
+| 净变化量 | - | 入库 - 出库 |
+| 完成率 | 百分比 | 完成单数 / 总单数 × 100% |
+
+**图表展示**:
+
+- 出入库趋势折线图
+- 出入库类型饼图
+- TOP10商品柱状图
+
+---
+
+### 14.3 库存周转率分析
+
+**报表名称**: 库存周转率分析表  
+**统计周期**: 月度  
+**计算公式**: 周转率 = 出库总额 / 平均库存金额
+
+**报表列**:
+
+| 列名 | 说明 | 计算公式 |
+|-----|------|---------|
+| 商品分类 | - | - |
+| SKU编码 | - | - |
+| 商品名称 | - | - |
+| 期初库存 | 件 | - |
+| 本期入库 | 件 | - |
+| 本期出库 | 件 | - |
+| 期末库存 | 件 | - |
+| 平均库存 | 件 | (期初 + 期末) / 2 |
+| 周转率 | 次 | 本期出库 / 平均库存 |
+| 周转天数 | 天 | 30 / 周转率 |
+| ABC分类 | - | 根据周转率分类 |
+
+**ABC分类规则**:
+
+- **A类**: 周转率 > 6次/月 (快速周转)
+- **B类**: 周转率 3-6次/月 (正常周转)
+- **C类**: 周转率 < 3次/月 (慢速周转)
 
 ---
 

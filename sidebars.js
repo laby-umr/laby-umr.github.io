@@ -321,11 +321,12 @@ const sidebars = {
       },
       items: [
         'projectDesign/wms-system-design',
+        'projectDesign/attendance-system-design',
         'projectDesign/crm-system-design',
         'projectDesign/erp-system-design',
         'projectDesign/oms-system-design',
         'projectDesign/digital-twin-system-design',
-        'projectDesign/itsm-situational-awareness-interface-design',
+        'projectDesign/ai-tutor-system-design',
       ]
     },
     {
