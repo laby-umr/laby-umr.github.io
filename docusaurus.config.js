@@ -71,9 +71,32 @@ const config = {
         docsDir: "docs",
         blogDir: "blog",
         highlightSearchTermsOnTargetPage: true,
-        searchBarShortcutHint: false
+        searchBarShortcutHint: false,
+        searchBarShortcut: false, // 禁用快捷键以避免错误
       },
     ],
+    // Blog API 配置插件
+    function blogApiConfigPlugin(context, options) {
+      return {
+        name: 'blog-api-config-plugin',
+        injectHtmlTags() {
+          return {
+            headTags: [
+              {
+                tagName: 'script',
+                innerHTML: `
+                  window.blogApiConfig = {
+                    apiBaseUrl: '${process.env.NODE_ENV === 'production' 
+                      ? 'http://120.48.86.168:48080' 
+                      : 'http://120.48.86.168:48080'}'
+                  };
+                `,
+              },
+            ],
+          };
+        },
+      };
+    },
   ],
 
   // Add Mermaid markdown support
@@ -135,7 +158,7 @@ const config = {
     ({
       // 设置图片亮暗模式
       colorMode: {
-        defaultMode: 'light',
+        defaultMode: 'dark',
         disableSwitch: false,
         respectPrefersColorScheme: false,
       },
@@ -170,6 +193,7 @@ const config = {
           },
           {to: '/blog', label: '博客', position: 'left'},
           {to: '/projects', label: '项目', position: 'left'},
+          {to: '/contact', label: '联系我', position: 'left'},
           {to: '/about', label: '关于我', position: 'right'},
           // 添加语言切换菜单
           {
@@ -183,45 +207,9 @@ const config = {
           },
         ],
       },
+      // Footer配置 - 使用自定义Footer组件
       footer: {
-        style: 'dark',
-        links: [
-          {
-            title: '内容',
-            items: [
-              {
-                label: '博客',
-                to: '/blog',
-              },
-              {
-                label: '知识库导航',
-                to: '/docs/intro',
-              },
-            ],
-          },
-          {
-            title: '社交账号',
-            items: [
-              {
-                label: '项目',
-                to: '/projects',
-              },
-              {
-                label: 'GitHub',
-                href: 'https://github.com/MasterLiu93',
-              },
-            ],
-          },
-          {
-            title: '更多',
-            items: [
-              {
-                label: '关于我',
-                to: '/about',
-              },
-            ],
-          },
-        ],
+        style: 'light',
         copyright: `Copyright © ${new Date().getFullYear()} Laby的博客. Built with Docusaurus.`,
       },
       prism: {

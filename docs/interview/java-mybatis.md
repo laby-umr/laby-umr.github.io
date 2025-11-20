@@ -1,4 +1,4 @@
-﻿#  Java MyBatis 面试题集
+#  Java MyBatis 面试题集
 
 >  **总题数**: 17道 |  **重点领域**: ORM、缓存、动态SQL |  **难度分布**: 中级
 
@@ -613,3 +613,655 @@ MyBatis提供了强大的关联查询功能，可以通过不同的方式实现�
 3. 灵活使用缓存，提高查询性能
 4. 考虑使用ResultMap复用，减少重复配置
 5. 根据业务场景选择适合的映射方式
+
+### 8. MyBatis 的插件运行原理是什么？如何编写一个插件？
+
+**插件运行原理**：
+
+MyBatis允许在SQL执行的关键点进行拦截，通过插件（Plugin）机制实现功能扩展。
+
+**可拦截的四大对象**：
+1. **Executor**：执行器，拦截SQL执行
+2. **StatementHandler**：SQL语句处理器，拦截SQL预编译
+3. **ParameterHandler**：参数处理器，拦截参数设置
+4. **ResultSetHandler**：结果集处理器，拦截结果映射
+
+**拦截原理**：
+- MyBatis使用JDK动态代理为四大对象创建代理
+- 当调用这些对象的方法时，会先经过插件的拦截器
+- 插件可以在方法执行前后添加自定义逻辑
+
+**编写插件步骤**：
+
+**1. 实现Interceptor接口**：
+```java
+@Intercepts({
+    @Signature(
+        type = Executor.class,
+        method = "update",
+        args = {MappedStatement.class, Object.class}
+    )
+})
+public class MyPlugin implements Interceptor {
+    
+    @Override
+    public Object intercept(Invocation invocation) throws Throwable {
+        // 执行前逻辑
+        System.out.println("SQL执行前...");
+        
+        // 执行目标方法
+        Object result = invocation.proceed();
+        
+        // 执行后逻辑
+        System.out.println("SQL执行后...");
+        
+        return result;
+    }
+    
+    @Override
+    public Object plugin(Object target) {
+        // 使用Plugin.wrap包装目标对象
+        return Plugin.wrap(target, this);
+    }
+    
+    @Override
+    public void setProperties(Properties properties) {
+        // 获取插件配置参数
+        String prop = properties.getProperty("someProperty");
+    }
+}
+```
+
+**2. 注册插件**：
+
+**XML配置方式**：
+```xml
+<plugins>
+    <plugin interceptor="com.example.MyPlugin">
+        <property name="someProperty" value="someValue"/>
+    </plugin>
+</plugins>
+```
+
+**Spring Boot配置方式**：
+```java
+@Configuration
+public class MyBatisConfig {
+    @Bean
+    public MyPlugin myPlugin() {
+        MyPlugin plugin = new MyPlugin();
+        Properties properties = new Properties();
+        properties.setProperty("someProperty", "someValue");
+        plugin.setProperties(properties);
+        return plugin;
+    }
+}
+```
+
+**常见插件应用场景**：
+
+**1. 分页插件**：
+```java
+@Intercepts({
+    @Signature(type = Executor.class, method = "query",
+               args = {MappedStatement.class, Object.class, 
+                      RowBounds.class, ResultHandler.class})
+})
+public class PageInterceptor implements Interceptor {
+    @Override
+    public Object intercept(Invocation invocation) throws Throwable {
+        Object[] args = invocation.getArgs();
+        MappedStatement ms = (MappedStatement) args[0];
+        Object parameter = args[1];
+        RowBounds rowBounds = (RowBounds) args[2];
+        
+        // 获取原始SQL
+        BoundSql boundSql = ms.getBoundSql(parameter);
+        String sql = boundSql.getSql();
+        
+        // 添加分页
+        String pageSql = sql + " LIMIT " + rowBounds.getOffset() 
+                       + "," + rowBounds.getLimit();
+        
+        // 执行分页SQL
+        // ...
+        return invocation.proceed();
+    }
+}
+```
+
+**2. SQL性能监控插件**：
+```java
+@Intercepts({
+    @Signature(type = StatementHandler.class, method = "query",
+               args = {Statement.class, ResultHandler.class})
+})
+public class PerformanceInterceptor implements Interceptor {
+    @Override
+    public Object intercept(Invocation invocation) throws Throwable {
+        long start = System.currentTimeMillis();
+        
+        Object result = invocation.proceed();
+        
+        long end = System.currentTimeMillis();
+        long time = end - start;
+        
+        if (time > 1000) {
+            System.out.println("慢SQL，执行时间：" + time + "ms");
+        }
+        
+        return result;
+    }
+}
+```
+
+**3. SQL日志打印插件**：
+```java
+@Intercepts({
+    @Signature(type = StatementHandler.class, method = "prepare",
+               args = {Connection.class, Integer.class})
+})
+public class SqlLogInterceptor implements Interceptor {
+    @Override
+    public Object intercept(Invocation invocation) throws Throwable {
+        StatementHandler handler = (StatementHandler) invocation.getTarget();
+        BoundSql boundSql = handler.getBoundSql();
+        String sql = boundSql.getSql();
+        
+        System.out.println("执行SQL: " + sql);
+        
+        return invocation.proceed();
+    }
+}
+```
+
+### 9. MyBatis 如何实现批量操作？
+
+MyBatis提供了多种批量操作的方式：
+
+**1. foreach标签批量插入**：
+```xml
+<insert id="batchInsert">
+    INSERT INTO users (name, email, age) VALUES
+    <foreach collection="list" item="user" separator=",">
+        (#{user.name}, #{user.email}, #{user.age})
+    </foreach>
+</insert>
+```
+
+**2. foreach标签批量更新**：
+```xml
+<update id="batchUpdate">
+    <foreach collection="list" item="user" separator=";">
+        UPDATE users 
+        SET name = #{user.name}, email = #{user.email}
+        WHERE id = #{user.id}
+    </foreach>
+</update>
+```
+
+**3. 使用BATCH执行器**：
+```java
+// 获取批量执行的SqlSession
+SqlSession session = sqlSessionFactory.openSession(ExecutorType.BATCH);
+try {
+    UserMapper mapper = session.getMapper(UserMapper.class);
+    
+    for (User user : userList) {
+        mapper.insert(user);
+    }
+    
+    // 提交批量操作
+    session.commit();
+} finally {
+    session.close();
+}
+```
+
+**4. Spring集成批量操作**：
+```java
+@Autowired
+private SqlSessionTemplate sqlSessionTemplate;
+
+public void batchInsert(List<User> users) {
+    SqlSession session = sqlSessionTemplate.getSqlSessionFactory()
+        .openSession(ExecutorType.BATCH, false);
+    try {
+        UserMapper mapper = session.getMapper(UserMapper.class);
+        for (User user : users) {
+            mapper.insert(user);
+        }
+        session.commit();
+    } finally {
+        session.close();
+    }
+}
+```
+
+**性能对比**：
+- **普通插入**：每条SQL单独执行，1000条数据约需10秒
+- **foreach批量插入**：一条SQL插入所有数据，1000条数据约需0.5秒
+- **BATCH执行器**：预编译复用，1000条数据约需1秒
+
+**最佳实践**：
+1. 大批量数据（>1000条）建议分批处理，每批500-1000条
+2. 插入操作优先使用foreach方式
+3. 更新操作使用BATCH执行器
+4. 注意事务大小，避免长事务
+
+### 10. MyBatis 如何处理枚举类型？
+
+MyBatis提供了两种内置的枚举类型处理器：
+
+**1. EnumTypeHandler（默认）**：
+将枚举转换为枚举名称字符串存储
+```java
+public enum UserStatus {
+    ACTIVE, INACTIVE, DELETED
+}
+
+// 数据库存储: "ACTIVE", "INACTIVE", "DELETED"
+```
+
+**2. EnumOrdinalTypeHandler**：
+将枚举转换为枚举序号（ordinal）存储
+```java
+// 数据库存储: 0, 1, 2
+```
+
+**配置枚举处理器**：
+
+**全局配置**：
+```xml
+<typeHandlers>
+    <typeHandler handler="org.apache.ibatis.type.EnumOrdinalTypeHandler"
+                 javaType="com.example.UserStatus"/>
+</typeHandlers>
+```
+
+**字段级配置**：
+```xml
+<result property="status" column="status" 
+        typeHandler="org.apache.ibatis.type.EnumOrdinalTypeHandler"/>
+```
+
+**自定义枚举处理器**：
+```java
+public enum UserStatus {
+    ACTIVE(1, "激活"),
+    INACTIVE(0, "未激活"),
+    DELETED(-1, "已删除");
+    
+    private final int code;
+    private final String desc;
+    
+    UserStatus(int code, String desc) {
+        this.code = code;
+        this.desc = desc;
+    }
+    
+    public int getCode() { return code; }
+    public String getDesc() { return desc; }
+}
+
+// 自定义处理器
+public class UserStatusTypeHandler extends BaseTypeHandler<UserStatus> {
+    
+    @Override
+    public void setNonNullParameter(PreparedStatement ps, int i, 
+                                    UserStatus parameter, JdbcType jdbcType) 
+                                    throws SQLException {
+        ps.setInt(i, parameter.getCode());
+    }
+    
+    @Override
+    public UserStatus getNullableResult(ResultSet rs, String columnName) 
+                                       throws SQLException {
+        int code = rs.getInt(columnName);
+        return getStatusByCode(code);
+    }
+    
+    @Override
+    public UserStatus getNullableResult(ResultSet rs, int columnIndex) 
+                                       throws SQLException {
+        int code = rs.getInt(columnIndex);
+        return getStatusByCode(code);
+    }
+    
+    @Override
+    public UserStatus getNullableResult(CallableStatement cs, int columnIndex) 
+                                       throws SQLException {
+        int code = cs.getInt(columnIndex);
+        return getStatusByCode(code);
+    }
+    
+    private UserStatus getStatusByCode(int code) {
+        for (UserStatus status : UserStatus.values()) {
+            if (status.getCode() == code) {
+                return status;
+            }
+        }
+        return null;
+    }
+}
+```
+
+### 11. MyBatis 如何防止SQL注入？
+
+**1. 使用#{}而不是${}**：
+```xml
+<!-- 安全：使用预编译 -->
+<select id="getUser" resultType="User">
+    SELECT * FROM users WHERE id = #{id}
+</select>
+
+<!-- 不安全：直接拼接 -->
+<select id="getUser" resultType="User">
+    SELECT * FROM users WHERE id = ${id}
+</select>
+```
+
+**2. 参数校验**：
+```java
+public User getUser(String id) {
+    // 校验参数格式
+    if (!id.matches("\\d+")) {
+        throw new IllegalArgumentException("Invalid ID");
+    }
+    return userMapper.getUser(id);
+}
+```
+
+**3. 使用白名单**：
+```java
+// 动态表名/列名时使用白名单
+private static final Set<String> ALLOWED_COLUMNS = 
+    Set.of("id", "name", "email", "age");
+
+public List<User> getUsersSortedBy(String column) {
+    if (!ALLOWED_COLUMNS.contains(column)) {
+        throw new IllegalArgumentException("Invalid column");
+    }
+    return userMapper.getUsersSortedBy(column);
+}
+```
+
+**4. 限制查询结果数量**：
+```xml
+<select id="searchUsers" resultType="User">
+    SELECT * FROM users 
+    WHERE name LIKE #{name}
+    LIMIT 1000
+</select>
+```
+
+### 12. MyBatis 的延迟加载是什么？如何配置？
+
+**延迟加载（Lazy Loading）**：
+关联对象在真正使用时才加载，而不是在查询主对象时立即加载。
+
+**配置延迟加载**：
+
+**全局配置**：
+```xml
+<settings>
+    <!-- 开启延迟加载 -->
+    <setting name="lazyLoadingEnabled" value="true"/>
+    <!-- 关闭积极加载 -->
+    <setting name="aggressiveLazyLoading" value="false"/>
+</settings>
+```
+
+**局部配置**：
+```xml
+<resultMap id="userMap" type="User">
+    <id property="id" column="id"/>
+    <result property="name" column="name"/>
+    <!-- fetchType可覆盖全局配置 -->
+    <association property="department" 
+                 select="getDepartment"
+                 column="dept_id"
+                 fetchType="lazy"/>
+</resultMap>
+```
+
+**延迟加载原理**：
+- MyBatis使用CGLIB或Javassist创建代理对象
+- 访问关联属性时触发代理方法
+- 代理方法执行关联查询并返回结果
+
+**注意事项**：
+1. 延迟加载需要SqlSession保持打开状态
+2. 序列化时会触发延迟加载
+3. 使用toString()等方法可能触发加载
+
+### 13. MyBatis 的分页插件 PageHelper 原理是什么？
+
+**PageHelper工作原理**：
+
+**1. 拦截SQL执行**：
+通过MyBatis插件机制拦截Executor的query方法
+
+**2. 解析分页参数**：
+从ThreadLocal中获取分页参数（PageNum、PageSize）
+
+**3. 改写SQL**：
+- 执行COUNT查询获取总记录数
+- 在原SQL基础上添加LIMIT子句
+
+**4. 执行分页查询**：
+执行改写后的SQL，返回分页结果
+
+**使用示例**：
+```java
+// 1. 添加依赖
+<dependency>
+    <groupId>com.github.pagehelper</groupId>
+    <artifactId>pagehelper-spring-boot-starter</artifactId>
+    <version>1.4.6</version>
+</dependency>
+
+// 2. 使用分页
+PageHelper.startPage(1, 10);
+List<User> users = userMapper.selectAll();
+PageInfo<User> pageInfo = new PageInfo<>(users);
+
+// 3. 获取分页信息
+pageInfo.getTotal();      // 总记录数
+pageInfo.getPages();      // 总页数
+pageInfo.getPageNum();    // 当前页
+pageInfo.getPageSize();   // 每页大小
+pageInfo.getList();       // 当前页数据
+```
+
+### 14. MyBatis 如何实现乐观锁？
+
+**使用版本号实现乐观锁**：
+
+**1. 数据库表添加version字段**：
+```sql
+CREATE TABLE users (
+    id INT PRIMARY KEY,
+    name VARCHAR(50),
+    version INT DEFAULT 0
+);
+```
+
+**2. 实体类添加version属性**：
+```java
+public class User {
+    private Integer id;
+    private String name;
+    private Integer version;
+}
+```
+
+**3. 更新时检查版本号**：
+```xml
+<update id="updateUser">
+    UPDATE users 
+    SET name = #{name}, 
+        version = version + 1
+    WHERE id = #{id} AND version = #{version}
+</update>
+```
+
+**4. 业务代码处理**：
+```java
+public boolean updateUser(User user) {
+    int rows = userMapper.updateUser(user);
+    if (rows == 0) {
+        // 更新失败，版本号已变化
+        throw new OptimisticLockException("数据已被修改");
+    }
+    return true;
+}
+```
+
+**使用MyBatis-Plus的乐观锁插件**：
+```java
+@Version
+private Integer version;
+
+// 自动处理版本号
+userMapper.updateById(user);
+```
+
+### 15. MyBatis 的 TypeHandler 是什么？如何自定义？
+
+**TypeHandler作用**：
+处理Java类型与JDBC类型之间的转换
+
+**自定义TypeHandler**：
+```java
+// 1. 实现TypeHandler接口
+public class JsonTypeHandler extends BaseTypeHandler<Object> {
+    
+    @Override
+    public void setNonNullParameter(PreparedStatement ps, int i, 
+                                    Object parameter, JdbcType jdbcType) 
+                                    throws SQLException {
+        ps.setString(i, JSON.toJSONString(parameter));
+    }
+    
+    @Override
+    public Object getNullableResult(ResultSet rs, String columnName) 
+                                   throws SQLException {
+        String json = rs.getString(columnName);
+        return JSON.parseObject(json, Object.class);
+    }
+    
+    @Override
+    public Object getNullableResult(ResultSet rs, int columnIndex) 
+                                   throws SQLException {
+        String json = rs.getString(columnIndex);
+        return JSON.parseObject(json, Object.class);
+    }
+    
+    @Override
+    public Object getNullableResult(CallableStatement cs, int columnIndex) 
+                                   throws SQLException {
+        String json = cs.getString(columnIndex);
+        return JSON.parseObject(json, Object.class);
+    }
+}
+
+// 2. 注册TypeHandler
+<typeHandlers>
+    <typeHandler handler="com.example.JsonTypeHandler"/>
+</typeHandlers>
+
+// 3. 使用TypeHandler
+<result property="extra" column="extra" 
+        typeHandler="com.example.JsonTypeHandler"/>
+```
+
+### 16. MyBatis 如何处理大数据量查询？
+
+**1. 流式查询**：
+```java
+@Options(resultSetType = ResultSetType.FORWARD_ONLY, 
+         fetchSize = 1000)
+@Select("SELECT * FROM users")
+void streamQuery(ResultHandler<User> handler);
+
+// 使用
+userMapper.streamQuery(context -> {
+    User user = (User) context.getResultObject();
+    // 处理每条记录
+});
+```
+
+**2. 游标查询**：
+```java
+@Select("SELECT * FROM users")
+Cursor<User> selectByCursor();
+
+// 使用
+try (Cursor<User> cursor = userMapper.selectByCursor()) {
+    for (User user : cursor) {
+        // 处理每条记录
+    }
+}
+```
+
+**3. 分页查询**：
+```java
+// 分批处理
+int pageSize = 1000;
+int pageNum = 1;
+while (true) {
+    PageHelper.startPage(pageNum, pageSize);
+    List<User> users = userMapper.selectAll();
+    if (users.isEmpty()) break;
+    
+    // 处理当前批次
+    processBatch(users);
+    pageNum++;
+}
+```
+
+### 17. MyBatis 与 JPA 的区别是什么？
+
+**对比总结**：
+
+| 特性 | MyBatis | JPA/Hibernate |
+|------|---------|---------------|
+| ORM方式 | 半自动，需手写SQL | 全自动，自动生成SQL |
+| SQL控制 | 完全控制 | 有限控制 |
+| 学习曲线 | 平缓 | 陡峭 |
+| 开发效率 | 中等 | 高 |
+| 性能优化 | 容易 | 困难 |
+| 数据库移植 | 差 | 好 |
+| 复杂查询 | 灵活 | 受限 |
+| 适用场景 | SQL优化要求高 | 领域模型复杂 |
+
+**选择建议**：
+- **MyBatis**：适合SQL优化要求高、复杂查询多的项目
+- **JPA**：适合领域模型复杂、需要快速开发的项目
+- 可以在同一项目中混合使用
+
+---
+
+## 学习指南
+
+**核心要点**：
+- MyBatis缓存机制和执行流程
+- 动态SQL的使用和原理
+- 关联查询的实现方式
+- 插件机制和自定义扩展
+- 性能优化和最佳实践
+
+**学习路径建议**：
+1. 掌握MyBatis基本配置和使用
+2. 理解缓存机制和执行流程
+3. 熟练使用动态SQL
+4. 学习插件开发和扩展
+5. 掌握性能优化技巧
+
+**实战建议**：
+- 合理使用缓存提升性能
+- 优先使用#{}防止SQL注入
+- 复杂SQL使用XML配置
+- 大数据量使用流式查询或分页
+- 根据场景选择合适的ORM框架

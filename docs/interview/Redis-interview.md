@@ -1,4 +1,4 @@
-﻿#  Redis 面试题集
+#  Redis 面试题集
 
 >  **总题数**: 53道 |  **重点领域**: 数据结构、高可用、性能优化 |  **难度分布**: 基础到高级
 
@@ -1160,3 +1160,471 @@ EVAL "
 - **复杂逻辑**：优先考虑Lua脚本
 - **高并发场景**：考虑使用Lua脚本代替WATCH，减少冲突
 - **数据一致性要求高**：考虑应用层事务或补偿机制
+
+### 11. Redis 的持久化机制有哪些？
+
+Redis提供两种主要的持久化机制：**RDB（快照）**和**AOF（追加文件）**，以及混合持久化方式。
+
+**1. RDB（Redis Database）持久化**：
+
+**原理**：
+- 在指定时间间隔内生成数据集的时间点快照
+- 将内存中的数据以二进制格式写入磁盘文件（dump.rdb）
+
+**触发方式**：
+```bash
+# 手动触发
+SAVE      # 阻塞主进程，不推荐
+BGSAVE    # 后台异步保存，推荐
+
+# 自动触发（redis.conf配置）
+save 900 1      # 900秒内至少1个键被修改
+save 300 10     # 300秒内至少10个键被修改
+save 60 10000   # 60秒内至少10000个键被修改
+```
+
+**优点**：
+- 文件紧凑，适合备份和灾难恢复
+- 恢复速度快
+- 对性能影响小（fork子进程处理）
+
+**缺点**：
+- 可能丢失最后一次快照后的数据
+- fork子进程时可能造成短暂停顿
+- 数据量大时fork耗时较长
+
+**2. AOF（Append Only File）持久化**：
+
+**原理**：
+- 记录每个写操作命令
+- 以追加方式写入文件（appendonly.aof）
+- Redis重启时重新执行AOF文件中的命令恢复数据
+
+**配置**：
+```bash
+# 启用AOF
+appendonly yes
+appendfilename "appendonly.aof"
+
+# 同步策略
+appendfsync always    # 每个命令都同步，最安全但最慢
+appendfsync everysec  # 每秒同步一次，推荐
+appendfsync no        # 由操作系统决定，最快但最不安全
+```
+
+**AOF重写**：
+```bash
+# 手动触发
+BGREWRITEAOF
+
+# 自动触发配置
+auto-aof-rewrite-percentage 100  # AOF文件增长100%时重写
+auto-aof-rewrite-min-size 64mb   # AOF文件至少64MB时重写
+```
+
+**优点**：
+- 数据更安全，最多丢失1秒数据
+- 文件可读，便于分析和修复
+- 自动重写机制避免文件过大
+
+**缺点**：
+- 文件体积大于RDB
+- 恢复速度慢于RDB
+- 某些命令可能有性能影响
+
+**3. 混合持久化（Redis 4.0+）**：
+
+```bash
+aof-use-rdb-preamble yes
+```
+
+**原理**：
+- AOF重写时，将重写前的数据以RDB格式写入AOF文件开头
+- 增量数据以AOF格式追加
+- 结合了RDB的快速恢复和AOF的数据安全
+
+**4. 持久化策略选择**：
+
+| 场景 | 推荐方案 |
+|------|---------|
+| 数据安全性要求高 | AOF（everysec） |
+| 性能要求高 | RDB |
+| 兼顾安全和性能 | RDB + AOF |
+| 大数据量快速恢复 | 混合持久化 |
+
+### 12. Redis 的过期策略有哪些？
+
+Redis使用**定期删除 + 惰性删除**的组合策略处理过期键。
+
+**1. 惰性删除（Lazy Expiration）**：
+
+**原理**：
+- 访问键时检查是否过期
+- 过期则删除并返回空
+
+**优点**：对CPU友好
+**缺点**：可能造成内存浪费（过期键未被访问）
+
+**2. 定期删除（Active Expiration）**：
+
+**原理**：
+- 每隔一段时间随机抽取一批键检查过期
+- 默认每秒执行10次（100ms一次）
+- 每次检查20个键，删除过期键
+- 如果过期键比例>25%，继续检查
+
+**配置**：
+```bash
+hz 10  # 每秒执行频率
+```
+
+**3. 内存淘汰策略（Eviction Policies）**：
+
+当内存不足时，Redis会根据配置的策略淘汰键：
+
+```bash
+maxmemory 2gb
+maxmemory-policy allkeys-lru
+```
+
+**策略类型**：
+
+**LRU策略**：
+- `volatile-lru`：从设置过期时间的键中，淘汰最少使用的
+- `allkeys-lru`：从所有键中，淘汰最少使用的
+
+**LFU策略（Redis 4.0+）**：
+- `volatile-lfu`：从设置过期时间的键中，淘汰最不经常使用的
+- `allkeys-lfu`：从所有键中，淘汰最不经常使用的
+
+**随机策略**：
+- `volatile-random`：从设置过期时间的键中，随机淘汰
+- `allkeys-random`：从所有键中，随机淘汰
+
+**TTL策略**：
+- `volatile-ttl`：淘汰即将过期的键
+
+**禁止淘汰**：
+- `noeviction`：不淘汰，写入时返回错误（默认）
+
+### 13. 什么是缓存穿透、缓存击穿、缓存雪崩？如何解决？
+
+**1. 缓存穿透（Cache Penetration）**：
+
+**定义**：查询不存在的数据，缓存和数据库都没有，导致每次请求都打到数据库。
+
+**危害**：大量恶意请求可能压垮数据库。
+
+**解决方案**：
+
+**布隆过滤器**：
+```java
+// 初始化布隆过滤器
+BloomFilter<String> bloomFilter = BloomFilter.create(
+    Funnels.stringFunnel(Charset.defaultCharset()),
+    100000,
+    0.01
+);
+
+// 查询前先判断
+if (!bloomFilter.mightContain(key)) {
+    return null;  // 一定不存在
+}
+```
+
+**缓存空值**：
+```java
+String value = redis.get(key);
+if (value == null) {
+    value = db.query(key);
+    if (value == null) {
+        redis.setex(key, 60, "");  // 缓存空值，短时间过期
+    } else {
+        redis.setex(key, 3600, value);
+    }
+}
+```
+
+**2. 缓存击穿（Cache Breakdown）**：
+
+**定义**：热点数据过期瞬间，大量请求同时访问数据库。
+
+**解决方案**：
+
+**互斥锁**：
+```java
+public String getData(String key) {
+    String value = redis.get(key);
+    if (value == null) {
+        String lockKey = "lock:" + key;
+        if (redis.setnx(lockKey, "1", 10)) {  // 获取锁
+            try {
+                value = db.query(key);
+                redis.setex(key, 3600, value);
+            } finally {
+                redis.del(lockKey);  // 释放锁
+            }
+        } else {
+            Thread.sleep(50);
+            return getData(key);  // 重试
+        }
+    }
+    return value;
+}
+```
+
+**热点数据永不过期**：
+```java
+// 逻辑过期
+redis.set(key, JSON.toJSONString(new CacheData(value, expireTime)));
+
+// 查询时判断逻辑过期
+CacheData data = JSON.parseObject(redis.get(key), CacheData.class);
+if (data.getExpireTime() < System.currentTimeMillis()) {
+    // 异步更新
+    threadPool.execute(() -> updateCache(key));
+}
+return data.getValue();
+```
+
+**3. 缓存雪崩（Cache Avalanche）**：
+
+**定义**：大量缓存同时过期或Redis宕机，请求全部打到数据库。
+
+**解决方案**：
+
+**过期时间随机化**：
+```java
+int expireTime = 3600 + new Random().nextInt(300);  // 3600-3900秒
+redis.setex(key, expireTime, value);
+```
+
+**Redis高可用**：
+- 使用Redis Cluster或哨兵模式
+- 主从复制保证可用性
+
+**限流降级**：
+```java
+// 使用Hystrix或Sentinel限流
+@HystrixCommand(fallbackMethod = "fallback")
+public String getData(String key) {
+    // 查询逻辑
+}
+```
+
+**多级缓存**：
+```
+请求 -> 本地缓存 -> Redis -> 数据库
+```
+
+### 14. Redis 如何实现分布式锁？
+
+**1. 基本实现（SETNX）**：
+
+```java
+// 加锁
+String lockKey = "lock:resource";
+String requestId = UUID.randomUUID().toString();
+Boolean success = redis.set(lockKey, requestId, "NX", "PX", 30000);
+
+if (success) {
+    try {
+        // 业务逻辑
+    } finally {
+        // 解锁（Lua脚本保证原子性）
+        String script = 
+            "if redis.call('get', KEYS[1]) == ARGV[1] then " +
+            "    return redis.call('del', KEYS[1]) " +
+            "else " +
+            "    return 0 " +
+            "end";
+        redis.eval(script, Collections.singletonList(lockKey), 
+                   Collections.singletonList(requestId));
+    }
+}
+```
+
+**2. Redisson实现**：
+
+```java
+RLock lock = redisson.getLock("myLock");
+try {
+    // 尝试加锁，最多等待100秒，锁10秒后自动释放
+    boolean res = lock.tryLock(100, 10, TimeUnit.SECONDS);
+    if (res) {
+        // 业务逻辑
+    }
+} finally {
+    lock.unlock();
+}
+```
+
+**3. RedLock算法（多节点）**：
+
+```java
+// 在多个独立的Redis实例上获取锁
+RLock lock1 = redisson1.getLock("lock");
+RLock lock2 = redisson2.getLock("lock");
+RLock lock3 = redisson3.getLock("lock");
+
+RedissonRedLock redLock = new RedissonRedLock(lock1, lock2, lock3);
+try {
+    redLock.lock();
+    // 业务逻辑
+} finally {
+    redLock.unlock();
+}
+```
+
+**4. 分布式锁的问题和注意事项**：
+
+- **死锁**：设置过期时间
+- **误删**：使用唯一标识符
+- **原子性**：使用Lua脚本
+- **可重入**：使用Redisson
+- **主从切换**：使用RedLock
+
+### 15. Redis 的发布订阅模式是什么？
+
+**发布订阅（Pub/Sub）**是Redis的消息通信模式，允许客户端订阅频道并接收消息。
+
+**基本命令**：
+
+```bash
+# 订阅频道
+SUBSCRIBE channel1 channel2
+
+# 发布消息
+PUBLISH channel1 "Hello World"
+
+# 模式订阅
+PSUBSCRIBE news.*
+
+# 取消订阅
+UNSUBSCRIBE channel1
+```
+
+**应用示例**：
+
+```java
+// 订阅者
+Jedis jedis = new Jedis("localhost");
+jedis.subscribe(new JedisPubSub() {
+    @Override
+    public void onMessage(String channel, String message) {
+        System.out.println("Received: " + message);
+    }
+}, "myChannel");
+
+// 发布者
+Jedis publisher = new Jedis("localhost");
+publisher.publish("myChannel", "Hello");
+```
+
+**特点**：
+- 消息不持久化
+- 订阅者离线时消息丢失
+- 适合实时通知场景
+
+**与Stream对比**：
+- Stream支持消息持久化
+- Stream支持消费者组
+- Pub/Sub更轻量级
+
+### 16-53题简要答案
+
+### 16. Redis 的 Pipeline 是什么？
+
+**Pipeline**批量发送命令，减少网络往返时间。
+
+```java
+Pipeline pipeline = jedis.pipelined();
+pipeline.set("key1", "value1");
+pipeline.set("key2", "value2");
+pipeline.get("key1");
+List<Object> results = pipeline.syncAndReturnAll();
+```
+
+### 17. Redis 的 Lua 脚本有什么作用？
+
+**Lua脚本**保证原子性执行复杂逻辑。
+
+```lua
+EVAL "return redis.call('set', KEYS[1], ARGV[1])" 1 mykey myvalue
+```
+
+### 18. Redis 如何实现限流？
+
+**滑动窗口**：
+```java
+long count = redis.zcount(key, now - window, now);
+if (count < limit) {
+    redis.zadd(key, now, UUID.randomUUID().toString());
+}
+```
+
+**令牌桶**：使用Redisson的RateLimiter
+
+### 19. Redis 的 GEO 功能如何使用？
+
+```bash
+GEOADD locations 116.40 39.90 "Beijing"
+GEORADIUS locations 116.40 39.90 100 km
+```
+
+### 20. Redis 如何实现延迟队列？
+
+**使用ZSET**：
+```java
+redis.zadd("delayQueue", System.currentTimeMillis() + delay, task);
+// 定时扫描到期任务
+Set<String> tasks = redis.zrangeByScore("delayQueue", 0, now);
+```
+
+### 21-53. 其他重要问题
+
+21. **Redis内存优化**：使用合适的数据结构、压缩、过期策略
+22. **Redis监控**：INFO命令、Redis-cli、Prometheus
+23. **Redis安全**：密码认证、bind地址、禁用危险命令
+24. **Redis主从同步延迟**：网络、写入量、repl-backlog-size
+25. **Redis哨兵模式**：自动故障转移
+26. **Redis Cluster分片**：16384个槽位
+27. **Redis数据迁移**：redis-cli --cluster、redis-shake
+28. **Redis性能优化**：合理使用数据结构、避免大key、Pipeline
+29. **Redis慢查询**：slowlog-log-slower-than
+30. **Redis内存碎片**：activedefrag yes
+31. **Redis bigkey问题**：使用SCAN、拆分
+32. **Redis hotkey问题**：本地缓存、多副本
+33. **Redis与MySQL一致性**：延迟双删、Canal
+34. **Redis Cluster扩容**：redis-cli --cluster reshard
+35. **Redis持久化性能影响**：fork、磁盘IO
+36. **Redis单线程为何快**：内存操作、IO多路复用
+37. **Redis数据类型选择**：根据场景选择合适类型
+38. **Redis事务与Lua**：Lua更灵活、性能更好
+39. **Redis连接池配置**：JedisPool、Lettuce
+40. **Redis客户端选择**：Jedis、Lettuce、Redisson
+41. **Redis Sentinel原理**：监控、通知、故障转移
+42. **Redis Cluster原理**：Gossip协议、槽位分配
+43. **Redis持久化恢复**：RDB快、AOF安全
+44. **Redis内存淘汰**：8种策略
+45. **Redis过期键删除**：定期+惰性
+46. **Redis主从复制原理**：全量+增量
+47. **Redis集群脑裂**：min-slaves配置
+48. **Redis数据备份**：RDB、AOF、主从
+49. **Redis性能测试**：redis-benchmark
+50. **Redis使用场景**：缓存、计数、排行榜、分布式锁
+51. **Redis vs Memcached**：数据结构、持久化、集群
+52. **Redis最佳实践**：合理设计key、监控、高可用
+53. **Redis未来发展**：多线程、模块化、云原生
+
+---
+
+## 总结
+
+本文档涵盖了Redis的53个核心面试问题，包括：
+- **基础概念**：数据类型、持久化、过期策略
+- **高可用**：主从复制、哨兵、集群
+- **性能优化**：缓存问题、分布式锁、Pipeline
+- **实战应用**：限流、延迟队列、GEO
+
+掌握这些知识点，能够应对大部分Redis相关的面试问题。
