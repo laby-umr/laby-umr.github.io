@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import styles from './CounterSection.module.css';
+import ElectricBorder from './ElectricBorder';
 
 const CounterSection = ({
   items,
@@ -69,21 +70,31 @@ const CounterSection = ({
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true, amount: 0.3 }}
           transition={{ duration: 0.6, delay: index * 0.1 }}
-          className={styles.card}
+          className="cursor-target"
         >
-          {item.icon && (
-            <div className={styles.icon} style={{ color: item.color }}>
-              {item.icon}
+          <ElectricBorder
+            color={item.color || '#7df9ff'}
+            speed={0.8}
+            chaos={0.4}
+            thickness={2}
+            style={{ borderRadius: 16, height: '100%' }}
+          >
+            <div className={styles.card}>
+              {item.icon && (
+                <div className={styles.icon} style={{ color: item.color }}>
+                  {item.icon}
+                </div>
+              )}
+              <div className={styles.numberWrapper}>
+                {item.prefix && <span className={`${styles.prefix} cursor-target`} style={{ color: item.color }}>{item.prefix}</span>}
+                <span className={`${styles.number} cursor-target`} style={{ color: item.color }}>
+                  {Math.round(counts[index])}
+                </span>
+                {item.suffix && <span className={`${styles.suffix} cursor-target`} style={{ color: item.color }}>{item.suffix}</span>}
+              </div>
+              <p className={styles.label}>{item.label}</p>
             </div>
-          )}
-          <div className={styles.numberWrapper}>
-            {item.prefix && <span className={styles.prefix}>{item.prefix}</span>}
-            <span className={styles.number} style={{ color: item.color }}>
-              {Math.round(counts[index])}
-            </span>
-            {item.suffix && <span className={styles.suffix}>{item.suffix}</span>}
-          </div>
-          <p className={styles.label}>{item.label}</p>
+          </ElectricBorder>
         </motion.div>
       ))}
     </motion.div>

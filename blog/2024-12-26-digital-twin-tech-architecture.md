@@ -7,7 +7,7 @@ tags: [数字孪生, 可视化大屏, 技术架构, 开发实践]
 
 # 数字孪生可视化大屏技术架构与开发实践指南
 
-![数字孪生可视化概览](https://images.unsplash.com/photo-1558494949-ef010cbdcc31?q=80&w=1934&auto=format&fit=crop)
+![数字孪生可视化概览](/img/blog/blog-1.jpg)
 
 随着数字孪生技术在各行业的深入应用，如何构建高性能、可扩展、用户友好的可视化大屏系统成为了工程团队面临的关键挑战。本文将深入探讨数字孪生可视化大屏的技术架构设计、开发流程、性能优化策略以及前沿实践经验，帮助开发团队打造功能强大的数字孪生可视化平台。
 
@@ -17,7 +17,7 @@ tags: [数字孪生, 可视化大屏, 技术架构, 开发实践]
 
 数字孪生可视化大屏系统通常采用分层架构设计，从底层数据到顶层展示形成完整的技术栈：
 
-![数字孪生技术架构](https://images.unsplash.com/photo-1561736778-92e52a7769ef?q=80&w=1470&auto=format&fit=crop)
+![数字孪生技术架构](/img/blog/blog-2.jpg)
 
 一个完整的数字孪生可视化大屏系统通常包含以下五层：
 
@@ -72,7 +72,7 @@ tags: [数字孪生, 可视化大屏, 技术架构, 开发实践]
 
 ### 2.2 3D可视化技术选型
 
-![3D渲染技术](https://images.unsplash.com/photo-1558591710-4b4a1ae0f04d?q=80&w=1587&auto=format&fit=crop)
+![3D渲染技术](/img/blog/blog-3.jpg)
 
 数字孪生3D可视化是大屏系统的核心，主要技术选型包括：
 
@@ -108,7 +108,7 @@ tags: [数字孪生, 可视化大屏, 技术架构, 开发实践]
 
 ### 3.1 后端服务架构
 
-![后端架构](https://images.unsplash.com/photo-1558494949-ef010cbdcc31?q=80&w=1934&auto=format&fit=crop)
+![后端架构](/img/blog/blog-4.jpg)
 
 数字孪生大屏后端架构通常采用微服务设计，包括：
 
@@ -153,7 +153,7 @@ tags: [数字孪生, 可视化大屏, 技术架构, 开发实践]
 
 ### 4.1 模型构建与集成
 
-![模型构建](https://images.unsplash.com/photo-1581093196277-9f12b581fc97?q=80&w=1470&auto=format&fit=crop)
+![模型构建](/img/blog/blog-5.jpg)
 
 数字孪生模型是系统的核心，主要包括：
 
@@ -195,7 +195,7 @@ tags: [数字孪生, 可视化大屏, 技术架构, 开发实践]
 
 ### 5.1 3D场景性能优化
 
-![3D场景优化](https://images.unsplash.com/photo-1633356122102-3fe601e05bd2?q=80&w=1470&auto=format&fit=crop)
+![3D场景优化](/img/blog/blog-8.jpg)
 
 3D场景是数字孪生大屏的性能瓶颈，优化策略包括：
 
@@ -235,7 +235,7 @@ tags: [数字孪生, 可视化大屏, 技术架构, 开发实践]
 
 ### 5.3 响应式设计与自适应布局
 
-![响应式设计](https://images.unsplash.com/photo-1581090464777-f3220bbe1b8b?q=80&w=1470&auto=format&fit=crop)
+![响应式设计](/img/blog/blog-9.jpg)
 
 数字孪生大屏需要适应不同显示设备：
 
@@ -258,7 +258,7 @@ tags: [数字孪生, 可视化大屏, 技术架构, 开发实践]
 
 ### 6.1 实时数据通信架构
 
-![实时通信](https://images.unsplash.com/photo-1544197150-b99a580bb7a8?q=80&w=1470&auto=format&fit=crop)
+![实时通信](/img/blog/blog-13.jpg)
 
 数字孪生系统需要高效的实时数据通信：
 
@@ -300,7 +300,7 @@ tags: [数字孪生, 可视化大屏, 技术架构, 开发实践]
 
 ### 7.1 安全架构设计
 
-![安全设计](https://images.unsplash.com/photo-1563986768494-4dee9056b3c5?q=80&w=1470&auto=format&fit=crop)
+![安全设计](/img/blog/blog-14.jpg)
 
 数字孪生系统安全设计至关重要：
 
@@ -342,7 +342,7 @@ tags: [数字孪生, 可视化大屏, 技术架构, 开发实践]
 
 ### 8.1 敏捷开发流程
 
-![敏捷开发](https://images.unsplash.com/photo-1522071820081-009f0129c71c?q=80&w=1470&auto=format&fit=crop)
+![敏捷开发](/img/blog/blog-15.jpg)
 
 数字孪生大屏项目适合采用敏捷开发方法：
 
@@ -382,7 +382,7 @@ tags: [数字孪生, 可视化大屏, 技术架构, 开发实践]
 
 ### 8.3 测试与质量保障
 
-![测试与质量](https://images.unsplash.com/photo-1516321318423-f06f85e504b3?q=80&w=1470&auto=format&fit=crop)
+![测试与质量](/img/blog/blog-16.jpg)
 
 数字孪生系统的测试策略：
 
@@ -405,7 +405,7 @@ tags: [数字孪生, 可视化大屏, 技术架构, 开发实践]
 
 ### 9.1 行业应用案例
 
-![行业应用](https://images.unsplash.com/photo-1581092918056-0c4c3acd3789?q=80&w=1470&auto=format&fit=crop)
+![行业应用](/img/blog/blog-17.jpg)
 
 不同行业的数字孪生可视化大屏应用案例：
 
@@ -442,7 +442,7 @@ tags: [数字孪生, 可视化大屏, 技术架构, 开发实践]
 
 ### 9.3 未来发展趋势
 
-![未来趋势](https://images.unsplash.com/photo-1451187580459-43490279c0fa?q=80&w=1472&auto=format&fit=crop)
+![未来趋势](/img/blog/blog-21.jpg)
 
 数字孪生可视化技术未来发展趋势：
 

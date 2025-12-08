@@ -7,7 +7,7 @@ tags: [AI大模型, ROI分析, 投资回报, 价值评估]
 
 # AI大模型投资回报分析：从成本到价值的系统评估
 
-![AI投资回报](https://images.unsplash.com/photo-1563986768609-322da13575f3?q=80&w=1470&auto=format&fit=crop)
+![AI投资回报](/img/blog/blog-1.jpg)
 
 AI大模型项目的投资回报分析是企业决策者面临的关键挑战。如何科学地评估AI项目的成本结构、量化价值创造、预测长期收益，是确保AI投资成功的重要前提。本文将提供一套完整的AI大模型ROI分析框架，帮助企业做出明智的投资决策。
 
@@ -15,7 +15,7 @@ AI大模型项目的投资回报分析是企业决策者面临的关键挑战。
 
 ### 1.1 ROI分析的重要性
 
-![ROI重要性](https://images.unsplash.com/photo-1460925895917-afdab827c52f?q=80&w=1415&auto=format&fit=crop)
+![ROI重要性](/img/blog/blog-2.jpg)
 
 在AI大模型项目投资决策中，ROI分析扮演着至关重要的角色：
 
@@ -43,7 +43,7 @@ AI大模型项目的投资回报分析是企业决策者面临的关键挑战。
 
 ### 1.2 ROI分析框架设计
 
-![ROI分析框架](https://images.unsplash.com/photo-1551288049-bebda4e38f71?q=80&w=1470&auto=format&fit=crop)
+![ROI分析框架](/img/blog/blog-3.jpg)
 
 构建科学的AI大模型ROI分析框架需要从多个维度进行考虑：
 
@@ -77,7 +77,7 @@ graph TD
 
 ### 2.1 直接成本分析
 
-![直接成本](https://images.unsplash.com/photo-1563986768494-4dee9056b3c5?q=80&w=1470&auto=format&fit=crop)
+![直接成本](/img/blog/blog-4.jpg)
 
 AI大模型项目的直接成本包括技术开发、基础设施、人员投入等可明确计量的费用。
 
@@ -118,7 +118,7 @@ AI大模型项目的直接成本包括技术开发、基础设施、人员投入
 
 ### 2.2 间接成本分析
 
-![间接成本](https://images.unsplash.com/photo-1554224155-6726b3ff858f?q=80&w=1511&auto=format&fit=crop)
+![间接成本](/img/blog/blog-5.jpg)
 
 间接成本虽然不直接体现在项目预算中，但对总体投资回报有重要影响。
 
@@ -141,7 +141,7 @@ AI大模型项目的直接成本包括技术开发、基础设施、人员投入
 
 ### 2.3 成本控制策略
 
-![成本控制](https://images.unsplash.com/photo-1434626881859-194d67b2b86f?q=80&w=1474&auto=format&fit=crop)
+![成本控制](/img/blog/blog-8.jpg)
 
 有效的成本控制是提升AI项目ROI的重要手段。
 
@@ -166,7 +166,7 @@ AI大模型项目的直接成本包括技术开发、基础设施、人员投入
 
 ### 3.1 量化价值分析
 
-![量化价值](https://images.unsplash.com/photo-1543286386-713bdd548da4?q=80&w=1470&auto=format&fit=crop)
+![量化价值](/img/blog/blog-9.jpg)
 
 量化价值是ROI分析的核心，需要建立科学的评估指标体系。
 
@@ -202,7 +202,7 @@ AI大模型项目的直接成本包括技术开发、基础设施、人员投入
 
 ### 3.2 定性价值评估
 
-![定性价值](https://images.unsplash.com/photo-1559526324-593bc073d938?q=80&w=1470&auto=format&fit=crop)
+![定性价值](/img/blog/blog-13.jpg)
 
 除了量化指标，AI大模型项目还创造许多难以量化的价值。
 
@@ -225,7 +225,7 @@ AI大模型项目的直接成本包括技术开发、基础设施、人员投入
 
 ### 3.3 战略价值评估
 
-![战略价值](https://images.unsplash.com/photo-1507679799987-c73779587ccf?q=80&w=1471&auto=format&fit=crop)
+![战略价值](/img/blog/blog-14.jpg)
 
 AI大模型项目的战略价值往往超越短期财务回报。
 
@@ -250,7 +250,7 @@ AI大模型项目的战略价值往往超越短期财务回报。
 
 ### 4.1 收益时间分布
 
-![收益时间分布](https://images.unsplash.com/photo-1543286386-2e659306cd6c?q=80&w=1470&auto=format&fit=crop)
+![收益时间分布](/img/blog/blog-15.jpg)
 
 AI大模型项目的收益通常呈现特定的时间分布特征。
 
@@ -298,7 +298,7 @@ graph LR
 
 ### 4.2 现金流分析
 
-![现金流分析](https://images.unsplash.com/photo-1579621970590-9d624316904b?q=80&w=1470&auto=format&fit=crop)
+![现金流分析](/img/blog/blog-16.jpg)
 
 现金流分析是评估AI项目投资回报的重要工具。
 
@@ -324,7 +324,7 @@ graph LR
 
 ### 5.1 风险因素识别
 
-![风险评估](https://images.unsplash.com/photo-1504384308090-c894fdcc538d?q=80&w=1470&auto=format&fit=crop)
+![风险评估](/img/blog/blog-17.jpg)
 
 AI大模型项目面临多种风险因素，需要系统识别和评估。
 
@@ -350,7 +350,7 @@ AI大模型项目面临多种风险因素，需要系统识别和评估。
 
 ### 5.2 敏感性分析
 
-![敏感性分析](https://images.unsplash.com/photo-1551288049-bebda4e38f71?q=80&w=1470&auto=format&fit=crop)
+![敏感性分析](/img/blog/blog-21.jpg)
 
 敏感性分析帮助评估关键变量对ROI的影响程度。
 
@@ -373,7 +373,7 @@ AI大模型项目面临多种风险因素，需要系统识别和评估。
 
 ### 5.3 风险应对策略
 
-![风险应对](https://images.unsplash.com/photo-1504384308090-c894fdcc538d?q=80&w=1470&auto=format&fit=crop)
+![风险应对](/img/blog/blog-22.jpg)
 
 针对识别的风险，制定相应的应对策略。
 
@@ -403,7 +403,7 @@ AI大模型项目面临多种风险因素，需要系统识别和评估。
 
 ### 6.1 成本优化方法
 
-![成本优化](https://images.unsplash.com/photo-1551288049-bebda4e38f71?q=80&w=1470&auto=format&fit=crop)
+![成本优化](/img/blog/blog-23.jpg)
 
 通过优化成本结构提升AI项目ROI。
 
@@ -426,7 +426,7 @@ AI大模型项目面临多种风险因素，需要系统识别和评估。
 
 ### 6.2 价值提升方法
 
-![价值提升](https://images.unsplash.com/photo-1434626881859-194d67b2b86f?q=80&w=1474&auto=format&fit=crop)
+![价值提升](/img/blog/blog-24.jpg)
 
 通过价值创造最大化提升AI项目ROI。
 
@@ -449,7 +449,7 @@ AI大模型项目面临多种风险因素，需要系统识别和评估。
 
 ### 6.3 持续优化机制
 
-![持续优化](https://images.unsplash.com/photo-1454165804606-c3d57bc86b40?q=80&w=1470&auto=format&fit=crop)
+![持续优化](/img/blog/blog-26.jpg)
 
 建立长效机制确保AI项目ROI持续优化。
 

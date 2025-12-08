@@ -7,7 +7,7 @@ tags: [数字孪生, 可视化大屏, 工业4.0, 智能制造]
 
 # 数字孪生技术基础与企业级应用场景全解析
 
-![数字孪生技术概览](https://images.unsplash.com/photo-1581090700227-1e37b190418e?q=80&w=1470&auto=format&fit=crop)
+![数字孪生技术概览](/img/blog/blog-1.jpg)
 
 在当今数字化转型浪潮中，数字孪生(Digital Twin)技术作为工业4.0的核心使能技术之一，正在各行各业掀起变革。本文将深入探讨数字孪生技术的基础理念、核心架构，以及在企业级场景中的落地应用，特别聚焦于可视化大屏这一重要表现形式。
 
@@ -24,7 +24,7 @@ tags: [数字孪生, 可视化大屏, 工业4.0, 智能制造]
 - **自主学习**：利用AI/ML技术不断学习和优化自身模型
 - **场景模拟**：能够进行"假设-分析"的预测性模拟
 
-![数字孪生与物理世界交互](https://images.unsplash.com/photo-1551288049-bebda4e38f71?q=80&w=1470&auto=format&fit=crop)
+![数字孪生与物理世界交互](/img/blog/blog-2.jpg)
 
 ### 1.2 数字孪生技术发展历程
 
@@ -39,7 +39,7 @@ tags: [数字孪生, 可视化大屏, 工业4.0, 智能制造]
 
 完整的数字孪生系统通常包含以下五层架构：
 
-![数字孪生架构](https://images.unsplash.com/photo-1561736778-92e52a7769ef?q=80&w=1470&auto=format&fit=crop)
+![数字孪生架构](/img/blog/blog-3.jpg)
 
 ### 2.1 感知层
 
@@ -81,7 +81,7 @@ tags: [数字孪生, 可视化大屏, 工业4.0, 智能制造]
 - 生产优化决策系统
 - 远程监控与操作界面
 
-![数字孪生应用](https://images.unsplash.com/photo-1581094794329-c8112a89af12?q=80&w=1470&auto=format&fit=crop)
+![数字孪生应用](/img/blog/blog-4.jpg)
 
 ## 三、数字孪生可视化大屏的关键技术
 
@@ -142,7 +142,7 @@ tags: [数字孪生, 可视化大屏, 工业4.0, 智能制造]
    - 自定义仪表板
    - 参数阈值设置
 
-![交互体验设计](https://images.unsplash.com/photo-1581090464777-f3220bbe1b8b?q=80&w=1470&auto=format&fit=crop)
+![交互体验设计](/img/blog/blog-5.jpg)
 
 ## 四、企业级数字孪生应用场景
 
@@ -168,7 +168,7 @@ tags: [数字孪生, 可视化大屏, 工业4.0, 智能制造]
    - 产品全生命周期管理
    - 远程诊断与服务
 
-![智能制造数字孪生](https://images.unsplash.com/photo-1581093196277-9f12b581fc97?q=80&w=1470&auto=format&fit=crop)
+![智能制造数字孪生](/img/blog/blog-8.jpg)
 
 ### 4.2 能源与公用事业
 
@@ -214,7 +214,7 @@ tags: [数字孪生, 可视化大屏, 工业4.0, 智能制造]
    - 交通流量分析
    - 维护计划优化
 
-![智慧城市数字孪生](https://images.unsplash.com/photo-1477959858617-67f85cf4f1df?q=80&w=1588&auto=format&fit=crop)
+![智慧城市数字孪生](/img/blog/blog-9.jpg)
 
 ## 五、数字孪生项目实施路径
 
@@ -256,7 +256,7 @@ tags: [数字孪生, 可视化大屏, 工业4.0, 智能制造]
    - 建立长效运营机制
    - 持续优化与创新
 
-![项目实施策略](https://images.unsplash.com/photo-1522071820081-009f0129c71c?q=80&w=1470&auto=format&fit=crop)
+![项目实施策略](/img/blog/blog-13.jpg)
 
 ### 5.3 常见挑战与应对策略
 
@@ -296,7 +296,7 @@ tags: [数字孪生, 可视化大屏, 工业4.0, 智能制造]
    - 云原生SaaS服务
    - 行业特化解决方案
 
-![未来趋势](https://images.unsplash.com/photo-1451187580459-43490279c0fa?q=80&w=1472&auto=format&fit=crop)
+![未来趋势](/img/blog/blog-14.jpg)
 
 ## 结论
 

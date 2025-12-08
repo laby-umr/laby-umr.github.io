@@ -31,11 +31,11 @@ export default function ParticleBackground() {
     }
     
     resizeCanvas();
-    window.addEventListener('resize', resizeCanvas);
+    window.addEventListener('resize', resizeCanvas, { passive: true });
     
-    // 粒子配置
+    // 粒子配置（优化：减少数量）
     const particlesArray = [];
-    const numberOfParticles = 80; // 增加粒子数量
+    const numberOfParticles = Math.min(Math.floor(window.innerWidth / 20), 50);
     
     // 粒子颜色
     const getParticleColor = () => {
@@ -103,8 +103,18 @@ export default function ParticleBackground() {
       }
     }
     
-    // 动画循环
-    function animate() {
+    // 动画循环（优化：限制帧率）
+    let lastFrame = 0;
+    const fps = 30;
+    const frameInterval = 1000 / fps;
+    
+    function animate(timestamp) {
+      const elapsed = timestamp - lastFrame;
+      if (elapsed < frameInterval) {
+        requestAnimationFrame(animate);
+        return;
+      }
+      lastFrame = timestamp - (elapsed % frameInterval);
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       
       for (let i = 0; i < particlesArray.length; i++) {
@@ -118,18 +128,18 @@ export default function ParticleBackground() {
       requestAnimationFrame(animate);
     }
     
-    // 粒子之间的连线
+    // 粒子之间的连线（优化：减少距离和计算）
     function connectParticles() {
-      const maxDistance = 180; // 增加连线的最大距离
+      const maxDistance = 100;
       for (let a = 0; a < particlesArray.length; a++) {
-        for (let b = a; b < particlesArray.length; b++) {
+        for (let b = a + 1; b < particlesArray.length; b++) {
           const dx = particlesArray[a].x - particlesArray[b].x;
           const dy = particlesArray[a].y - particlesArray[b].y;
           const distance = Math.sqrt(dx * dx + dy * dy);
           
           if (distance < maxDistance) {
             const opacity = 1 - (distance / maxDistance);
-            ctx.strokeStyle = `${getParticleColor()}${opacity * 0.4})`; // 减小连线的不透明度
+            ctx.strokeStyle = `${getParticleColor()}${opacity * 0.15})`;
             ctx.lineWidth = 0.5;
             ctx.beginPath();
             ctx.moveTo(particlesArray[a].x, particlesArray[a].y);
@@ -152,7 +162,15 @@ export default function ParticleBackground() {
   return (
     <canvas
       ref={canvasRef}
-      className="particles-js"
+      style={{
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        width: '100%',
+        height: '100%',
+        zIndex: 0,
+        pointerEvents: 'none',
+      }}
     />
   );
-} 
+}

@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import styles from './TestimonialsCarousel.module.css';
+import ElectricBorder from './ElectricBorder';
 
 const TestimonialsCarousel = ({
   testimonials,
@@ -81,45 +82,55 @@ const TestimonialsCarousel = ({
               x: { type: "spring", stiffness: 300, damping: 30 },
               opacity: { duration: 0.2 },
             }}
-            className={styles.testimonialCard}
+            style={{ width: '100%' }}
           >
-            <div className={styles.content}>
-              <div className={styles.quote}>"</div>
-              <p className={styles.text}>{testimonials[currentIndex].content}</p>
-              
-              <div className={styles.author}>
-                {testimonials[currentIndex].image && (
-                  <img 
-                    src={testimonials[currentIndex].image} 
-                    alt={testimonials[currentIndex].name}
-                    className={styles.avatar}
-                  />
-                )}
-                <div className={styles.authorInfo}>
-                  <div className={styles.name}>{testimonials[currentIndex].name}</div>
-                  <div className={styles.role}>
-                    {testimonials[currentIndex].role}
-                    {testimonials[currentIndex].company && ` @ ${testimonials[currentIndex].company}`}
+            <ElectricBorder
+              color="#ff6ec7"
+              speed={0.8}
+              chaos={0.4}
+              thickness={2}
+              style={{ borderRadius: 20 }}
+            >
+              <div className={styles.testimonialCard}>
+                <div className={styles.content}>
+                  <div className={styles.quote}>"</div>
+                  <p className={styles.text}>{testimonials[currentIndex].content}</p>
+                  
+                  <div className={styles.author}>
+                    {testimonials[currentIndex].image && (
+                      <img 
+                        src={testimonials[currentIndex].image} 
+                        alt={testimonials[currentIndex].name}
+                        className={styles.avatar}
+                      />
+                    )}
+                    <div className={styles.authorInfo}>
+                      <div className={styles.name}>{testimonials[currentIndex].name}</div>
+                      <div className={styles.role}>
+                        {testimonials[currentIndex].role}
+                        {testimonials[currentIndex].company && ` @ ${testimonials[currentIndex].company}`}
+                      </div>
+                    </div>
                   </div>
+                  
+                  {testimonials[currentIndex].rating && (
+                    <div className={styles.rating}>
+                      {renderRating(testimonials[currentIndex].rating)}
+                    </div>
+                  )}
                 </div>
               </div>
-              
-              {testimonials[currentIndex].rating && (
-                <div className={styles.rating}>
-                  {renderRating(testimonials[currentIndex].rating)}
-                </div>
-              )}
-            </div>
+            </ElectricBorder>
           </motion.div>
         </AnimatePresence>
         
-        <button onClick={handlePrev} className={`${styles.navButton} ${styles.prevButton}`}>
+        <button onClick={handlePrev} className={`${styles.navButton} ${styles.prevButton} cursor-target`}>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
           </svg>
         </button>
         
-        <button onClick={handleNext} className={`${styles.navButton} ${styles.nextButton}`}>
+        <button onClick={handleNext} className={`${styles.navButton} ${styles.nextButton} cursor-target`}>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
           </svg>
@@ -134,7 +145,7 @@ const TestimonialsCarousel = ({
               setDirection(index > currentIndex ? 1 : -1);
               setCurrentIndex(index);
             }}
-            className={`${styles.indicator} ${index === currentIndex ? styles.activeIndicator : ''}`}
+            className={`${styles.indicator} ${index === currentIndex ? styles.activeIndicator : ''} cursor-target`}
           />
         ))}
       </div>

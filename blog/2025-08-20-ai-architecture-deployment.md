@@ -7,7 +7,7 @@ tags: [AI大模型, 技术架构, 部署实践, 系统设计]
 
 # AI大模型技术架构与部署实践指南
 
-![AI技术架构](https://images.unsplash.com/photo-1620712943543-bcc4688e7485?q=80&w=1965&auto=format&fit=crop)
+![AI技术架构](/img/blog/blog-1.jpg)
 
 AI大模型的成功落地不仅需要正确的业务策略，更需要坚实的技术架构支撑。本文将深入探讨AI大模型的技术架构设计、部署策略、性能优化等关键技术问题，为技术团队提供实用的实施指南和最佳实践。
 
@@ -15,7 +15,7 @@ AI大模型的成功落地不仅需要正确的业务策略，更需要坚实的
 
 ### 1.1 整体架构设计原则
 
-![架构设计原则](https://images.unsplash.com/photo-1561736778-92e52a7769ef?q=80&w=1470&auto=format&fit=crop)
+![架构设计原则](/img/blog/blog-2.jpg)
 
 构建企业级AI大模型应用需要遵循特定的架构设计原则，确保系统的可扩展性、可维护性和可靠性。
 
@@ -105,7 +105,7 @@ graph TD
 
 ### 2.1 模型服务架构模式
 
-![模型服务架构](https://images.unsplash.com/photo-1558494949-ef010cbdcc31?q=80&w=1934&auto=format&fit=crop)
+![模型服务架构](/img/blog/blog-3.jpg)
 
 AI模型服务架构主要有以下几种模式，每种模式适用于不同的应用场景：
 
@@ -149,7 +149,7 @@ AI模型服务架构主要有以下几种模式，每种模式适用于不同的
 
 ### 2.3 向量数据库选型与应用
 
-![向量数据库](https://images.unsplash.com/photo-1558494949-ef010cbdcc31?q=80&w=1934&auto=format&fit=crop)
+![向量数据库](/img/blog/blog-4.jpg)
 
 向量数据库是AI大模型应用的关键组件，主要用于存储和检索高维向量数据：
 
@@ -179,7 +179,7 @@ AI模型服务架构主要有以下几种模式，每种模式适用于不同的
 
 ### 3.1 容器化部署架构
 
-![容器化部署](https://images.unsplash.com/photo-1605745341112-85968b19335b?q=80&w=1471&auto=format&fit=crop)
+![容器化部署](/img/blog/blog-5.jpg)
 
 容器化技术已成为AI模型部署的主流方式，提供了灵活性和可移植性：
 
@@ -202,7 +202,7 @@ AI模型服务架构主要有以下几种模式，每种模式适用于不同的
 
 ### 3.2 Kubernetes部署模式
 
-![Kubernetes部署](https://images.unsplash.com/photo-1667372393119-3d4c48d07fc9?q=80&w=1470&auto=format&fit=crop)
+![Kubernetes部署](/img/blog/blog-8.jpg)
 
 Kubernetes已成为AI模型部署的标准平台，提供了丰富的部署模式：
 
@@ -248,7 +248,7 @@ GPU资源是AI模型推理的关键，需要合理管理和优化：
 
 ### 4.1 模型量化与压缩
 
-![模型优化](https://images.unsplash.com/photo-1551288049-bebda4e38f71?q=80&w=1470&auto=format&fit=crop)
+![模型优化](/img/blog/blog-9.jpg)
 
 模型量化与压缩是提高推理效率的关键技术：
 
@@ -294,7 +294,7 @@ GPU资源是AI模型推理的关键，需要合理管理和优化：
 
 ### 4.3 分布式推理架构
 
-![分布式推理](https://images.unsplash.com/photo-1558494949-ef010cbdcc31?q=80&w=1934&auto=format&fit=crop)
+![分布式推理](/img/blog/blog-13.jpg)
 
 大规模模型需要分布式推理架构支持：
 
@@ -320,7 +320,7 @@ GPU资源是AI模型推理的关键，需要合理管理和优化：
 
 ### 5.1 数据处理流水线
 
-![数据处理](https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?q=80&w=1470&auto=format&fit=crop)
+![数据处理](/img/blog/blog-14.jpg)
 
 高效的数据处理流水线对AI系统至关重要：
 
@@ -368,7 +368,7 @@ AI系统需要高效的存储架构支持：
 
 ### 6.1 安全架构设计
 
-![安全架构](https://images.unsplash.com/photo-1563986768494-4dee9056b3c5?q=80&w=1470&auto=format&fit=crop)
+![安全架构](/img/blog/blog-15.jpg)
 
 AI系统的安全架构需要全面考虑：
 
@@ -416,7 +416,7 @@ AI系统需要满足各种合规要求：
 
 ### 7.1 监控系统架构
 
-![监控系统](https://images.unsplash.com/photo-1551288049-bebda4e38f71?q=80&w=1470&auto=format&fit=crop)
+![监控系统](/img/blog/blog-16.jpg)
 
 全面的监控系统是保障AI服务稳定运行的关键：
 
@@ -464,7 +464,7 @@ AI系统需要满足各种合规要求：
 
 ### 8.1 性能优化策略
 
-![性能优化](https://images.unsplash.com/photo-1504384308090-c894fdcc538d?q=80&w=1470&auto=format&fit=crop)
+![性能优化](/img/blog/blog-17.jpg)
 
 AI系统性能优化需要全面考虑：
 
@@ -512,7 +512,7 @@ AI系统性能优化需要全面考虑：
 
 ### 9.1 企业级部署最佳实践
 
-![企业级部署](https://images.unsplash.com/photo-1521791136064-7986c2920216?q=80&w=1469&auto=format&fit=crop)
+![企业级部署](/img/blog/blog-21.jpg)
 
 企业级AI系统部署的最佳实践：
 

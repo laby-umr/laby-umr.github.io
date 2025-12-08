@@ -7,7 +7,7 @@ tags: [欢迎, AI, 大模型, 介绍]
 
 # 欢迎来到AI大模型落地实践博客
 
-![AI大模型技术概览](https://images.unsplash.com/photo-1620712943543-bcc4688e7485?q=80&w=1965&auto=format&fit=crop)
+![AI大模型技术概览](/img/blog/blog-1.jpg)
 
 欢迎访问我们的**AI大模型落地实践博客**！在这里，我们将深入探讨人工智能大型语言模型(LLM)从理论到实践的全过程，为企业和技术团队提供系统化的实施指南与经验分享。
 
@@ -21,7 +21,7 @@ tags: [欢迎, AI, 大模型, 介绍]
 
 ### 1. 实施方案与策略
 
-![AI实施策略](https://images.unsplash.com/photo-1551288049-bebda4e38f71?q=80&w=1470&auto=format&fit=crop)
+![AI实施策略](/img/blog/blog-2.jpg)
 
 从业务需求分析到技术选型，从团队组建到变革管理，我们将分享完整的AI落地实施框架。无论您是初次探索AI应用的企业，还是寻求优化现有AI战略的团队，都能找到适合的方法论指导。
 
@@ -33,7 +33,7 @@ tags: [欢迎, AI, 大模型, 介绍]
 
 ### 2. 行业应用案例
 
-![AI行业应用](https://images.unsplash.com/photo-1485827404703-89b55fcc595e?q=80&w=1470&auto=format&fit=crop)
+![AI行业应用](/img/blog/blog-3.jpg)
 
 各行业AI应用案例将展示大模型如何在金融、医疗、制造、零售等不同领域创造实际价值。每个案例都包含具体的技术方案、实施过程和效果评估，帮助您从实践中获取灵感。
 
@@ -45,7 +45,7 @@ tags: [欢迎, AI, 大模型, 介绍]
 
 ### 3. 技术架构与部署
 
-![AI技术架构](https://images.unsplash.com/photo-1558494949-ef010cbdcc31?q=80&w=1934&auto=format&fit=crop)
+![AI技术架构](/img/blog/blog-4.jpg)
 
 深入剖析AI大模型的技术架构，包括基础设施选择、模型服务设计、知识库构建、安全合规等关键环节。提供从云服务到私有部署的多种方案，满足不同企业的需求。
 
@@ -57,7 +57,7 @@ tags: [欢迎, AI, 大模型, 介绍]
 
 ### 4. ROI分析与价值评估
 
-![AI价值评估](https://images.unsplash.com/photo-1543286386-713bdd548da4?q=80&w=1470&auto=format&fit=crop)
+![AI价值评估](/img/blog/blog-5.jpg)
 
 构建科学的投资回报分析框架，帮助决策者全面理解AI项目的成本结构和价值创造。通过量化与非量化指标相结合的方式，评估AI项目对业务的实际贡献。
 
@@ -98,7 +98,7 @@ tags: [欢迎, AI, 大模型, 介绍]
 
 ## 开始您的AI之旅
 
-![AI之旅](https://images.unsplash.com/photo-1620712943543-bcc4688e7485?q=80&w=1965&auto=format&fit=crop)
+![AI之旅](/img/blog/blog-8.jpg)
 
 无论您是：
 - **技术团队**：寻求技术实现指导

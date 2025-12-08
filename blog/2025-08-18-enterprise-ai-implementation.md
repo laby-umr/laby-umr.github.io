@@ -7,7 +7,7 @@ tags: [AI大模型, 企业落地, 实施策略, 数字化转型]
 
 # 企业级AI大模型落地实施方案：从战略到执行
 
-![AI大模型企业应用](https://images.unsplash.com/photo-1591696331111-ef9586a5b17a?q=80&w=1470&auto=format&fit=crop)
+![AI大模型企业应用](/img/blog/blog-1.jpg)
 
 随着ChatGPT、Claude、Gemini等大语言模型的爆发式发展，AI技术正在以前所未有的速度重塑商业世界。然而，对于大多数企业来说，如何将AI大模型从概念转化为实际业务价值，仍然是一个巨大的挑战。本文将从战略规划到具体执行，为您提供一套完整的企业级AI大模型落地实施方案。
 
@@ -45,7 +45,7 @@ tags: [AI大模型, 企业落地, 实施策略, 数字化转型]
 
 ### 1.2 组织能力评估与准备
 
-![组织能力评估](https://images.unsplash.com/photo-1552664730-d307ca884978?q=80&w=1470&auto=format&fit=crop)
+![组织能力评估](/img/blog/blog-2.jpg)
 
 AI大模型的成功落地不仅需要技术能力，更需要组织层面的充分准备。
 
@@ -85,7 +85,7 @@ graph TD
 
 ### 2.1 AI大模型技术架构概览
 
-![AI技术架构](https://images.unsplash.com/photo-1558494949-ef010cbdcc31?q=80&w=1934&auto=format&fit=crop)
+![AI技术架构](/img/blog/blog-3.jpg)
 
 企业级AI大模型应用需要构建完整的技术架构，确保系统的可扩展性、安全性和可维护性。
 
@@ -113,7 +113,7 @@ graph TD
 
 ### 2.2 模型选型策略
 
-![模型选型策略](https://images.unsplash.com/photo-1551288049-bebda4e38f71?q=80&w=1470&auto=format&fit=crop)
+![模型选型策略](/img/blog/blog-4.jpg)
 
 选择合适的AI大模型是技术架构设计的关键环节，需要综合考虑多种因素。
 
@@ -163,7 +163,7 @@ graph TD
 
 ### 3.1 分阶段实施策略
 
-![分阶段实施](https://images.unsplash.com/photo-1522071820081-009f0129c71c?q=80&w=1470&auto=format&fit=crop)
+![分阶段实施](/img/blog/blog-5.jpg)
 
 AI大模型项目应采用分阶段实施策略，逐步验证价值并降低风险。
 
@@ -191,7 +191,7 @@ AI大模型项目应采用分阶段实施策略，逐步验证价值并降低风
 
 ### 3.2 项目管理与治理
 
-![项目管理](https://images.unsplash.com/photo-1454165804606-c3d57bc86b40?q=80&w=1470&auto=format&fit=crop)
+![项目管理](/img/blog/blog-8.jpg)
 
 有效的项目管理和治理机制是AI项目成功的关键保障。
 
@@ -212,7 +212,7 @@ AI大模型项目应采用分阶段实施策略，逐步验证价值并降低风
 
 ### 3.3 数据架构与知识库构建
 
-![数据架构](https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?q=80&w=1470&auto=format&fit=crop)
+![数据架构](/img/blog/blog-9.jpg)
 
 高质量的数据和知识库是AI大模型应用的基础。
 
@@ -272,7 +272,7 @@ AI大模型的落地需要配套的组织变革和人才发展策略。
 
 ### 4.2 价值评估与持续优化
 
-![价值评估](https://images.unsplash.com/photo-1551288049-bebda4e38f71?q=80&w=1470&auto=format&fit=crop)
+![价值评估](/img/blog/blog-13.jpg)
 
 建立科学的价值评估体系，确保AI投资获得预期回报。
 
@@ -304,7 +304,7 @@ AI大模型的落地需要配套的组织变革和人才发展策略。
 
 ### 5.1 数据安全与隐私保护
 
-![数据安全](https://images.unsplash.com/photo-1563986768494-4dee9056b3c5?q=80&w=1470&auto=format&fit=crop)
+![数据安全](/img/blog/blog-14.jpg)
 
 确保AI系统的数据安全和隐私保护是企业责任和法律要求。
 

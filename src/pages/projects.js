@@ -5,6 +5,17 @@ import { motion, AnimatePresence } from 'framer-motion';
 import styles from './projects.module.css';
 import Translate, { translate } from '@docusaurus/Translate';
 import { useVisitorTracking } from '@site/src/utils/blogApi';
+import { rafThrottle } from '@site/src/utils/throttle';
+import ElectricBorder from '../components/ElectricBorder';
+import GlitchText from '../components/GlitchText';
+import { TranslatedJellyText } from '../components/JellyTextAnimation';
+import { 
+  SparklesIcon, 
+  GlobeAltIcon, 
+  DevicePhoneMobileIcon, 
+  CpuChipIcon, 
+  SignalIcon 
+} from '@heroicons/react/24/outline';
 
 export default function Projects() {
   // 项目数据（移到最前面，避免依赖问题）
@@ -146,19 +157,19 @@ export default function Projects() {
 
   // 分类选项
   const categories = [
-    { id: 'all', name: translate({ id: 'projects.filter.all', message: '全部' }), icon: '🌟' },
-    { id: 'web', name: translate({ id: 'projects.filter.web', message: 'Web应用' }), icon: '🌐' },
-    { id: 'mobile', name: translate({ id: 'projects.filter.mobile', message: '移动应用' }), icon: '📱' },
-    { id: 'ai', name: translate({ id: 'projects.filter.ai', message: 'AI/ML' }), icon: '🧠' },
-    { id: 'iot', name: translate({ id: 'projects.filter.iot', message: '物联网' }), icon: '📡' },
+    { id: 'all', name: translate({ id: 'projects.filter.all', message: '全部' }), Icon: SparklesIcon },
+    { id: 'web', name: translate({ id: 'projects.filter.web', message: 'Web应用' }), Icon: GlobeAltIcon },
+    { id: 'mobile', name: translate({ id: 'projects.filter.mobile', message: '移动应用' }), Icon: DevicePhoneMobileIcon },
+    { id: 'ai', name: translate({ id: 'projects.filter.ai', message: 'AI/ML' }), Icon: CpuChipIcon },
+    { id: 'iot', name: translate({ id: 'projects.filter.iot', message: '物联网' }), Icon: SignalIcon },
   ];
 
-  // 滚动效果
+  // 滚动效果（优化：添加 RAF 节流）
   useEffect(() => {
-    const handleScroll = () => {
+    const handleScroll = rafThrottle(() => {
       setScrollY(window.scrollY);
-    };
-    window.addEventListener('scroll', handleScroll);
+    });
+    window.addEventListener('scroll', handleScroll, { passive: true });
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
@@ -247,13 +258,15 @@ export default function Projects() {
               </motion.div>
 
               <motion.h1
-                initial={{ opacity: 0, y: 20 }}
+                initial={{ opacity: 0, y: 30 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.8, delay: 0.4 }}
+                transition={{ delay: 0.2 }}
                 className={styles.heroTitle}
               >
                 <span className={styles.gradientText}>
-                  <Translate id="projects.title">项目作品</Translate>
+                  <GlitchText speed={1} enableShadows={true} enableOnHover={false}>
+                    <TranslatedJellyText id="projects.title" defaultMessage="项目作品" delay={0} disableHover={true} />
+                  </GlitchText>
                 </span>
               </motion.h1>
 
@@ -281,27 +294,37 @@ export default function Projects() {
         </section>
 
         {/* 筛选和搜索 */}
-        <motion.section
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.8, delay: 0.8 }}
-          className={styles.filterSection}
-        >
+        <section className={styles.filterSection}>
           <div className="container">
-            <div className={styles.filterCard}>
+            <ElectricBorder
+              color="#7df9ff"
+              speed={0.8}
+              chaos={0.4}
+              thickness={2}
+              style={{ borderRadius: 16 }}
+            >
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.8, delay: 0.8 }}
+              >
+                <div className={styles.filterCard}>
               <div className={styles.categoryTabs}>
-                {categories.map((category) => (
-                  <motion.button
-                    key={category.id}
-                    className={`${styles.categoryTab} ${selectedCategory === category.id ? styles.active : ''}`}
-                    onClick={() => setSelectedCategory(category.id)}
-                    whileHover={{ scale: 1.05, y: -2 }}
-                    whileTap={{ scale: 0.95 }}
-                  >
-                    <span className={styles.categoryIcon}>{category.icon}</span>
-                    <span>{category.name}</span>
-                  </motion.button>
-                ))}
+                {categories.map((category) => {
+                  const IconComponent = category.Icon;
+                  return (
+                    <motion.button
+                      key={category.id}
+                      className={`${styles.categoryTab} ${selectedCategory === category.id ? styles.active : ''} cursor-target`}
+                      onClick={() => setSelectedCategory(category.id)}
+                      whileHover={{ scale: 1.05, y: -2 }}
+                      whileTap={{ scale: 0.95 }}
+                    >
+                      <IconComponent className={styles.categoryIcon} />
+                      <span>{category.name}</span>
+                    </motion.button>
+                  );
+                })}
               </div>
 
               <div className={styles.searchBox}>
@@ -314,21 +337,23 @@ export default function Projects() {
                 />
                 {searchTerm && (
                   <button
-                    className={styles.clearButton}
+                    className={`${styles.clearButton} cursor-target`}
                     onClick={() => setSearchTerm('')}
                   >
                     ×
                   </button>
                 )}
-                <button className={styles.searchButton}>
+                <button className={`${styles.searchButton} cursor-target`}>
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                   </svg>
                 </button>
               </div>
-            </div>
+              </div>
+              </motion.div>
+            </ElectricBorder>
           </div>
-        </motion.section>
+        </section>
 
         {/* 项目网格 */}
         <section className={styles.projectsSection}>
@@ -347,23 +372,28 @@ export default function Projects() {
                 }}
               >
                 {filteredProjects.map((project, index) => (
-                  <motion.div
+                  <ElectricBorder
                     key={project.id}
-                    className={styles.projectCard}
-                    variants={{
-                      hidden: { y: 20, opacity: 0 },
-                      visible: {
-                        y: 0,
-                        opacity: 1,
-                        transition: { type: "spring", stiffness: 100, damping: 12 }
-                      }
-                    }}
-                    whileHover={{
-                      y: -8,
-                      boxShadow: "0 25px 50px -12px rgba(102, 126, 234, 0.25)"
-                    }}
-                    onClick={() => setSelectedProject(project)}
+                    color={['#7df9ff', '#ff6b9d', '#c77dff', '#00ff88', '#ffd700', '#00d4ff'][index % 6]}
+                    speed={0.8}
+                    chaos={0.4}
+                    thickness={2}
+                    style={{ borderRadius: 16, height: '100%' }}
                   >
+                    <motion.div
+                      variants={{
+                        hidden: { y: 20, opacity: 0 },
+                        visible: {
+                          y: 0,
+                          opacity: 1,
+                          transition: { type: "spring", stiffness: 100, damping: 12 }
+                        }
+                      }}
+                    >
+                      <div 
+                        className={styles.projectCard}
+                        onClick={() => setSelectedProject(project)}
+                      >
                     <div className={styles.projectImageWrapper}>
                       <img src={project.image} alt={project.title} className={styles.projectImage} />
                       <div className={styles.imageOverlay} />
@@ -371,26 +401,26 @@ export default function Projects() {
                       <div className={styles.decorativeBorder} />
                     </div>
 
-                    <div className={styles.projectBadge}>
+                    <div className={`${styles.projectBadge} cursor-target`}>
                       {project.techStack[0]}
                     </div>
 
                     <div className={styles.projectInfo}>
                       <h3 className={styles.projectTitle}>
                         {project.title}
-                        <span className={styles.categoryBadge}>{project.categories[0]}</span>
+                        <span className={`${styles.categoryBadge} cursor-target`}>{project.categories[0]}</span>
                       </h3>
                       <p className={styles.projectSubtitle}>{project.subtitle}</p>
                       <p className={styles.projectDescription}>{project.description}</p>
 
                       <div className={styles.techStack}>
                         {project.techStack.slice(0, 3).map((tech, i) => (
-                          <span key={i} className={styles.techBadge}>{tech}</span>
+                          <span key={i} className={`${styles.techBadge} cursor-target`}>{tech}</span>
                         ))}
                       </div>
 
                       <div className={styles.projectActions}>
-                        <button className={styles.viewDetailsButton}>
+                        <button className={`${styles.viewDetailsButton} cursor-target`}>
                           <span className={styles.buttonShine} />
                           <span className={styles.buttonText}>
                             <Translate id="projects.viewDetails">查看详情</Translate>
@@ -404,7 +434,7 @@ export default function Projects() {
                             href={project.demoUrl}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className={styles.demoButton}
+                            className={`${styles.demoButton} cursor-target`}
                             onClick={(e) => e.stopPropagation()}
                           >
                             <Translate id="projects.viewDemo">在线演示</Translate>
@@ -412,7 +442,9 @@ export default function Projects() {
                         )}
                       </div>
                     </div>
-                  </motion.div>
+                      </div>
+                    </motion.div>
+                  </ElectricBorder>
                 ))}
               </motion.div>
             ) : (
@@ -427,7 +459,7 @@ export default function Projects() {
                 <h3><Translate id="projects.noResults">未找到项目</Translate></h3>
                 <p><Translate id="projects.tryDifferent">尝试其他搜索条件或分类</Translate></p>
                 <button
-                  className={styles.resetButton}
+                  className={`${styles.resetButton} cursor-target`}
                   onClick={() => {
                     setSelectedCategory('all');
                     setSearchTerm('');
@@ -441,15 +473,22 @@ export default function Projects() {
         </section>
 
         {/* CTA区域 */}
-        <motion.section
-          className={styles.ctaSection}
-          initial={{ opacity: 0, y: 20 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          transition={{ duration: 0.8 }}
-        >
+        <section className={styles.ctaSection}>
           <div className="container">
-            <div className={styles.ctaCard}>
+            <ElectricBorder
+              color="#ff6ec7"
+              speed={0.8}
+              chaos={0.4}
+              thickness={3}
+              style={{ borderRadius: 20 }}
+            >
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={{ duration: 0.8 }}
+              >
+                <div className={styles.ctaCard}>
               <motion.div
                 className={styles.ctaBackground}
                 animate={{ rotate: [0, 360] }}
@@ -459,12 +498,15 @@ export default function Projects() {
               <div className={styles.ctaContent}>
                 <motion.h2
                   className={styles.ctaTitle}
-                  initial={{ opacity: 0, y: -20 }}
-                  whileInView={{ opacity: 1, y: 0 }}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.8, delay: 0.4 }}
                   viewport={{ once: true }}
                 >
                   <span className={styles.gradientText}>
-                    <Translate id="projects.cta.title">有项目想法？</Translate>
+                    <GlitchText speed={1} enableShadows={true} enableOnHover={false}>
+                      <TranslatedJellyText id="projects.cta.title" defaultMessage="有项目想法？" delay={0} disableHover={true} />
+                    </GlitchText>
                   </span>
                 </motion.h2>
 
@@ -487,7 +529,7 @@ export default function Projects() {
                   viewport={{ once: true }}
                   transition={{ delay: 0.4 }}
                 >
-                  <Link to="/contact" className={styles.ctaButton}>
+                  <Link to="/contact" className={`${styles.ctaButton} cursor-target`}>
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M21.75 6.75v10.5a2.25 2.25 0 01-2.25 2.25h-15a2.25 2.25 0 01-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25m19.5 0v.243a2.25 2.25 0 01-1.07 1.916l-7.5 4.615a2.25 2.25 0 01-2.36 0L3.32 8.91a2.25 2.25 0 01-1.07-1.916V6.75" />
                     </svg>
@@ -498,7 +540,7 @@ export default function Projects() {
                     href="https://github.com"
                     target="_blank"
                     rel="noopener noreferrer"
-                    className={styles.githubButton}
+                    className={`${styles.githubButton} cursor-target`}
                   >
                     <svg width="20" height="20" fill="currentColor" viewBox="0 0 16 16">
                       <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.012 8.012 0 0 0 16 8c0-4.42-3.58-8-8-8z"/>
@@ -507,9 +549,11 @@ export default function Projects() {
                   </a>
                 </motion.div>
               </div>
-            </div>
+                </div>
+              </motion.div>
+            </ElectricBorder>
           </div>
-        </motion.section>
+        </section>
 
         {/* 项目详情模态窗口 */}
         <AnimatePresence>
@@ -530,7 +574,7 @@ export default function Projects() {
                 onClick={(e) => e.stopPropagation()}
               >
                 <button
-                  className={styles.modalClose}
+                  className={`${styles.modalClose} cursor-target`}
                   onClick={() => setSelectedProject(null)}
                 >
                   ✕
@@ -540,7 +584,7 @@ export default function Projects() {
                   <img src={selectedProject.image} alt={selectedProject.title} />
                   <div className={styles.modalImageOverlay} />
                   <div className={styles.modalImageInfo}>
-                    <span className={styles.modalBadge}>{selectedProject.categories[0]}</span>
+                    <span className={`${styles.modalBadge} cursor-target`}>{selectedProject.categories[0]}</span>
                     <h2>{selectedProject.title}</h2>
                     <p>{selectedProject.subtitle}</p>
                   </div>
@@ -554,7 +598,7 @@ export default function Projects() {
                       <h3><Translate id="project1.features">核心功能</Translate></h3>
                       <div className={styles.featuresList}>
                         {selectedProject.features.map((feature, i) => (
-                          <div key={i} className={styles.featureItem}>
+                          <div key={i} className={`${styles.featureItem} cursor-target`}>
                             <svg className={styles.featureIcon} viewBox="0 0 20 20" fill="currentColor">
                               <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
                             </svg>
@@ -569,7 +613,7 @@ export default function Projects() {
                     <h3><Translate id="projects.techStack">技术栈</Translate></h3>
                     <div className={styles.modalTechList}>
                       {selectedProject.techStack.map((tech, i) => (
-                        <span key={i} className={styles.modalTechBadge}>{tech}</span>
+                        <span key={i} className={`${styles.modalTechBadge} cursor-target`}>{tech}</span>
                       ))}
                     </div>
                   </div>
@@ -580,7 +624,7 @@ export default function Projects() {
                         href={selectedProject.demoUrl}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className={styles.modalButton}
+                        className={`${styles.modalButton} cursor-target`}
                       >
                         <svg viewBox="0 0 20 20" fill="currentColor">
                           <path fillRule="evenodd" d="M12.293 5.293a1 1 0 011.414 0l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414-1.414L14.586 11H3a1 1 0 110-2h11.586l-2.293-2.293a1 1 0 010-1.414z" clipRule="evenodd" />

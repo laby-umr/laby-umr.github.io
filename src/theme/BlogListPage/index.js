@@ -10,6 +10,10 @@ import Link from '@docusaurus/Link';
 import { translate } from '@docusaurus/Translate';
 import styles from './styles.module.css';
 import clsx from 'clsx';
+import ElectricBorder from '@site/src/components/ElectricBorder';
+import TargetCursor from '@site/src/components/TargetCursor';
+import GlitchText from '@site/src/components/GlitchText';
+import JellyTextAnimation from '@site/src/components/JellyTextAnimation';
 
 function BlogListPageMetadata(props) {
   const { metadata } = props;
@@ -63,7 +67,11 @@ function BlogListPageHeader(props) {
           </div>
           
           <h1 className={styles.blogTitle}>
-            <span className={styles.gradientText}>{blogTitle}</span>
+            <span className={styles.gradientText}>
+              <GlitchText speed={1} enableShadows={true} enableOnHover={false}>
+                <JellyTextAnimation delay={0}>{blogTitle}</JellyTextAnimation>
+              </GlitchText>
+            </span>
           </h1>
           <p className={styles.blogDescription}>{blogDescription}</p>
           
@@ -99,7 +107,7 @@ function TagCloud({tags, activeTag, onTagClick}) {
   return (
     <div className={styles.tagCloud}>
       <div 
-        className={clsx(styles.tagItem, activeTag === 'all' && styles.tagActive)}
+        className={clsx(styles.tagItem, activeTag === 'all' && styles.tagActive, 'cursor-target')}
         onClick={() => onTagClick('all')}
       >
         {translate({
@@ -110,7 +118,7 @@ function TagCloud({tags, activeTag, onTagClick}) {
       {sortedTags.map((tag, idx) => (
         <div 
           key={idx} 
-          className={clsx(styles.tagItem, activeTag === tag.label && styles.tagActive)}
+          className={clsx(styles.tagItem, activeTag === tag.label && styles.tagActive, 'cursor-target')}
           onClick={() => onTagClick(tag.label)}
         >
           {tag.label} <span className={styles.tagCount}>{tag.count}</span>
@@ -129,26 +137,27 @@ function extractImageFromPost(post) {
     return frontMatter.image;
   }
   
-  // 其次：检查文章内容中的第一个图片链接
-  const contentStr = content.toString();
-  const imgRegex = /!\[.*?\]\((.*?)\)/;
-  const imgMatch = contentStr.match(imgRegex);
-  
-  if (imgMatch && imgMatch[1]) {
-    return imgMatch[1];
-  }
-  
-  // 最后：使用默认图片
+  // 使用默认图片（日本街景 - 东京/京都/大阪）
+  // 根据标题 hash 分配，确保不同文章使用不同图片
   const defaultImages = [
-    '/img/blog/blog-1.jpg',
-    '/img/blog/blog-2.jpg',
-    '/img/blog/blog-3.jpg',
-    '/img/blog/blog-4.jpg',
-    '/img/blog/blog-5.jpg',
-    '/img/blog/blog-6.jpg',
-    '/img/blog/blog-7.jpg',
-    '/img/blog/blog-8.jpg',
-    '/img/blog/blog-9.jpg'
+    '/img/blog/blog-1.jpg',   // 东京夜景
+    '/img/blog/blog-2.jpg',   // 东京塔
+    '/img/blog/blog-3.jpg',   // 涩谷
+    '/img/blog/blog-4.jpg',   // 东京都市
+    '/img/blog/blog-5.jpg',   // 霓虹灯
+    '/img/blog/blog-8.jpg',   // 京都神社
+    '/img/blog/blog-9.jpg',   // 樱花
+    '/img/blog/blog-13.jpg',  // 竹林
+    '/img/blog/blog-14.jpg',  // 富士山
+    '/img/blog/blog-15.jpg',  // 大阪道顿堀
+    '/img/blog/blog-16.jpg',  // 大阪夜景
+    '/img/blog/blog-17.jpg',  // 大阪城市
+    '/img/blog/blog-21.jpg',  // 传统建筑
+    '/img/blog/blog-22.jpg',  // 灯笼街
+    '/img/blog/blog-23.jpg',  // 现代建筑
+    '/img/blog/blog-24.jpg',  // 地铁站
+    '/img/blog/blog-26.jpg',  // 日本城市
+    '/img/blog/blog-30.jpg'   // 日本建筑
   ];
   
   // 根据文章标题生成一个稳定的索引，确保相同标题总是得到相同图片
@@ -169,60 +178,56 @@ function BlogPostItem({post, isAnimated = false}) {
   const imageUrl = extractImageFromPost(post);
   
   return (
-    <article className={clsx(styles.blogPost, isAnimated && styles.animatedPost)}>
-      <Link to={permalink} className={styles.blogPostLink}>
-        <div className={styles.blogPostImageContainer}>
-          <img 
-            src={imageUrl} 
-            alt={title} 
-            className={styles.blogPostImage}
-            onError={(e) => {
-              e.target.onerror = null;
-              e.target.src = '/img/logo.jpg'; // 图片加载失败时的备用图片
-            }}
-          />
-          <div className={styles.blogPostOverlay}></div>
-        </div>
-        <div className={styles.blogPostContent}>
-          <div className={styles.blogPostMeta}>
-            <time className={styles.blogPostDate}>{formattedDate}</time>
-            {readingTime && (
-              <span className={styles.blogPostReadingTime}>
-                {Math.ceil(readingTime)} {translate({
-                  id: 'blog.readingTime',
-                  message: '分钟阅读'
-                })}
-              </span>
-            )}
-          </div>
-          
-          <h2 className={styles.blogPostTitle}>{title}</h2>
-          <p className={styles.blogPostDescription}>{description}</p>
-          
-          {tags?.length > 0 && (
+    <ElectricBorder
+      color="#7df9ff"
+      speed={0.8}
+      chaos={0.4}
+      thickness={2}
+      style={{ borderRadius: 16, height: '100%' }}
+    >
+      <article 
+        className={clsx(styles.blogPost, isAnimated && styles.animatedPost)}
+        style={{
+          backgroundImage: `url(${imageUrl})`,
+          backgroundSize: 'cover',
+          backgroundPosition: 'center'
+        }}
+      >
+        <div className={styles.blogPostOverlay}></div>
+        <div className={styles.blogPostContentWrapper}>
+          {/* 上半部分 - 左对齐 */}
+          <div className={styles.blogPostTopContent}>
+            <h2 className={styles.blogPostTitle}>{title}</h2>
             <div className={styles.blogPostTags}>
-              {tags.slice(0, 3).map((tag, i) => (
-                <span key={i} className={styles.blogPostTag}>
+              {readingTime && (
+                <span className={`${styles.blogPostTag} cursor-target`}>
+                  {Math.ceil(readingTime)}{translate({id: 'blog.readingTime.minutes', message: '分钟'})}
+                </span>
+              )}
+              {tags?.slice(0, 2).map((tag, i) => (
+                <span key={i} className={`${styles.blogPostTag} cursor-target`}>
                   {tag.label}
                 </span>
               ))}
             </div>
-          )}
+            <p className={styles.blogPostDescription}>{description}</p>
+          </div>
           
-          <div className={styles.blogPostFooter}>
-            <button className={styles.readMoreButton}>
+          {/* 右下角按钮 */}
+          <Link to={permalink} className={`${styles.blogReadButton} cursor-target`}>
+            <span>
               {translate({
                 id: 'blog.readArticle',
                 message: '阅读文章'
               })}
-              <svg className={styles.readMoreIcon} viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
-              </svg>
-            </button>
-          </div>
+            </span>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M5 12h14M12 5l7 7-7 7"/>
+            </svg>
+          </Link>
         </div>
-      </Link>
-    </article>
+      </article>
+    </ElectricBorder>
   );
 }
 
@@ -233,71 +238,48 @@ function FeaturedPost({post}) {
   // 从文章中提取图片URL
   const imageUrl = extractImageFromPost(post);
   
+  // 提取年份
+  const year = new Date(date).getFullYear();
+  
   return (
-    <section className={styles.featuredPost}>
-      <div className={styles.featuredInner}>
-        <div className={styles.featuredContent}>
-          <span className={styles.featuredLabel}>
-            {translate({
-              id: 'blog.featuredPost',
-              message: '精选文章'
-            })}
-          </span>
-          
-          <h2 className={styles.featuredTitle}>
-            <Link to={permalink}>{title}</Link>
-          </h2>
-          
-          <div className={styles.featuredMeta}>
-            <span className={styles.featuredDate}>{formattedDate}</span>
-            {readingTime && (
-              <span className={styles.featuredReadingTime}>
-                {Math.ceil(readingTime)} {translate({
-                  id: 'blog.readingTime',
-                  message: '分钟阅读'
-                })}
+    <article 
+      className={styles.featuredPost}
+      style={{
+        backgroundImage: `url(${imageUrl})`,
+        backgroundSize: 'cover',
+        backgroundPosition: 'center'
+      }}
+    >
+      <div className={styles.featuredOverlay}></div>
+      <div className={styles.featuredContent}>
+        {/* 内容 - 中间偏下左对齐 */}
+        <div className={styles.featuredTopContent}>
+          <h2 className={styles.featuredTitle}>{title}</h2>
+          <div className={styles.featuredTags}>
+            <span className={`${styles.featuredTag} cursor-target`}>{year}</span>
+            {tags?.slice(0, 3).map((tag, i) => (
+              <span key={i} className={`${styles.featuredTag} cursor-target`}>
+                {tag.label}
               </span>
-            )}
+            ))}
           </div>
-          
           <p className={styles.featuredDescription}>{description}</p>
-          
-          {tags?.length > 0 && (
-            <div className={styles.featuredTags}>
-              {tags.slice(0, 4).map((tag, i) => (
-                <span key={i} className={styles.featuredTag}>
-                  {tag.label}
-                </span>
-              ))}
-            </div>
-          )}
-          
-          <Link to={permalink} className={styles.featuredButton}>
+        </div>
+        
+        {/* 右下角按钮 */}
+        <Link to={permalink} className={`${styles.featuredButton} cursor-target`}>
+          <span>
             {translate({
               id: 'blog.readFullArticle',
               message: '阅读全文'
             })}
-            <svg className={styles.readMoreIcon} viewBox="0 0 24 24" fill="none" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
-            </svg>
-          </Link>
-        </div>
-        
-        <div className={styles.featuredImageContainer}>
-          <img 
-            src={imageUrl} 
-            alt={title} 
-            className={styles.featuredImage} 
-            onError={(e) => {
-              e.target.onerror = null;
-              e.target.src = '/img/logo.jpg'; // 图片加载失败时的备用图片
-            }}
-          />
-          <div className={styles.featuredImageOverlay}></div>
-          <div className={styles.featuredImageGradient}></div>
-        </div>
+          </span>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M5 12h14M12 5l7 7-7 7"/>
+          </svg>
+        </Link>
       </div>
-    </section>
+    </article>
   );
 }
 
@@ -358,7 +340,14 @@ function BlogListPageContent(props) {
         {/* 左侧：文章列表 */}
         <div className={styles.postsColumn}>
           {/* 搜索和筛选 */}
-          <div className={styles.filterSection}>
+          <ElectricBorder
+            color="#00ff88"
+            speed={0.8}
+            chaos={0.4}
+            thickness={2}
+            style={{ borderRadius: 16 }}
+          >
+            <div className={styles.filterSection}>
             <div className={styles.searchBox}>
               <input
                 type="text"
@@ -384,6 +373,7 @@ function BlogListPageContent(props) {
               }}
             />
           </div>
+          </ElectricBorder>
           
           {/* 筛选结果提示 */}
           {(searchTerm || activeTag !== 'all' || activeCategory !== 'all') && (
@@ -444,7 +434,7 @@ function BlogListPageContent(props) {
           {visiblePosts < filteredItems.length && (
             <div className={styles.loadMoreContainer}>
               <button 
-                className={clsx(styles.loadMoreButton, isLoading && styles.loading)}
+                className={clsx(styles.loadMoreButton, isLoading && styles.loading, 'cursor-target')}
                 onClick={loadMore}
                 disabled={isLoading}
               >
@@ -464,7 +454,14 @@ function BlogListPageContent(props) {
         {/* 右侧：侧边栏 */}
         <aside className={styles.sidebar}>
           {/* 作者信息 */}
-          <div className={styles.sidebarCard}>
+          <ElectricBorder
+            color="#c77dff"
+            speed={0.8}
+            chaos={0.4}
+            thickness={2}
+            style={{ borderRadius: 16 }}
+          >
+            <div className={styles.sidebarCard}>
             <h3 className={styles.sidebarTitle}>
               {translate({
                 id: 'blog.aboutAuthor',
@@ -488,21 +485,29 @@ function BlogListPageContent(props) {
               </div>
             </div>
             <div className={styles.socialLinks}>
-              <a href="#" className={styles.socialLink} aria-label="GitHub">
+              <a href="#" className={`${styles.socialLink} cursor-target`} aria-label="GitHub">
                 <svg viewBox="0 0 24 24" fill="currentColor">
                   <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/>
                 </svg>
               </a>
-              <a href="#" className={styles.socialLink} aria-label="Twitter">
+              <a href="#" className={`${styles.socialLink} cursor-target`} aria-label="Twitter">
                 <svg viewBox="0 0 24 24" fill="currentColor">
                   <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
                 </svg>
               </a>
             </div>
           </div>
+          </ElectricBorder>
           
           {/* 分类 */}
-          <div className={styles.sidebarCard}>
+          <ElectricBorder
+            color="#ffd700"
+            speed={0.8}
+            chaos={0.4}
+            thickness={2}
+            style={{ borderRadius: 16 }}
+          >
+            <div className={styles.sidebarCard}>
             <h3 className={styles.sidebarTitle}>
               {translate({
                 id: 'blog.categories',
@@ -511,7 +516,7 @@ function BlogListPageContent(props) {
             </h3>
             <div className={styles.categoryList}>
               <button
-                className={clsx(styles.categoryItem, activeCategory === 'all' && styles.categoryActive)}
+                className={clsx(styles.categoryItem, activeCategory === 'all' && styles.categoryActive, 'cursor-target')}
                 onClick={() => setActiveCategory('all')}
               >
                 {translate({
@@ -522,7 +527,7 @@ function BlogListPageContent(props) {
               {Array.from(allCategories).map((category, index) => (
                 <button
                   key={index}
-                  className={clsx(styles.categoryItem, activeCategory === category && styles.categoryActive)}
+                  className={clsx(styles.categoryItem, activeCategory === category && styles.categoryActive, 'cursor-target')}
                   onClick={() => setActiveCategory(category)}
                 >
                   {category}
@@ -530,9 +535,17 @@ function BlogListPageContent(props) {
               ))}
             </div>
           </div>
+          </ElectricBorder>
           
           {/* 热门标签 */}
-          <div className={styles.sidebarCard}>
+          <ElectricBorder
+            color="#00d4ff"
+            speed={0.8}
+            chaos={0.4}
+            thickness={2}
+            style={{ borderRadius: 16 }}
+          >
+            <div className={styles.sidebarCard}>
             <h3 className={styles.sidebarTitle}>
               {translate({
                 id: 'blog.popularTags',
@@ -543,7 +556,7 @@ function BlogListPageContent(props) {
               {allTags.slice(0, 10).map((tag, index) => (
                 <div 
                   key={index} 
-                  className={clsx(styles.sidebarTag, activeTag === tag.label && styles.sidebarTagActive)}
+                  className={clsx(styles.sidebarTag, activeTag === tag.label && styles.sidebarTagActive, 'cursor-target')}
                   onClick={() => {
                     setActiveTag(tag.label);
                     setVisiblePosts(4);
@@ -554,6 +567,7 @@ function BlogListPageContent(props) {
               ))}
             </div>
           </div>
+          </ElectricBorder>
         </aside>
       </div>
     </div>
@@ -567,6 +581,7 @@ export default function BlogListPage(props) {
         ThemeClassNames.wrapper.blogPages,
         ThemeClassNames.page.blogListPage,
       )}>
+      <TargetCursor />
       <BlogListPageMetadata {...props} />
       <BlogLayout>
         <BlogListPageHeader {...props} />

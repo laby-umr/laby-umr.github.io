@@ -23,6 +23,27 @@ const config = {
   url: 'https://masterliu93.github.io',
   baseUrl: '/',
 
+  // 性能优化：预连接和 DNS 预解析
+  headTags: [
+    // DNS 预解析
+    {
+      tagName: 'link',
+      attributes: {
+        rel: 'dns-prefetch',
+        href: 'http://120.48.86.168:48080',
+      },
+    },
+    // 预连接 API
+    {
+      tagName: 'link',
+      attributes: {
+        rel: 'preconnect',
+        href: 'http://120.48.86.168:48080',
+        crossorigin: 'anonymous',
+      },
+    },
+  ],
+
   // GitHub pages deployment config.
   organizationName: 'MasterLiu93', // GitHub org/user name.
   projectName: 'blog-web', // repo name.
@@ -50,6 +71,50 @@ const config = {
   },
 
   plugins: [
+    // PWA 支持
+    [
+      '@docusaurus/plugin-pwa',
+      {
+        debug: false,
+        offlineModeActivationStrategies: [
+          'appInstalled',
+          'standalone',
+          'queryString',
+        ],
+        pwaHead: [
+          {
+            tagName: 'link',
+            rel: 'icon',
+            href: '/img/logo.jpg',
+          },
+          {
+            tagName: 'link',
+            rel: 'manifest',
+            href: '/manifest.json',
+          },
+          {
+            tagName: 'meta',
+            name: 'theme-color',
+            content: '#667eea',
+          },
+          {
+            tagName: 'meta',
+            name: 'apple-mobile-web-app-capable',
+            content: 'yes',
+          },
+          {
+            tagName: 'meta',
+            name: 'apple-mobile-web-app-status-bar-style',
+            content: 'black-translucent',
+          },
+          {
+            tagName: 'link',
+            rel: 'apple-touch-icon',
+            href: '/img/logo.jpg',
+          },
+        ],
+      },
+    ],
     [
       'docusaurus-plugin-module-alias',
       {
@@ -125,10 +190,13 @@ const config = {
           // Please change this to your repo.
           editUrl:
             'https://github.com/MasterLiu93/blog-web/tree/main/',
-          postsPerPage: 5,
+          // 优化：增加每页文章数到 10 篇，减少分页请求
+          postsPerPage: 10,
           blogSidebarCount: 'ALL',
           blogSidebarTitle: '全部博客文章',
           blogDescription: '关注前后端开发、DevOps和系统架构设计的技术博客',
+          // 优化：添加摘要截断标记
+          truncateMarker: /<!--\s*truncate\s*-->/,
           feedOptions: {
             type: 'all',
             title: 'Laby的博客',
@@ -193,6 +261,7 @@ const config = {
           },
           {to: '/blog', label: '博客', position: 'left'},
           {to: '/projects', label: '项目', position: 'left'},
+          {to: '/music', label: '音乐', position: 'left'},
           {to: '/contact', label: '联系我', position: 'left'},
           {to: '/about', label: '关于我', position: 'right'},
           // 添加语言切换菜单

@@ -10,7 +10,7 @@ export default function ReadingProgress() {
   const progressBarRef = useRef(null);
   const particlesContainerRef = useRef(null);
   const location = useLocation();
-  const particleCount = 8; // 粒子数量
+  const particleCount = 5; // 粒子数量（优化：减少粒子）
   
   // 重置进度条，当路由变化时
   useEffect(() => {
@@ -21,7 +21,10 @@ export default function ReadingProgress() {
 
   // 计算阅读进度
   useEffect(() => {
+    let ticking = false;
+    
     const calculateScrollProgress = () => {
+      ticking = false;
       // 获取内容元素
       const content = document.querySelector('article') || 
                      document.querySelector('.markdown') || 
@@ -52,12 +55,19 @@ export default function ReadingProgress() {
         setShowProgress(false);
       }
       
-      // 生成粒子
+      // 生成粒子（优化：降低生成频率）
       if (progressBarRef.current && particlesContainerRef.current && newWidth > 0) {
-        // 仅在进度更新且粒子数少于最大数量时创建新粒子
-        if (Math.random() > 0.85 && particles.length < 20) {
+        if (Math.random() > 0.92 && particles.length < 15) {
           createParticle();
         }
+      }
+    };
+    
+    // 节流处理滚动事件
+    const requestTick = () => {
+      if (!ticking) {
+        ticking = true;
+        requestAnimationFrame(calculateScrollProgress);
       }
     };
 
@@ -127,21 +137,25 @@ export default function ReadingProgress() {
     // 初始化计算
     calculateScrollProgress();
     
-    // 创建动画循环
+    // 创建动画循环（优化：降低更新频率）
     let animationFrameId;
-    const animate = () => {
-      updateParticles();
+    let lastUpdate = 0;
+    const animate = (timestamp) => {
+      if (timestamp - lastUpdate > 50) { // 限制为 20fps
+        updateParticles();
+        lastUpdate = timestamp;
+      }
       animationFrameId = requestAnimationFrame(animate);
     };
-    animate();
+    animate(0);
     
-    // 监听滚动事件
-    window.addEventListener('scroll', calculateScrollProgress);
-    window.addEventListener('resize', calculateScrollProgress);
+    // 监听滚动事件（优化：使用节流）
+    window.addEventListener('scroll', requestTick, { passive: true });
+    window.addEventListener('resize', requestTick, { passive: true });
     
     return () => {
-      window.removeEventListener('scroll', calculateScrollProgress);
-      window.removeEventListener('resize', calculateScrollProgress);
+      window.removeEventListener('scroll', requestTick);
+      window.removeEventListener('resize', requestTick);
       cancelAnimationFrame(animationFrameId);
     };
   }, [location.pathname, particles.length]);

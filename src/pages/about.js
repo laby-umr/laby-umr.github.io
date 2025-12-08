@@ -2,87 +2,11 @@ import React, { useState, useEffect, useRef } from 'react';
 import Layout from '@theme/Layout';
 import Translate, {translate} from '@docusaurus/Translate';
 import { useVisitorTracking } from '@site/src/utils/blogApi';
+import { rafThrottle } from '@site/src/utils/throttle';
 import styles from './about.module.css';
-
-// 粒子背景组件
-function ParticleBackground() {
-  const canvasRef = useRef(null);
-  
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    const ctx = canvas.getContext('2d');
-    let particles = [];
-    let animationFrameId;
-    
-    const resizeCanvas = () => {
-      canvas.width = window.innerWidth;
-      canvas.height = window.innerHeight;
-      initParticles();
-    };
-    
-    const initParticles = () => {
-      particles = [];
-      const particleCount = Math.min(Math.floor(window.innerWidth / 15), 50);
-      
-      for (let i = 0; i < particleCount; i++) {
-        particles.push({
-          x: Math.random() * canvas.width,
-          y: Math.random() * canvas.height,
-          radius: Math.random() * 2 + 1,
-          color: `rgba(102, 126, 234, ${Math.random() * 0.5 + 0.2})`,
-          speedX: (Math.random() - 0.5) * 0.5,
-          speedY: (Math.random() - 0.5) * 0.5,
-        });
-      }
-    };
-    
-    const drawParticles = () => {
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      
-      particles.forEach((particle, i) => {
-        particle.x += particle.speedX;
-        particle.y += particle.speedY;
-        
-        if (particle.x < 0 || particle.x > canvas.width) particle.speedX = -particle.speedX;
-        if (particle.y < 0 || particle.y > canvas.height) particle.speedY = -particle.speedY;
-        
-        ctx.beginPath();
-        ctx.arc(particle.x, particle.y, particle.radius, 0, Math.PI * 2);
-        ctx.fillStyle = particle.color;
-        ctx.fill();
-        
-        particles.forEach((p2, j) => {
-          if (i === j) return;
-          const dx = particle.x - p2.x;
-          const dy = particle.y - p2.y;
-          const distance = Math.sqrt(dx * dx + dy * dy);
-          
-          if (distance < 100) {
-            ctx.beginPath();
-            ctx.strokeStyle = `rgba(102, 126, 234, ${0.15 * (1 - distance / 100)})`;
-            ctx.lineWidth = 0.5;
-            ctx.moveTo(particle.x, particle.y);
-            ctx.lineTo(p2.x, p2.y);
-            ctx.stroke();
-          }
-        });
-      });
-      
-      animationFrameId = requestAnimationFrame(drawParticles);
-    };
-    
-    window.addEventListener('resize', resizeCanvas);
-    resizeCanvas();
-    drawParticles();
-    
-    return () => {
-      window.removeEventListener('resize', resizeCanvas);
-      cancelAnimationFrame(animationFrameId);
-    };
-  }, []);
-  
-  return <canvas ref={canvasRef} className={styles.particleCanvas} />;
-}
+import ElectricBorder from '../components/ElectricBorder';
+import GlitchText from '../components/GlitchText';
+import JellyTextAnimation, { TranslatedJellyText } from '../components/JellyTextAnimation';
 
 // 技能专长组件 - 带花朵绽放效果
 function SkillsSection({ skills }) {
@@ -96,6 +20,14 @@ function SkillsSection({ skills }) {
     >
       {skills.map((skillGroup, index) => (
         <div key={index} className={`${styles.skillCard} ${styles[`skillCard${skillGroup.color}`]}`}>
+          <ElectricBorder
+            color={['#7df9ff', '#ff6b9d', '#c77dff', '#00ff88'][index % 4]}
+            speed={0.8}
+            chaos={0.4}
+            thickness={2}
+            style={{ borderRadius: 16, height: '100%', position: 'absolute', inset: 0, pointerEvents: 'none' }}
+            className="cursor-target"
+          />
           <div className={styles.skillHeader}>
             <div className={`${styles.skillIcon} ${styles[`skillIcon${skillGroup.color}`]}`}>{skillGroup.icon}</div>
             <h3 className={styles.skillTitle}>{skillGroup.category}</h3>
@@ -116,7 +48,7 @@ function SkillsSection({ skills }) {
           
           <div className={styles.skillTags}>
             {skillGroup.items.map((skill, i) => (
-              <span key={i} className={`${styles.skillTag} ${styles[`skillTag${skillGroup.color}`]}`}>{skill}</span>
+              <span key={i} className={`${styles.skillTag} ${styles[`skillTag${skillGroup.color}`]} cursor-target`}>{skill}</span>
             ))}
           </div>
         </div>
@@ -317,11 +249,11 @@ function About() {
   const [expandedExp, setExpandedExp] = useState(null);
   
   useEffect(() => {
-    const handleScroll = () => {
+    const handleScroll = rafThrottle(() => {
       setScrollY(window.scrollY);
-    };
+    });
     
-    window.addEventListener('scroll', handleScroll);
+    window.addEventListener('scroll', handleScroll, { passive: true });
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
@@ -330,7 +262,6 @@ function About() {
       title={translate({id: 'about.meta.title', message: 'About Me'})}
       description={translate({id: 'about.meta.description', message: 'Laby - Full Stack Developer'})}
     >
-      <ParticleBackground />
       <div className={styles.aboutContainer}>
         {/* 浮动装饰球 */}
         <div className={styles.blob1}></div>
@@ -346,26 +277,32 @@ function About() {
             <div className={styles.heroContent}>
               {/* 徽章 */}
               <div className={styles.heroBadge}>
-                <span className={styles.badgeText}>关于我</span>
+                <span className={styles.badgeText}>
+                  <Translate id="about.badge">关于我</Translate>
+                </span>
                 <div className={styles.badgeRing}></div>
                 <div className={styles.badgeRing2}></div>
               </div>
               
               {/* 标题 */}
               <h1 className={styles.heroTitle}>
-                <span className={styles.gradientText}>Laby</span>
+                <span className={styles.gradientText}>
+                  <GlitchText speed={1} enableShadows={true} enableOnHover={false}>
+                    <JellyTextAnimation delay={0}>Laby</JellyTextAnimation>
+                  </GlitchText>
+                </span>
                 <div className={styles.titleUnderline}></div>
               </h1>
               
               {/* 标签 */}
               <div className={styles.heroBadges}>
-                <span className={styles.badge}>
+                <span className={`${styles.badge} cursor-target`}>
                   <Translate id="about.badge.fullstack">全栈工程师</Translate>
                 </span>
-                <span className={styles.badge}>
+                <span className={`${styles.badge} cursor-target`}>
                   <Translate id="about.badge.architect">系统架构师</Translate>
                 </span>
-                <span className={styles.badge}>
+                <span className={`${styles.badge} cursor-target`}>
                   <Translate id="about.badge.ai">AI技术专家</Translate>
                 </span>
               </div>
@@ -393,13 +330,13 @@ function About() {
                   </p>
                   
                   <div className={styles.socialLinks}>
-                    <a href="#" className={styles.socialLink}>
+                    <a href="#" className={`${styles.socialLink} cursor-target`}>
                       <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
                         <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/>
                       </svg>
                       GitHub
                     </a>
-                    <a href="#" className={styles.socialLink}>
+                    <a href="#" className={`${styles.socialLink} cursor-target`}>
                       <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
                         <path d="M19 0h-14c-2.761 0-5 2.239-5 5v14c0 2.761 2.239 5 5 5h14c2.762 0 5-2.239 5-5v-14c0-2.761-2.238-5-5-5zm-11 19h-3v-11h3v11zm-1.5-12.268c-.966 0-1.75-.79-1.75-1.764s.784-1.764 1.75-1.764 1.75.79 1.75 1.764-.783 1.764-1.75 1.764zm13.5 12.268h-3v-5.604c0-3.368-4-3.113-4 0v5.604h-3v-11h3v1.765c1.396-2.586 7-2.777 7 2.476v6.759z"/>
                       </svg>
@@ -417,19 +354,19 @@ function About() {
           <div className={styles.tabsContainer}>
             <div className={styles.tabs}>
               <button 
-                className={`${styles.tab} ${activeTab === 'skills' ? styles.tabActive : ''}`}
+                className={`${styles.tab} ${activeTab === 'skills' ? styles.tabActive : ''} cursor-target`}
                 onClick={() => setActiveTab('skills')}
               >
                 <Translate id="about.tab.skills">技能专长</Translate>
               </button>
               <button 
-                className={`${styles.tab} ${activeTab === 'experience' ? styles.tabActive : ''}`}
+                className={`${styles.tab} ${activeTab === 'experience' ? styles.tabActive : ''} cursor-target`}
                 onClick={() => setActiveTab('experience')}
               >
                 <Translate id="about.tab.experience">工作经历</Translate>
               </button>
               <button 
-                className={`${styles.tab} ${activeTab === 'education' ? styles.tabActive : ''}`}
+                className={`${styles.tab} ${activeTab === 'education' ? styles.tabActive : ''} cursor-target`}
                 onClick={() => setActiveTab('education')}
               >
                 <Translate id="about.tab.education">教育背景</Translate>
@@ -449,7 +386,15 @@ function About() {
           {activeTab === 'experience' && (
             <div className={styles.experienceList}>
               {experiences.map((exp, index) => (
-                <div key={index} className={styles.experienceCard}>
+                <ElectricBorder
+                  key={index}
+                  color={['#7df9ff', '#ff6b9d', '#c77dff', '#00ff88'][index % 4]}
+                  speed={0.8}
+                  chaos={0.4}
+                  thickness={2}
+                  style={{ borderRadius: 16, height: '100%' }}
+                >
+                  <div className={styles.experienceCard}>
                   <div className={`${styles.expLeftBar} ${styles[`expLeftBar${exp.color}`]}`}></div>
                   
                   <div className={styles.expHeader} onClick={() => setExpandedExp(expandedExp === index ? null : index)} style={{cursor: 'pointer'}}>
@@ -517,6 +462,7 @@ function About() {
                     </div>
                   )}
                 </div>
+                </ElectricBorder>
               ))}
             </div>
           )}
@@ -525,7 +471,15 @@ function About() {
           {activeTab === 'education' && (
             <div className={styles.educationList}>
               {education.map((edu, index) => (
-                <div key={index} className={styles.educationCard}>
+                <ElectricBorder
+                  key={index}
+                  color="#ffd700"
+                  speed={0.8}
+                  chaos={0.4}
+                  thickness={2}
+                  style={{ borderRadius: 16, height: '100%' }}
+                >
+                  <div className={styles.educationCard}>
                   <div className={styles.eduLogo}>{edu.logo}</div>
                   <div className={styles.eduContent}>
                     <div className={styles.eduHeader}>
@@ -536,6 +490,7 @@ function About() {
                     <p className={styles.eduDescription}>{edu.description}</p>
                   </div>
                 </div>
+                </ElectricBorder>
               ))}
             </div>
           )}
@@ -543,14 +498,23 @@ function About() {
 
         {/* 下载简历区域 */}
         <div className="container">
-          <div className={styles.downloadSection}>
+          <ElectricBorder
+            color="#ff6ec7"
+            speed={0.8}
+            chaos={0.4}
+            thickness={3}
+            style={{ borderRadius: 20 }}
+          >
+            <div className={styles.downloadSection}>
             <h2 className={styles.downloadTitle}>
-              <Translate id="about.downloadTitle">想了解更多？</Translate>
+              <GlitchText speed={1} enableShadows={true} enableOnHover={false}>
+                <TranslatedJellyText id="about.downloadTitle" defaultMessage="想了解更多？" delay={0} disableHover={true} />
+              </GlitchText>
             </h2>
             <p className={styles.downloadDesc}>
               <Translate id="about.downloadDesc2">获取完整的个人简历PDF版本</Translate>
             </p>
-            <a href="/file/刘佳兴-全栈-简历.pdf" download="刘佳兴-全栈-简历.pdf" className={styles.downloadButton}>
+            <a href="/file/刘佳兴-全栈-简历.pdf" download="刘佳兴-全栈-简历.pdf" className={`${styles.downloadButton} cursor-target`}>
               <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" strokeWidth="2">
                 <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
                 <polyline points="7 10 12 15 17 10" />
@@ -559,6 +523,7 @@ function About() {
               <Translate id="about.downloadButton">下载简历</Translate>
             </a>
           </div>
+          </ElectricBorder>
         </div>
       </div>
     </Layout>

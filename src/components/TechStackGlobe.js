@@ -50,15 +50,32 @@ const TechStackGlobe = ({
 
   useEffect(() => {
     if (!containerRef.current || !interactive) return;
+    
+    let ticking = false;
+    let lastX = 0;
+    let lastY = 0;
 
     const handleMouseMove = (e) => {
+      lastX = e.clientX;
+      lastY = e.clientY;
+      
+      if (!ticking) {
+        ticking = true;
+        requestAnimationFrame(() => {
+          updateMousePosition(lastX, lastY);
+          ticking = false;
+        });
+      }
+    };
+    
+    const updateMousePosition = (clientX, clientY) => {
+      if (!containerRef.current) return;
       const rect = containerRef.current.getBoundingClientRect();
       const centerX = rect.left + rect.width / 2;
       const centerY = rect.top + rect.height / 2;
       
-      // Calculate relative mouse position to center of container
-      const x = e.clientX - centerX;
-      const y = e.clientY - centerY;
+      const x = clientX - centerX;
+      const y = clientY - centerY;
       
       mouseX.set(x);
       mouseY.set(y);
@@ -67,28 +84,42 @@ const TechStackGlobe = ({
     const handleMouseEnter = () => setActive(true);
     const handleMouseLeave = () => setActive(false);
 
+    const container = containerRef.current;
+    
     window.addEventListener('mousemove', handleMouseMove);
-    containerRef.current.addEventListener('mouseenter', handleMouseEnter);
-    containerRef.current.addEventListener('mouseleave', handleMouseLeave);
+    if (container) {
+      container.addEventListener('mouseenter', handleMouseEnter);
+      container.addEventListener('mouseleave', handleMouseLeave);
+    }
 
     return () => {
       window.removeEventListener('mousemove', handleMouseMove);
-      if (containerRef.current) {
-        containerRef.current.removeEventListener('mouseenter', handleMouseEnter);
-        containerRef.current.removeEventListener('mouseleave', handleMouseLeave);
+      if (container) {
+        container.removeEventListener('mouseenter', handleMouseEnter);
+        container.removeEventListener('mouseleave', handleMouseLeave);
       }
     };
   }, [interactive, mouseX, mouseY]);
 
   useEffect(() => {
-    // Animation loop for 3D rotation
+    // Animation loop for 3D rotation（优化：降低帧率）
     let animationId;
     let lastTime = 0;
+    let lastRender = 0;
     const baseRotationSpeed = 0.0005 * speed;
+    const targetFPS = 30; // 限制为 30fps
+    const frameInterval = 1000 / targetFPS;
 
     const animate = (time) => {
       if (!containerRef.current) return;
       
+      const elapsed = time - lastRender;
+      if (elapsed < frameInterval) {
+        animationId = requestAnimationFrame(animate);
+        return;
+      }
+      
+      lastRender = time - (elapsed % frameInterval);
       const deltaTime = time - lastTime;
       lastTime = time;
       

@@ -4,6 +4,9 @@ import { motion } from 'framer-motion';
 import styles from './contact.module.css';
 import Translate, { translate } from '@docusaurus/Translate';
 import { messageApi, subscribeApi, useVisitorTracking } from '../utils/blogApi';
+import ElectricBorder from '../components/ElectricBorder';
+import GlitchText from '../components/GlitchText';
+import { TranslatedJellyText, SimpleText } from '../components/JellyTextAnimation';
 
 export default function Contact() {
   const [formState, setFormState] = useState({
@@ -411,7 +414,9 @@ export default function Contact() {
               </motion.div>
               <h1 className={styles.heroTitle}>
                 <span className={styles.gradientText}>
-                  <Translate id="contact.hero.title">让我们一起创造精彩</Translate>
+                  <GlitchText speed={1} enableShadows={true} enableOnHover={false}>
+                    <TranslatedJellyText id="contact.hero.title" defaultMessage="让我们一起创造精彩" delay={0} />
+                  </GlitchText>
                 </span>
               </h1>
               <p className={styles.heroSubtitle}>
@@ -428,7 +433,7 @@ export default function Contact() {
                     href={social.url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className={styles.socialLink}
+                    className={`${styles.socialLink} cursor-target`}
                     initial={{ scale: 0 }}
                     animate={{ scale: 1 }}
                     transition={{ delay: index * 0.1 + 0.3 }}
@@ -448,55 +453,59 @@ export default function Contact() {
           <div className="container">
             <div className={styles.methodsGrid}>
               {contactMethods.map((method, index) => (
-                <motion.div
+                <ElectricBorder
                   key={index}
-                  className={styles.methodCard}
-                  initial={{ opacity: 0, y: 30 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: index * 0.1 }}
-                  whileHover={{ 
-                    y: -8,
-                    boxShadow: "0 25px 50px -12px rgba(102, 126, 234, 0.25)"
-                  }}
+                  color={index === 0 ? '#7df9ff' : index === 1 ? '#ff6b9d' : '#c77dff'}
+                  speed={0.8}
+                  chaos={0.4}
+                  thickness={2}
+                  style={{ borderRadius: 16 }}
                 >
-                  <div className={styles.cardContent}>
-                    {/* 动态装饰背景 */}
-                    <motion.div 
-                      className={styles.decorativeBlob}
-                      animate={{
-                        opacity: [0.2, 0.4, 0.2],
-                        scale: [1, 1.1, 1]
-                      }}
-                      transition={{ duration: 8, repeat: Infinity, ease: "easeInOut" }}
-                    />
-                    
-                    <div className={styles.contentWrapper}>
+                  <motion.div
+                    className={styles.methodCard}
+                    initial={{ opacity: 0, y: 30 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: index * 0.1 }}
+                  >
+                    <div className={styles.cardContent}>
+                      {/* 动态装饰背景 */}
                       <motion.div 
-                        className={styles.iconWrapper}
-                        whileHover={{ 
-                          scale: 1.1,
-                          rotate: [0, 5, -5, 0],
-                          transition: { duration: 0.5 }
+                        className={styles.decorativeBlob}
+                        animate={{
+                          opacity: [0.2, 0.4, 0.2],
+                          scale: [1, 1.1, 1]
                         }}
-                      >
-                        <div className={styles.methodIcon}>{method.icon}</div>
-                        <span className={styles.iconLabel}>{method.title}</span>
-                      </motion.div>
+                        transition={{ duration: 8, repeat: Infinity, ease: "easeInOut" }}
+                      />
                       
-                      <p className={styles.methodValue}>{method.value}</p>
-                      
-                      <motion.a 
-                        href={method.url}
-                        className={styles.methodButton}
-                        whileHover={{ scale: 1.05, y: -2 }}
-                        whileTap={{ scale: 0.95 }}
-                      >
-                        <span className={styles.buttonShine}></span>
-                        <span className={styles.buttonText}>{method.action}</span>
-                      </motion.a>
+                      <div className={styles.contentWrapper}>
+                        <motion.div 
+                          className={styles.iconWrapper}
+                          whileHover={{ 
+                            scale: 1.1,
+                            rotate: [0, 5, -5, 0],
+                            transition: { duration: 0.5 }
+                          }}
+                        >
+                          <div className={styles.methodIcon}>{method.icon}</div>
+                          <span className={styles.iconLabel}>{method.title}</span>
+                        </motion.div>
+                        
+                        <p className={styles.methodValue}>{method.value}</p>
+                        
+                        <motion.a 
+                          href={method.url}
+                          className={`${styles.methodButton} cursor-target`}
+                          whileHover={{ scale: 1.05, y: -2 }}
+                          whileTap={{ scale: 0.95 }}
+                        >
+                          <span className={styles.buttonShine}></span>
+                          <span className={styles.buttonText}>{method.action}</span>
+                        </motion.a>
+                      </div>
                     </div>
-                  </div>
-                </motion.div>
+                  </motion.div>
+                </ElectricBorder>
               ))}
             </div>
           </div>
@@ -507,16 +516,20 @@ export default function Contact() {
           <div className="container">
             <div className={styles.formGrid}>
               {/* Contact Form */}
-              <motion.div
-                className={styles.formCard}
-                initial={{ opacity: 0, x: -30 }}
-                whileInView={{ opacity: 1, x: 0 }}
-                viewport={{ once: true }}
-                transition={{ delay: 0.3 }}
-                whileHover={{ 
-                  boxShadow: "0 25px 50px -12px rgba(102, 126, 234, 0.15)"
-                }}
+              <ElectricBorder
+                color="#ff6ec7"
+                speed={0.8}
+                chaos={0.4}
+                thickness={2}
+                style={{ borderRadius: 16 }}
               >
+                <motion.div
+                  initial={{ opacity: 0, x: -30 }}
+                  whileInView={{ opacity: 1, x: 0 }}
+                  viewport={{ once: true }}
+                  transition={{ delay: 0.3 }}
+                >
+                  <div className={styles.formCard}>
                 {/* 装饰背景 */}
                 <motion.div 
                   className={styles.formDecorativeBlob}
@@ -530,7 +543,9 @@ export default function Contact() {
                 <div className={styles.formContent}>
                   <h2 className={styles.formTitle}>
                     <span className={styles.gradientText}>
-                      <Translate id="contact.leaveMessage">给我留言</Translate>
+                      <GlitchText speed={1} enableShadows={true} enableOnHover={false}>
+                        <TranslatedJellyText id="contact.leaveMessage" defaultMessage="给我留言" delay={0} disableHover={true} />
+                      </GlitchText>
                     </span>
                   </h2>
 
@@ -631,7 +646,7 @@ export default function Contact() {
 
                     <button
                       type="submit"
-                      className={styles.submitButton}
+                      className={`${styles.submitButton} cursor-target`}
                       disabled={submitting}
                     >
                       {submitting ? (
@@ -643,20 +658,31 @@ export default function Contact() {
                   </form>
                 )}
                 </div>
-              </motion.div>
+                  </div>
+                </motion.div>
+              </ElectricBorder>
 
               {/* Location and Remote Work */}
               <div className={styles.sideContent}>
                 {/* Location Card */}
-                <motion.div
-                  className={styles.locationCard}
-                  initial={{ opacity: 0, x: 30 }}
-                  whileInView={{ opacity: 1, x: 0 }}
-                  viewport={{ once: true }}
+                <ElectricBorder
+                  color="#ffd700"
+                  speed={0.8}
+                  chaos={0.4}
+                  thickness={2}
+                  style={{ borderRadius: 16, height: '100%' }}
                 >
+                  <motion.div
+                    initial={{ opacity: 0, x: 30 }}
+                    whileInView={{ opacity: 1, x: 0 }}
+                    viewport={{ once: true }}
+                  >
+                    <div className={styles.locationCard}>
                   <h3 className={styles.cardTitle}>
                     <span className={styles.gradientText}>
-                      <Translate id="contact.workLocation">工作地点</Translate>
+                      <GlitchText speed={1} enableShadows={true} enableOnHover={false}>
+                        <TranslatedJellyText id="contact.workLocation" defaultMessage="工作地点" delay={0} disableHover={true} />
+                      </GlitchText>
                     </span>
                   </h3>
                   <div className={styles.mapContainer}>
@@ -678,29 +704,44 @@ export default function Contact() {
                       </p>
                     </div>
                   </div>
-                </motion.div>
+                    </div>
+                  </motion.div>
+                </ElectricBorder>
 
                 {/* Remote Work Card */}
-                <motion.div
-                  className={styles.remoteCard}
-                  initial={{ opacity: 0, x: 30 }}
-                  whileInView={{ opacity: 1, x: 0 }}
-                  viewport={{ once: true }}
-                  transition={{ delay: 0.2 }}
+                <ElectricBorder
+                  color="#00d4ff"
+                  speed={0.8}
+                  chaos={0.4}
+                  thickness={2}
+                  style={{ borderRadius: 16, height: '100%' }}
                 >
+                  <motion.div
+                    initial={{ opacity: 0, x: 30 }}
+                    whileInView={{ opacity: 1, x: 0 }}
+                    viewport={{ once: true }}
+                    transition={{ delay: 0.2 }}
+                  >
+                    <div className={styles.remoteCard}>
                   <h3 className={styles.cardTitle}>
-                    <span className={styles.gradientText}><Translate id="contact.remoteWork">远程工作</Translate></span>
+                    <span className={styles.gradientText}>
+                      <GlitchText speed={1} enableShadows={true} enableOnHover={false}>
+                        <TranslatedJellyText id="contact.remoteWork" defaultMessage="远程工作" delay={0} disableHover={true} />
+                      </GlitchText>
+                    </span>
                   </h3>
                   <p className={styles.remoteText}>
                     <Translate id="contact.remoteWorkDesc">我主要通过远程方式工作，可以与全球各地的团队和项目协作，为您提供灵活的合作方式。</Translate>
                   </p>
                   <div className={styles.remoteBadges}>
-                    <span className={styles.badge}><Translate id="contact.remoteWork.onlineMeeting">线上会议</Translate></span>
-                    <span className={styles.badge}><Translate id="contact.remoteWork.flexibleTime">灵活时间</Translate></span>
-                    <span className={styles.badge}><Translate id="contact.remoteWork.globalCollaboration">全球协作</Translate></span>
-                    <span className={styles.badge}><Translate id="contact.remoteWork.realTimeCommunication">实时沟通</Translate></span>
+                    <span className={`${styles.badge} cursor-target`}><Translate id="contact.remoteWork.onlineMeeting">线上会议</Translate></span>
+                    <span className={`${styles.badge} cursor-target`}><Translate id="contact.remoteWork.flexibleTime">灵活时间</Translate></span>
+                    <span className={`${styles.badge} cursor-target`}><Translate id="contact.remoteWork.globalCollaboration">全球协作</Translate></span>
+                    <span className={`${styles.badge} cursor-target`}><Translate id="contact.remoteWork.realTimeCommunication">实时沟通</Translate></span>
                   </div>
-                </motion.div>
+                    </div>
+                  </motion.div>
+                </ElectricBorder>
               </div>
             </div>
           </div>
@@ -712,7 +753,9 @@ export default function Contact() {
             <div className={styles.sectionHeader}>
               <h2 className={styles.sectionTitleLarge}>
                 <span className={styles.gradientText}>
-                  <Translate id="contact.faq.title">常见问题</Translate>
+                  <GlitchText speed={1} enableShadows={true} enableOnHover={false}>
+                    <TranslatedJellyText id="contact.faq.title" defaultMessage="常见问题" delay={0} disableHover={true} />
+                  </GlitchText>
                 </span>
               </h2>
               <p className={styles.sectionDesc}>
@@ -743,42 +786,51 @@ export default function Contact() {
                   a: <Translate id="contact.faq.a5">是的，我提供项目交付后的技术支持和维护服务，确保系统稳定运行。</Translate>
                 }
               ].map((faq, index) => (
-                <motion.div
+                <ElectricBorder
                   key={index}
-                  className={styles.faqItem}
-                  initial={{ opacity: 0, y: 20 }}
-                  whileInView={{ opacity: 1, y: 0 }}
-                  viewport={{ once: true }}
-                  transition={{ delay: index * 0.1 }}
+                  color={['#7df9ff', '#ff6b9d', '#c77dff', '#00ff88', '#ffd700'][index % 5]}
+                  speed={0.8}
+                  chaos={0.4}
+                  thickness={2}
+                  style={{ borderRadius: 12, height: '100%' }}
                 >
-                  <div 
-                    className={styles.faqQuestion}
-                    onClick={() => setOpenFaqIndex(openFaqIndex === index ? null : index)}
-                  >
-                    <h4>{faq.q}</h4>
-                    <motion.svg
-                      className={styles.faqIcon}
-                      animate={{ rotate: openFaqIndex === index ? 180 : 0 }}
-                      transition={{ duration: 0.3 }}
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                    >
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                    </motion.svg>
-                  </div>
                   <motion.div
-                    initial={false}
-                    animate={{
-                      height: openFaqIndex === index ? 'auto' : 0,
-                      opacity: openFaqIndex === index ? 1 : 0
-                    }}
-                    transition={{ duration: 0.3, ease: "easeInOut" }}
-                    className={styles.faqAnswerWrapper}
+                    initial={{ opacity: 0, y: 20 }}
+                    whileInView={{ opacity: 1, y: 0 }}
+                    viewport={{ once: true }}
+                    transition={{ delay: index * 0.1 }}
                   >
-                    <p className={styles.faqAnswer}>{faq.a}</p>
+                    <div className={styles.faqItem}>
+                      <div 
+                        className={styles.faqQuestion}
+                        onClick={() => setOpenFaqIndex(openFaqIndex === index ? null : index)}
+                      >
+                        <h4>{faq.q}</h4>
+                        <motion.svg
+                          className={styles.faqIcon}
+                          animate={{ rotate: openFaqIndex === index ? 180 : 0 }}
+                          transition={{ duration: 0.3 }}
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                        >
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                        </motion.svg>
+                      </div>
+                      <motion.div
+                        initial={false}
+                        animate={{
+                          height: openFaqIndex === index ? 'auto' : 0,
+                          opacity: openFaqIndex === index ? 1 : 0
+                        }}
+                        transition={{ duration: 0.3, ease: "easeInOut" }}
+                        className={styles.faqAnswerWrapper}
+                      >
+                        <p className={styles.faqAnswer}>{faq.a}</p>
+                      </motion.div>
+                    </div>
                   </motion.div>
-                </motion.div>
+                </ElectricBorder>
               ))}
             </div>
           </div>
@@ -787,15 +839,26 @@ export default function Contact() {
         {/* Newsletter Section */}
         <section className={styles.newsletterSection}>
           <div className="container">
-            <motion.div
-              className={styles.newsletterCard}
-              initial={{ opacity: 0, y: 30 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
+            <ElectricBorder
+              color="#ff6ec7"
+              speed={0.8}
+              chaos={0.4}
+              thickness={2}
+              style={{ borderRadius: 16, height: '100%' }}
             >
+              <motion.div
+                initial={{ opacity: 0, y: 30 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+              >
+                <div className={styles.newsletterCard}>
               <div className={styles.newsletterContent}>
                 <h2 className={styles.newsletterTitle}>
-                  <span className={styles.gradientText}><Translate id="contact.subscribe.title">订阅我的动态</Translate></span>
+                  <span className={styles.gradientText}>
+                    <GlitchText speed={1} enableShadows={true} enableOnHover={false}>
+                      <TranslatedJellyText id="contact.subscribe.title" defaultMessage="订阅我的动态" delay={0} disableHover={true} />
+                    </GlitchText>
+                  </span>
                 </h2>
                 <p className={styles.newsletterText}>
                   <Translate id="contact.subscribe.description">定期接收我的最新文章、技术分享和项目更新，不会错过任何邮件。</Translate>
@@ -811,7 +874,7 @@ export default function Contact() {
                   disabled={subscribing || subscribeSuccess}
                 />
                 <button 
-                  className={styles.newsletterButton}
+                  className={`${styles.newsletterButton} cursor-target`}
                   onClick={handleSubscribe}
                   disabled={subscribing || subscribeSuccess || !subscribeEmail}
                 >
@@ -826,7 +889,9 @@ export default function Contact() {
               <p className={styles.privacyText}>
                 <Translate id="contact.subscribe.privacy">我们遵循您的隐私，不会与第三方分享您的信息。</Translate>
               </p>
-            </motion.div>
+                </div>
+              </motion.div>
+            </ElectricBorder>
           </div>
         </section>
       </div>
