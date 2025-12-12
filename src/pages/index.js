@@ -12,8 +12,7 @@ import CounterSection from '@site/src/components/CounterSection';
 import TestimonialsCarousel from '@site/src/components/TestimonialsCarousel';
 import { AnimatedHeroTitle } from '@site/src/components/JellyTextAnimation';
 import { TranslatedJellyText } from '@site/src/components/JellyTextAnimation';
-import ElectricBorder from '@site/src/components/ElectricBorder';
-import Orb from '@site/src/components/Orb';
+import DOSTerminal from '@site/src/components/DOSTerminal';
 import GlitchText from '@site/src/components/GlitchText';
 import { useVisitorTracking } from '@site/src/utils/blogApi';
 import { rafThrottle } from '@site/src/utils/throttle';
@@ -165,77 +164,9 @@ function HeroSection() {
             </div>
           </div>
 
-          {/* 右侧展示区 - Electric Border 展示 */}
+          {/* 右侧展示区 - DOS终端展示 */}
           <div className={styles.heroRight}>
-            <div className={`${styles.electricBorderWrapper} cursor-target`}>
-              <ElectricBorder
-                color="#7df9ff"
-                speed={1}
-                chaos={0.5}
-                thickness={3}
-                style={{ borderRadius: 16, height: '100%' }}
-              >
-                <div style={{
-                  padding: '2rem',
-                  background: 'linear-gradient(135deg, rgba(13, 17, 23, 0.95) 0%, rgba(23, 27, 33, 0.98) 100%)',
-                  borderRadius: 16,
-                  height: '100%',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  justifyContent: 'center',
-                  gap: '1.5rem'
-                }}>
-                <div style={{ 
-                  fontSize: '2rem', 
-                  fontWeight: 800, 
-                  background: 'linear-gradient(135deg, #7df9ff 0%, #00ff88 100%)',
-                  WebkitBackgroundClip: 'text',
-                  WebkitTextFillColor: 'transparent',
-                  letterSpacing: '-0.02em'
-                }}>
-                  Full-Stack Developer
-                </div>
-                
-                <div style={{ 
-                  fontSize: '1rem', 
-                  color: 'rgba(255, 255, 255, 0.8)',
-                  lineHeight: 1.8
-                }}>
-                  <div style={{ marginBottom: '0.75rem' }}>
-                    ✓ React 18.2.0
-                  </div>
-                  <div style={{ marginBottom: '0.75rem' }}>
-                    ✓ TypeScript 5.0
-                  </div>
-                  <div style={{ marginBottom: '0.75rem' }}>
-                    ✓ Next.js 14.0
-                  </div>
-                  <div style={{ marginBottom: '0.75rem' }}>
-                    ✓ Spring Boot
-                  </div>
-                  <div style={{ marginBottom: '0.75rem' }}>
-                    ✓ Docker & Kubernetes
-                  </div>
-                </div>
-                
-                <div style={{
-                  marginTop: '1rem',
-                  padding: '1rem',
-                  background: 'rgba(125, 249, 255, 0.1)',
-                  borderRadius: 8,
-                  border: '1px solid rgba(125, 249, 255, 0.3)',
-                  fontSize: '0.9rem',
-                  color: '#7df9ff',
-                  fontFamily: 'Fira Code, monospace'
-                }}>
-                  $ npm start<br/>
-                  <span style={{ color: 'rgba(255, 255, 255, 0.6)' }}>
-                    {'>'} Server running at localhost:3000
-                  </span>
-                </div>
-              </div>
-            </ElectricBorder>
-            </div>
+            <DOSTerminal />
           </div>
         </div>
 
@@ -353,26 +284,6 @@ function TechStackSection() {
 function FeaturesSection() {
   const history = useHistory();
   const [isExpanded, setIsExpanded] = useState(false);
-  const sectionRef = useRef(null);
-  
-  // 使用 IntersectionObserver 在进入视口时展开
-  useEffect(() => {
-    if (!sectionRef.current) return;
-    
-    const observer = new IntersectionObserver(
-      (entries) => {
-        entries.forEach(entry => {
-          if (entry.isIntersecting) {
-            setIsExpanded(true);
-          }
-        });
-      },
-      { threshold: 0.2 }
-    );
-    
-    observer.observe(sectionRef.current);
-    return () => observer.disconnect();
-  }, []);
   
   const features = [
     {
@@ -457,7 +368,7 @@ function FeaturesSection() {
   ];
 
   return (
-    <section ref={sectionRef} className={styles.features}>
+    <section className={styles.features}>
       <div className="container">
         <h2 className={styles.sectionTitle}>
           <span className={styles.gradientText}>
@@ -474,6 +385,8 @@ function FeaturesSection() {
 
         <div 
           className={`${styles.featuresGrid} ${isExpanded ? styles.featuresGridExpanded : ''}`}
+          onMouseEnter={() => setIsExpanded(true)}
+          onMouseLeave={() => setIsExpanded(false)}
         >
           {features.map((feature, index) => (
             <div 
@@ -486,13 +399,13 @@ function FeaturesSection() {
                 backgroundPosition: 'center'
               }}
             >
-              <ElectricBorder
+     {/*         <ElectricBorder
                 color={['#7df9ff', '#ff6b9d', '#c77dff', '#00ff88', '#ffd700', '#00d4ff'][index % 6]}
                 speed={0.8}
                 chaos={0.4}
                 thickness={2}
                 style={{ borderRadius: 16, height: '100%', position: 'absolute', inset: 0, pointerEvents: 'none' }}
-              />
+              />*/}
               <div className={styles.featureCardOverlay} />
               <div className={styles.featureCardContent}>
                 {/* 上半部分 - 左对齐 */}
@@ -532,26 +445,6 @@ function RecentPosts() {
   const { colorMode } = useColorMode();
   const isDark = colorMode === 'dark';
   const [isExpanded, setIsExpanded] = useState(false);
-  const sectionRef = useRef(null);
-  
-  // 使用 IntersectionObserver 在进入视口时展开
-  useEffect(() => {
-    if (!sectionRef.current) return;
-    
-    const observer = new IntersectionObserver(
-      (entries) => {
-        entries.forEach(entry => {
-          if (entry.isIntersecting) {
-            setIsExpanded(true);
-          }
-        });
-      },
-      { threshold: 0.2 }
-    );
-    
-    observer.observe(sectionRef.current);
-    return () => observer.disconnect();
-  }, []);
 
   const posts = [
     {
@@ -629,14 +522,7 @@ function RecentPosts() {
   ];
 
   return (
-    <section ref={sectionRef} className={styles.recentPosts} style={{ 
-      background: isDark 
-        ? 'linear-gradient(180deg, rgba(10, 10, 15, 0.95) 0%, rgba(5, 5, 10, 0.98) 100%)'
-        : 'linear-gradient(180deg, rgba(248, 249, 250, 0.98) 0%, rgba(241, 243, 245, 1) 100%)',
-      position: 'relative',
-      zIndex: 1
-    }}>
-      <div className={styles.postsBg} />
+    <section className={styles.recentPosts}>
       <div className="container">
         <h2 className={styles.sectionTitle}>
           <span className={styles.gradientText}>
@@ -651,6 +537,8 @@ function RecentPosts() {
 
         <div 
           className={`${styles.postsGrid} ${isExpanded ? styles.postsGridExpanded : ''}`}
+          onMouseEnter={() => setIsExpanded(true)}
+          onMouseLeave={() => setIsExpanded(false)}
         >
           {posts.slice(0, 3).map((post, index) => (
             <div 
@@ -663,13 +551,13 @@ function RecentPosts() {
                 backgroundPosition: 'center'
               }}
             >
-              <ElectricBorder
+{/*              <ElectricBorder
                 color={['#7df9ff', '#ff6b9d', '#c77dff'][index % 3]}
                 speed={0.8}
                 chaos={0.4}
                 thickness={2}
                 style={{ borderRadius: 16, height: '100%', position: 'absolute', inset: 0, pointerEvents: 'none' }}
-              />
+              />*/}
               <div className={styles.postCardOverlay} />
               <div className={styles.postCardContent}>
                 {/* 上半部分 - 左对齐 */}

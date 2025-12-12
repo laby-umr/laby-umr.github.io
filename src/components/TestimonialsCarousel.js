@@ -1,7 +1,6 @@
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import styles from './TestimonialsCarousel.module.css';
-import ElectricBorder from './ElectricBorder';
 
 const TestimonialsCarousel = ({
   testimonials,
@@ -84,14 +83,7 @@ const TestimonialsCarousel = ({
             }}
             style={{ width: '100%' }}
           >
-            <ElectricBorder
-              color="#ff6ec7"
-              speed={0.8}
-              chaos={0.4}
-              thickness={2}
-              style={{ borderRadius: 20 }}
-            >
-              <div className={styles.testimonialCard}>
+            <div className={styles.testimonialCard}>
                 <div className={styles.content}>
                   <div className={styles.quote}>"</div>
                   <p className={styles.text}>{testimonials[currentIndex].content}</p>
@@ -119,8 +111,7 @@ const TestimonialsCarousel = ({
                     </div>
                   )}
                 </div>
-              </div>
-            </ElectricBorder>
+            </div>
           </motion.div>
         </AnimatePresence>
         

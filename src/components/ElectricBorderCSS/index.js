@@ -10,8 +10,8 @@ import styles from '../../styles/electric-border-css.module.css';
  * @param {'cyan'|'pink'|'purple'|'green'|'gold'} props.color - 颜色主题
  * @param {string} props.className - 额外的 CSS 类名
  */
-export default function ElectricBorderCSS({ 
-  children, 
+export default function ElectricBorderCSS({
+  children,
   color = 'cyan',
   className = ''
 }) {
@@ -37,7 +37,7 @@ export default function ElectricBorderCSS({
  */
 export function SimpleBorder({ children, color = '#7df9ff', className = '' }) {
   return (
-    <div 
+    <div
       className={className}
       style={{
         border: `2px solid ${color}`,

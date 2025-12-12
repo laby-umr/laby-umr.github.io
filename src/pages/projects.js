@@ -296,19 +296,12 @@ export default function Projects() {
         {/* 筛选和搜索 */}
         <section className={styles.filterSection}>
           <div className="container">
-            <ElectricBorder
-              color="#7df9ff"
-              speed={0.8}
-              chaos={0.4}
-              thickness={2}
-              style={{ borderRadius: 16 }}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.8, delay: 0.8 }}
             >
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.8, delay: 0.8 }}
-              >
-                <div className={styles.filterCard}>
+              <div className={styles.filterCard}>
               <div className={styles.categoryTabs}>
                 {categories.map((category) => {
                   const IconComponent = category.Icon;
@@ -350,8 +343,7 @@ export default function Projects() {
                 </button>
               </div>
               </div>
-              </motion.div>
-            </ElectricBorder>
+            </motion.div>
           </div>
         </section>
 
@@ -372,28 +364,21 @@ export default function Projects() {
                 }}
               >
                 {filteredProjects.map((project, index) => (
-                  <ElectricBorder
+                  <motion.div
                     key={project.id}
-                    color={['#7df9ff', '#ff6b9d', '#c77dff', '#00ff88', '#ffd700', '#00d4ff'][index % 6]}
-                    speed={0.8}
-                    chaos={0.4}
-                    thickness={2}
-                    style={{ borderRadius: 16, height: '100%' }}
+                    variants={{
+                      hidden: { y: 20, opacity: 0 },
+                      visible: {
+                        y: 0,
+                        opacity: 1,
+                        transition: { type: "spring", stiffness: 100, damping: 12 }
+                      }
+                    }}
                   >
-                    <motion.div
-                      variants={{
-                        hidden: { y: 20, opacity: 0 },
-                        visible: {
-                          y: 0,
-                          opacity: 1,
-                          transition: { type: "spring", stiffness: 100, damping: 12 }
-                        }
-                      }}
+                    <div 
+                      className={styles.projectCard}
+                      onClick={() => setSelectedProject(project)}
                     >
-                      <div 
-                        className={styles.projectCard}
-                        onClick={() => setSelectedProject(project)}
-                      >
                     <div className={styles.projectImageWrapper}>
                       <img src={project.image} alt={project.title} className={styles.projectImage} />
                       <div className={styles.imageOverlay} />
@@ -442,9 +427,8 @@ export default function Projects() {
                         )}
                       </div>
                     </div>
-                      </div>
-                    </motion.div>
-                  </ElectricBorder>
+                    </div>
+                  </motion.div>
                 ))}
               </motion.div>
             ) : (
@@ -475,20 +459,13 @@ export default function Projects() {
         {/* CTA区域 */}
         <section className={styles.ctaSection}>
           <div className="container">
-            <ElectricBorder
-              color="#ff6ec7"
-              speed={0.8}
-              chaos={0.4}
-              thickness={3}
-              style={{ borderRadius: 20 }}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.8 }}
             >
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }}
-                transition={{ duration: 0.8 }}
-              >
-                <div className={styles.ctaCard}>
+              <div className={styles.ctaCard}>
               <motion.div
                 className={styles.ctaBackground}
                 animate={{ rotate: [0, 360] }}
@@ -550,8 +527,7 @@ export default function Projects() {
                 </motion.div>
               </div>
                 </div>
-              </motion.div>
-            </ElectricBorder>
+            </motion.div>
           </div>
         </section>
 
@@ -565,20 +541,27 @@ export default function Projects() {
               exit={{ opacity: 0 }}
               onClick={() => setSelectedProject(null)}
             >
-              <motion.div
-                className={styles.modalContent}
-                initial={{ scale: 0.9, opacity: 0 }}
-                animate={{ scale: 1, opacity: 1 }}
-                exit={{ scale: 0.9, opacity: 0 }}
-                transition={{ type: "spring", damping: 20, stiffness: 300 }}
-                onClick={(e) => e.stopPropagation()}
+              <ElectricBorder
+                color="#7df9ff"
+                speed={0.8}
+                chaos={0.4}
+                thickness={3}
+                style={{ borderRadius: 20 }}
               >
-                <button
-                  className={`${styles.modalClose} cursor-target`}
-                  onClick={() => setSelectedProject(null)}
+                <motion.div
+                  className={styles.modalContent}
+                  initial={{ scale: 0.9, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  exit={{ scale: 0.9, opacity: 0 }}
+                  transition={{ type: "spring", damping: 20, stiffness: 300 }}
+                  onClick={(e) => e.stopPropagation()}
                 >
-                  ✕
-                </button>
+                  <button
+                    className={`${styles.modalClose} cursor-target`}
+                    onClick={() => setSelectedProject(null)}
+                  >
+                    ✕
+                  </button>
 
                 <div className={styles.modalImage}>
                   <img src={selectedProject.image} alt={selectedProject.title} />
@@ -634,7 +617,8 @@ export default function Projects() {
                     )}
                   </div>
                 </div>
-              </motion.div>
+                </motion.div>
+              </ElectricBorder>
             </motion.div>
           )}
         </AnimatePresence>

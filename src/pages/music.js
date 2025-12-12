@@ -5,7 +5,6 @@ import styles from './music.module.css';
 import Translate, { translate } from '@docusaurus/Translate';
 import { useVisitorTracking } from '@site/src/utils/blogApi';
 import { rafThrottle } from '@site/src/utils/throttle';
-import ElectricBorder from '../components/ElectricBorder';
 import GlitchText from '../components/GlitchText';
 import { TranslatedJellyText } from '../components/JellyTextAnimation';
 import {
@@ -466,8 +465,7 @@ export default function Music() {
           <div className="container">
             <div className={styles.contentGrid}>
               <motion.div initial={{ opacity: 0, x: -30 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.6 }} className={styles.playlistSection}>
-                <ElectricBorder color="#667eea" speed={0.6} chaos={0.3} thickness={1.5} style={{ borderRadius: 20 }}>
-                  <div className={styles.sectionCard}>
+                <div className={styles.sectionCard}>
                     <div className={styles.sectionBg} style={{ backgroundImage: `url(${bgImages[0]})` }} />
                     <div className={styles.sectionHeader}>
                       <h3><QueueListIcon className={styles.headerIcon} /><Translate id="music.playlist">播放列表</Translate></h3>
@@ -526,12 +524,10 @@ export default function Music() {
                       </div>
                     )}
                   </div>
-                </ElectricBorder>
               </motion.div>
 
               <motion.div initial={{ opacity: 0, x: 30 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.7 }} className={styles.lyricSection}>
-                <ElectricBorder color="#764ba2" speed={0.6} chaos={0.3} thickness={1.5} style={{ borderRadius: 20 }}>
-                  <div className={styles.sectionCard}>
+                <div className={styles.sectionCard}>
                     <div className={styles.sectionBg} style={{ backgroundImage: `url(${bgImages[1]})` }} />
                     <div className={styles.sectionHeader}>
                       <h3><MusicalNoteIcon className={styles.headerIcon} /><Translate id="music.lyrics">歌词</Translate></h3>
@@ -544,8 +540,7 @@ export default function Music() {
                         </motion.p>
                       ))}
                     </div>
-                  </div>
-                </ElectricBorder>
+                </div>
               </motion.div>
             </div>
           </div>

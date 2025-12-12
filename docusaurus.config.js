@@ -20,7 +20,7 @@ const config = {
   },
 
   // Set the production url of your site here
-  url: 'https://masterliu93.github.io',
+  url: 'https://laby-umr.github.io',
   baseUrl: '/',
 
   // 性能优化：预连接和 DNS 预解析
@@ -45,14 +45,14 @@ const config = {
   ],
 
   // GitHub pages deployment config.
-  organizationName: 'MasterLiu93', // GitHub org/user name.
-  projectName: 'blog-web', // repo name.
+  organizationName: 'laby-umr', // GitHub org/user name.
+  projectName: 'laby-blog-private', // repo name.
 
   onBrokenLinks: 'warn',
-  onBrokenMarkdownLinks: 'warn',
 
   // Even if you don't use internationalization, you can use this field to set
   // useful metadata like html lang.
+  // i18n 配置 - 应用 3.9.2 优化
   i18n: {
     defaultLocale: 'zh-Hans',
     locales: ['zh-Hans', 'en'],
@@ -61,11 +61,14 @@ const config = {
         label: '简体中文',
         direction: 'ltr',
         htmlLang: 'zh-Hans',
+        // 新特性：translate 标志（3.9+）
+        translate: true, // 启用翻译
       },
       'en': {
         label: 'English',
         direction: 'ltr',
         htmlLang: 'en',
+        translate: true,
       },
     },
   },
@@ -164,9 +167,24 @@ const config = {
     },
   ],
 
-  // Add Mermaid markdown support
+  // Markdown 配置 - 应用 3.9.2 新特性
   markdown: {
     mermaid: true,
+    // 新特性：emoji 配置（3.9+）
+    emoji: true, // 启用 emoji 自动转换
+    // 新特性：Markdown 钩子函数（3.9+）
+    hooks: {
+      // 处理损坏的 Markdown 链接
+      onBrokenMarkdownLinks: (link) => {
+        console.warn(`Broken markdown link detected: ${link}`);
+        return undefined; // 返回 undefined 使用默认行为，或返回备用 URL
+      },
+      // 处理损坏的 Markdown 图片
+      onBrokenMarkdownImages: (image) => {
+        console.warn(`Broken markdown image detected: ${image}`);
+        return '/img/placeholder.png'; // 返回占位图片
+      },
+    },
   },
 
   presets: [

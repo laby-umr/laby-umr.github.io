@@ -1,8 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import styles from './CounterSection.module.css';
-import ElectricBorder from './ElectricBorder';
-
 const CounterSection = ({
   items,
   title,
@@ -72,29 +70,24 @@ const CounterSection = ({
           transition={{ duration: 0.6, delay: index * 0.1 }}
           className="cursor-target"
         >
-          <ElectricBorder
-            color={item.color || '#7df9ff'}
-            speed={0.8}
-            chaos={0.4}
-            thickness={2}
-            style={{ borderRadius: 16, height: '100%' }}
-          >
-            <div className={styles.card}>
+            <div className={styles.card} style={{ '--border-color': item.color }}>
+              <div className={styles.trail3} style={{ '--border-color': item.color }}></div>
+              <div className={styles.trail4} style={{ '--border-color': item.color }}></div>
               {item.icon && (
                 <div className={styles.icon} style={{ color: item.color }}>
                   {item.icon}
                 </div>
               )}
               <div className={styles.numberWrapper}>
-                {item.prefix && <span className={`${styles.prefix} cursor-target`} style={{ color: item.color }}>{item.prefix}</span>}
-                <span className={`${styles.number} cursor-target`} style={{ color: item.color }}>
+                {item.prefix && <span className={styles.prefix} style={{ color: item.color }}>{item.prefix}</span>}
+                <span className={styles.number} style={{ color: item.color }}>
                   {Math.round(counts[index])}
                 </span>
-                {item.suffix && <span className={`${styles.suffix} cursor-target`} style={{ color: item.color }}>{item.suffix}</span>}
+                {item.suffix && <span className={styles.suffix} style={{ color: item.color }}>{item.suffix}</span>}
               </div>
               <p className={styles.label}>{item.label}</p>
             </div>
-          </ElectricBorder>
+
         </motion.div>
       ))}
     </motion.div>
