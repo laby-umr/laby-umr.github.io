@@ -4,7 +4,6 @@ import Link from '@docusaurus/Link';
 import { motion, AnimatePresence } from 'framer-motion';
 import styles from './projects.module.css';
 import Translate, { translate } from '@docusaurus/Translate';
-import { useVisitorTracking } from '@site/src/utils/blogApi';
 import { rafThrottle } from '@site/src/utils/throttle';
 import ElectricBorder from '../components/ElectricBorder';
 import GlitchText from '../components/GlitchText';
@@ -142,11 +141,7 @@ export default function Projects() {
     }
   ];
 
-  // 访客追踪
-  useEffect(() => {
-    const cleanup = useVisitorTracking();
-    return cleanup;
-  }, []);
+  // 访客统计已迁移到 Google Analytics 4
 
   // 状态管理
   const [selectedCategory, setSelectedCategory] = useState('all');

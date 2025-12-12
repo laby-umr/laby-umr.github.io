@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import Layout from '@theme/Layout';
 import Translate, { translate } from '@docusaurus/Translate';
-import { useVisitorTracking } from '@site/src/utils/blogApi';
 import { rafThrottle } from '@site/src/utils/throttle';
 import styles from './about.module.css';
 import GlitchText from '../components/GlitchText';

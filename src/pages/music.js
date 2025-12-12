@@ -3,7 +3,6 @@ import Layout from '@theme/Layout';
 import { motion, AnimatePresence } from 'framer-motion';
 import styles from './music.module.css';
 import Translate, { translate } from '@docusaurus/Translate';
-import { useVisitorTracking } from '@site/src/utils/blogApi';
 import { rafThrottle } from '@site/src/utils/throttle';
 import GlitchText from '../components/GlitchText';
 import { TranslatedJellyText } from '../components/JellyTextAnimation';
@@ -90,10 +89,7 @@ const parseLyric = (lrcStr) => {
 };
 
 export default function Music() {
-  useEffect(() => {
-    const cleanup = useVisitorTracking();
-    return cleanup;
-  }, []);
+  // 访客统计已迁移到 Google Analytics 4
 
   const [musicList, setMusicList] = useState(defaultMusicList);
   const [isLoading, setIsLoading] = useState(true);

@@ -14,7 +14,6 @@ import { AnimatedHeroTitle } from '@site/src/components/JellyTextAnimation';
 import { TranslatedJellyText } from '@site/src/components/JellyTextAnimation';
 import DOSTerminal from '@site/src/components/DOSTerminal';
 import GlitchText from '@site/src/components/GlitchText';
-import { useVisitorTracking } from '@site/src/utils/blogApi';
 import { rafThrottle } from '@site/src/utils/throttle';
 
 // 3D网格动画背景组件
@@ -701,11 +700,7 @@ function CallToAction() {
 export default function Home() {
   const { siteConfig } = useDocusaurusContext();
 
-  // 访客追踪
-  useEffect(() => {
-    const cleanup = useVisitorTracking();
-    return cleanup;
-  }, []);
+  // 访客追踪已迁移到 Google Analytics 4
 
   // 首先获取纯文本的翻译，之后手动替换变量
   const metaTitle = translate({

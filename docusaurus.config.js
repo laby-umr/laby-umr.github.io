@@ -147,7 +147,7 @@ const config = {
       },
     ],
     */
-    // Blog API 配置插件
+    // Blog API 配置插件（保留用于留言和订阅功能）
     function blogApiConfigPlugin(context, options) {
       return {
         name: 'blog-api-config-plugin',
@@ -157,6 +157,8 @@ const config = {
               {
                 tagName: 'script',
                 innerHTML: `
+                  // 访客统计已迁移到 Google Analytics 4
+                  // 保留此配置仅用于留言和订阅功能
                   window.blogApiConfig = {
                     apiBaseUrl: '${process.env.NODE_ENV === 'production' 
                       ? 'http://120.48.86.168:48080' 

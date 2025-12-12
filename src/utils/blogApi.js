@@ -1,6 +1,9 @@
 /**
  * Blog API 服务
  * 与后端 laby-module-blog 模块对接
+ * 
+ * 注意：访客统计已改用 Google Analytics 4
+ * 本文件仅保留订阅和留言功能
  */
 
 // API 基础地址
@@ -39,34 +42,6 @@ async function request(url, options = {}) {
     throw error;
   }
 }
-
-/**
- * 访客信息API
- */
-export const visitorApi = {
-  /**
-   * 记录访客信息
-   * @param {string} pageUrl - 访问页面URL
-   * @returns {Promise<number>} 访客ID
-   */
-  async record(pageUrl) {
-    const data = await request(`/app-api/blog/visitor/record?pageUrl=${encodeURIComponent(pageUrl)}`, {
-      method: 'POST',
-    });
-    return data.data;
-  },
-
-  /**
-   * 更新访问时长
-   * @param {number} id - 访客ID
-   * @param {number} duration - 访问时长（秒）
-   */
-  async updateDuration(id, duration) {
-    await request(`/app-api/blog/visitor/update-duration?id=${id}&duration=${duration}`, {
-      method: 'PUT',
-    });
-  },
-};
 
 /**
  * 订阅API
@@ -131,44 +106,5 @@ export const messageApi = {
   },
 };
 
-/**
- * 访客追踪Hook
- * 用于自动记录页面访问
- */
-export function useVisitorTracking() {
-  if (typeof window === 'undefined') return;
-
-  let visitorId = null;
-  let startTime = Date.now();
-
-  // 记录访客
-  visitorApi.record(window.location.href)
-    .then(id => {
-      visitorId = id;
-      console.log('访客记录成功:', id);
-    })
-    .catch(error => {
-      console.error('访客记录失败:', error);
-    });
-
-  // 页面卸载时更新访问时长
-  const handleBeforeUnload = () => {
-    if (visitorId) {
-      const duration = Math.floor((Date.now() - startTime) / 1000);
-      // 使用 sendBeacon 确保请求发送
-      const data = new FormData();
-      data.append('id', visitorId);
-      data.append('duration', duration);
-      navigator.sendBeacon(
-        `${API_BASE_URL}/app-api/blog/visitor/update-duration?id=${visitorId}&duration=${duration}`,
-        data
-      );
-    }
-  };
-
-  window.addEventListener('beforeunload', handleBeforeUnload);
-
-  return () => {
-    window.removeEventListener('beforeunload', handleBeforeUnload);
-  };
-}
+// 访客统计已迁移到 Google Analytics 4
+// useVisitorTracking 已移除，现在由 GA4 自动处理

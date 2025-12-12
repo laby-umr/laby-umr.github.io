@@ -3,7 +3,7 @@ import Layout from '@theme/Layout';
 import { motion } from 'framer-motion';
 import styles from './contact.module.css';
 import Translate, { translate } from '@docusaurus/Translate';
-import { messageApi, subscribeApi, useVisitorTracking } from '../utils/blogApi';
+import { messageApi, subscribeApi } from '../utils/blogApi';
 import GlitchText from '../components/GlitchText';
 import { TranslatedJellyText, SimpleText } from '../components/JellyTextAnimation';
 
@@ -38,11 +38,7 @@ export default function Contact() {
     address: translate({id: 'contact.location.address', message: 'Longqi Shopping Center, Huilongguan Street, Changping District, Beijing'})
   };
 
-  // 访客追踪
-  useEffect(() => {
-    const cleanup = useVisitorTracking();
-    return cleanup;
-  }, []);
+  // 访客统计已迁移到 Google Analytics 4
 
   // 加载高德地图（只初始化一次）
   useEffect(() => {
