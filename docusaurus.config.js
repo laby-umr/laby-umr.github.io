@@ -143,6 +143,9 @@ const config = {
         searchBarShortcut: false,
       },
     ],
+    
+    // 图片放大查看插件
+    'plugin-image-zoom',
 
     // Blog API 配置插件（保留用于留言和订阅功能）
     function blogApiConfigPlugin(context, options) {
