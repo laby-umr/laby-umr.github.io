@@ -1,0 +1,1 @@
+"use strict";(self.webpackChunkfullstack_dev_blog=self.webpackChunkfullstack_dev_blog||[]).push([["37279"],{3490:function(e,c,l){l.d(c,{createInfoServices:()=>s.v});var s=l(91885);l(47342)}}]);

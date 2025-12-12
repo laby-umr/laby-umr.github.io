@@ -1,0 +1,1 @@
+"use strict";(self.webpackChunkfullstack_dev_blog=self.webpackChunkfullstack_dev_blog||[]).push([["47234"],{6846:function(e,l,n){n.d(l,{A:()=>c});var s=n(74848);n(96540);var u=n(7356);function c(e){return(0,s.jsx)(s.Fragment,{children:(0,s.jsx)(u.A,{...e})})}}}]);

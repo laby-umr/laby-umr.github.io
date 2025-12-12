@@ -1,0 +1,1 @@
+"use strict";(self.webpackChunkfullstack_dev_blog=self.webpackChunkfullstack_dev_blog||[]).push([["21794"],{50617:function(e,c,l){l.d(c,{createPieServices:()=>s.f});var s=l(69150);l(47342)}}]);
