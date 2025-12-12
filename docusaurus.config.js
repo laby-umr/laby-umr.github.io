@@ -301,14 +301,14 @@ const config = {
       */
       // 添加Giscus评论系统
       giscus: {
-        repo: 'MasterLiu93/web-blog',
-        repoId: 'R_kgDOPZrqqQ',
+        repo: 'laby-umr/laby-umr.github.io',
+        repoId: 'R_kgDOQkvCIQ',
         category: 'Announcements',
-        categoryId: 'DIC_kwDOPZrqqc4Ct73X',
+        categoryId: 'DIC_kwDOQkvCIc4Czr7V',
         mapping: 'pathname',
         strict: '0',
         reactionsEnabled: '1',
-        emitMetadata: '0',
+        emitMetadata: '1',
         inputPosition: 'bottom',
         theme: 'preferred_color_scheme',
         lang: 'zh-CN',

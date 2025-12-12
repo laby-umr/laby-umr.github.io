@@ -22,10 +22,10 @@ export default function Comments() {
     
     // 设置 giscus 属性
     script.src = 'https://giscus.app/client.js';
-    script.setAttribute('data-repo', 'MasterLiu93/web-blog');
-    script.setAttribute('data-repo-id', 'R_kgDOPZrqqQ');
+    script.setAttribute('data-repo', 'laby-umr/laby-umr.github.io');
+    script.setAttribute('data-repo-id', 'R_kgDOQkvCIQ');
     script.setAttribute('data-category', 'Announcements');
-    script.setAttribute('data-category-id', 'DIC_kwDOPZrqqc4Ct73X');
+    script.setAttribute('data-category-id', 'DIC_kwDOQkvCIc4Czr7V');
     script.setAttribute('data-mapping', 'pathname');
     script.setAttribute('data-strict', '0');
     script.setAttribute('data-reactions-enabled', '1'); // 启用反应（点赞等）
