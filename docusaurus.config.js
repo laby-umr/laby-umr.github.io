@@ -233,6 +233,11 @@ const config = {
           ignorePatterns: ['/tags/**'],
           filename: 'sitemap.xml',
         },
+        // Google Analytics 4 配置
+        gtag: {
+          trackingID: 'G-03NXQZ7S0Z',
+          anonymizeIP: true, // 匿名化用户 IP，保护隐私
+        },
         theme: {
           customCss: './src/css/custom.css',
         },
@@ -303,6 +308,15 @@ const config = {
         inputPosition: 'bottom',
         theme: 'preferred_color_scheme',
         lang: 'zh-CN',
+      },
+      // 顶部公告栏
+      announcementBar: {
+        id: 'support_star',
+        content:
+          '⭐️ 如果觉得这个项目对你有帮助，请给个 <a target="_blank" rel="noopener noreferrer" href="https://github.com/laby-umr/laby-umr.github.io">Star</a> 支持一下！',
+        backgroundColor: '#667eea',
+        textColor: '#ffffff',
+        isCloseable: true,
       },
       // Replace with your project's social card
       image: 'img/docusaurus-social-card.jpg',
