@@ -126,15 +126,12 @@ const config = {
         },
       },
     ],
-    // 本地搜索插件（已禁用，改用 Algolia DocSearch）
-    // 收到 Algolia 配置信息前，可以暂时取消注释继续使用本地搜索
-    /*
+    // 本地搜索插件（所有环境启用）
     [
       require.resolve("@easyops-cn/docusaurus-search-local"),
       {
-        // 配置选项
-        hashed: true, // 为了加快构建速度，推荐启用哈希
-        language: ["en", "zh"], // 支持的语言
+        hashed: true,
+        language: ["en", "zh"],
         indexDocs: true,
         indexBlog: true,
         docsRouteBasePath: "/docs",
@@ -143,10 +140,10 @@ const config = {
         blogDir: "blog",
         highlightSearchTermsOnTargetPage: true,
         searchBarShortcutHint: false,
-        searchBarShortcut: false, // 禁用快捷键以避免错误
+        searchBarShortcut: false,
       },
     ],
-    */
+
     // Blog API 配置插件（保留用于留言和订阅功能）
     function blogApiConfigPlugin(context, options) {
       return {
@@ -259,8 +256,9 @@ const config = {
         disableSwitch: false,
         respectPrefersColorScheme: false,
       },
-      // Algolia DocSearch 配置
-      // ✅ 已配置 Algolia DocSearch v4 + AI 助手
+      // Algolia DocSearch 配置（已禁用，改用本地搜索）
+      // 如需启用 Algolia，取消下面的注释
+      /*
       algolia: {
         // Algolia 提供的 Application ID
         appId: 'Z8PAZK675G',
@@ -297,6 +295,7 @@ const config = {
           },
         },
       },
+      */
       // 添加Giscus评论系统
       giscus: {
         repo: 'MasterLiu93/web-blog',
