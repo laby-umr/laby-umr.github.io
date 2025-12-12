@@ -1,12 +1,14 @@
-# 🚀 Spring Cloud 全栈开发知识库
+# 🚀 Laby 的技术博客
 
-![GitHub stars](https://img.shields.io/github/stars/MasterLiu93/spring-cloud-backend?style=social)
-![GitHub forks](https://img.shields.io/github/forks/MasterLiu93/spring-cloud-backend?style=social)
-![Docusaurus](https://img.shields.io/badge/Docusaurus-3.8.1-green)
+![Docusaurus](https://img.shields.io/badge/Docusaurus-3.9.2-green)
 ![React](https://img.shields.io/badge/React-19.0-blue)
+![Node.js](https://img.shields.io/badge/Node.js-20.x-success)
 ![License](https://img.shields.io/badge/license-MIT-brightgreen)
+![Deploy](https://github.com/laby-umr/laby-umr.github.io/actions/workflows/deploy.yml/badge.svg)
 
-一个基于 [Docusaurus 3](https://docusaurus.io/) 构建的现代化全栈开发知识库系统，涵盖 **Spring Cloud 微服务架构**、**前后端技术栈**、**系统设计**、**面试题库**、**技术博客**等内容，助力开发者系统性学习和快速提升技术能力。
+> 一个基于 [Docusaurus 3.9](https://docusaurus.io/) 构建的现代化技术博客和知识库，涵盖前后端开发、系统设计、面试题库等内容。
+
+**🌐 在线访问**: [https://laby-umr.github.io](https://laby-umr.github.io)
 
 ## 🎯 项目特色
 
@@ -19,15 +21,16 @@
 - **大数据**：Hadoop、Spark、Flink
 - **面试宝典**：精选高频面试题及详细解答
 
-### 🎨 **精美的可视化**
-- **Mermaid 架构图**：使用专业的流程图展示系统架构
-- **交互式代码**：支持在线运行代码示例
-- **深色模式**：护眼的夜间模式
-- **全文搜索**：快速定位知识点
+### 🎨 **现代化体验**
+- **Mermaid ELK 图表**：使用最新的 ELK 布局算法绘制复杂架构图
+- **深色模式**：自动适配系统主题，护眼舒适
+- **全文搜索**：本地搜索引擎，快速定位内容
+- **响应式设计**：完美适配桌面和移动设备
 
-### 🌐 **国际化支持**
-- 中文/英文双语切换
-- 可扩展更多语言
+### 🚀 **自动化部署**
+- **GitHub Actions**：每次推送代码自动构建部署
+- **持续集成**：无需手动操作，提交即部署
+- **快速发布**：3-6 分钟完成构建和发布
 
 ## ✨ 核心功能
 
@@ -52,22 +55,27 @@
 
 ## 🛠️ 技术栈
 
-### 前端框架
-- **[Docusaurus 3.8.1](https://docusaurus.io/)**: React 驱动的静态网站生成器
-- **[React 19.0](https://reactjs.org/)**: 用户界面库
-- **[MDX](https://mdxjs.com/)**: 支持 JSX 的 Markdown
-- **[Mermaid](https://mermaid.js.org/)**: 流程图和架构图
-- **[React-Icons](https://react-icons.github.io/react-icons/)**: 丰富的图标库
+### 核心框架
+- **[Docusaurus 3.9.2](https://docusaurus.io/)**: 最新版静态网站生成器
+- **[React 19.0](https://reactjs.org/)**: 现代化用户界面库
+- **[Node.js 20.x](https://nodejs.org/)**: 运行环境
+- **[MDX](https://mdxjs.com/)**: 支持 JSX 的增强 Markdown
+
+### Docusaurus 3.9 新特性
+- ✨ **Mermaid ELK 布局**: 支持复杂图表的高级布局算法
+- ✨ **Markdown 钩子**: 智能处理损坏的链接和图片
+- ✨ **Emoji 支持**: 自动转换 emoji 代码
+- ✨ **@site/* 路径**: 更方便的文件引用
 
 ### 功能组件
-- **[Prism](https://prismjs.com/)**: 代码语法高亮
-- **[@easyops-cn/docusaurus-search-local](https://github.com/easyops-cn/docusaurus-search-local)**: 本地搜索
-- **CSS Modules**: 组件级样式隔离
+- **[@mermaid-js/layout-elk](https://mermaid.js.org/)**: ELK 布局算法
+- **[Prism React Renderer](https://prismjs.com/)**: 代码语法高亮
+- **[@easyops-cn/docusaurus-search-local](https://github.com/easyops-cn/docusaurus-search-local)**: 本地全文搜索
+- **[Ant Design](https://ant.design/)**: UI 组件库
 
-### 开发工具
-- **TypeScript**: 类型安全
-- **ESLint + Prettier**: 代码规范
-- **Git Hooks**: 代码提交前检查
+### CI/CD
+- **GitHub Actions**: 自动化部署工作流
+- **GitHub Pages**: 静态网站托管
 
 ## 🚀 快速开始
 
@@ -76,56 +84,92 @@
 - **Node.js**: >= 18.0
 - **包管理器**: yarn 或 npm
 
-### 安装
+### 克隆项目
 
 ```bash
 # 克隆仓库
-git clone https://github.com/MasterLiu93/spring-cloud-backend.git
-cd spring-cloud-backend
+git clone https://github.com/laby-umr/laby-umr.github.io.git
+cd laby-umr.github.io
 
-# 安装依赖（推荐使用 yarn）
-yarn
-
-# 或使用 npm
+# 安装依赖
 npm install
 ```
 
 ### 本地开发
 
 ```bash
-# 启动开发服务器（默认中文）
-yarn start
+# 启动开发服务器
+npm start
 
-# 启动英文版
-yarn start --locale en
-
-# 服务器启动后会自动打开浏览器访问 http://localhost:3000
+# 自动打开浏览器访问 http://localhost:3000
 ```
 
-开发服务器支持热重载，大多数更改会实时生效无需重启。
+开发服务器支持**热重载**，大多数更改会实时生效。
 
-### 构建
+### 构建网站
 
 ```bash
 # 构建生产版本
-yarn build
+npm run build
 
-# 构建完成后，静态文件位于 build/ 目录
+# 静态文件生成在 build/ 目录
 ```
 
 ### 本地预览
 
 ```bash
 # 预览构建后的网站
-yarn serve
+npm run serve
 
-# 访问 http://localhost:3000 查看生产版本
+# 访问 http://localhost:3000
 ```
+
+## 🚀 自动部署
+
+### 工作流程
+
+本项目已配置 **GitHub Actions 自动部署**，工作流程如下：
+
+```bash
+# 1. 修改代码或写文章
+
+# 2. 提交更改
+git add .
+git commit -m "你的提交信息"
+
+# 3. 推送到 GitHub
+git push origin main
+
+# 4. ✨ 自动部署！
+# GitHub Actions 自动构建并部署到 GitHub Pages
+# 等待 3-6 分钟后网站自动更新
+```
+
+### 查看部署状态
+
+- **Actions 页面**: [github.com/laby-umr/laby-umr.github.io/actions](https://github.com/laby-umr/laby-umr.github.io/actions)
+- 🟡 黄色 = 部署中
+- ✅ 绿色 = 部署成功
+- ❌ 红色 = 部署失败
+
+### 部署配置
+
+部署工作流配置文件：`.github/workflows/deploy.yml`
+
+```yaml
+# 自动触发条件
+on:
+  push:
+    branches: [main, master]  # 推送到 main 分支时触发
+  workflow_dispatch:           # 也可手动触发
+```
+
+更多详情请查看文档：[部署指南](https://laby-umr.github.io/docs/deployment-guide)
 
 ## 📁 项目结构
 
 ```
-spring-cloud-backend/
+laby-umr.github.io/
 ├── blog/                         # 📰 博客文章
 │   ├── 2024-12-24-*.md          # 数字孪生系列
 │   └── 2025-08-17-*.md          # AI 实施系列
@@ -353,17 +397,14 @@ import MyComponent from '@site/src/components/MyComponent';
 
 ### 如何部署到 GitHub Pages？
 
-```bash
-# 配置 Git 用户信息
-git config user.name "Your Name"
-git config user.email "your-email@example.com"
+本项目已配置 **GitHub Actions 自动部署**，无需手动操作！
 
-# 部署到 GitHub Pages
-GIT_USER=<Your GitHub username> yarn deploy
+只需：
+1. 提交代码：`git commit -m "你的更改"`
+2. 推送代码：`git push origin main`
+3. 等待 3-6 分钟，网站自动更新
 
-# 或使用 SSH
-USE_SSH=true yarn deploy
-```
+详见：[自动部署](#-自动部署)章节
 
 ### 搜索功能不工作？
 
@@ -435,21 +476,25 @@ USE_SSH=true yarn deploy
 
 ## 📞 联系方式
 
-如有问题、建议或合作意向，欢迎联系：
-
-- 📧 **邮箱**：1521170425@qq.com
-- 🐛 **Issue**：[GitHub Issues](https://github.com/MasterLiu93/spring-cloud-backend/issues)
-- 💬 **讨论**：[GitHub Discussions](https://github.com/MasterLiu93/spring-cloud-backend/discussions)
-- 🌟 **Star**: 如果觉得项目有帮助，请给个 Star ⭐
+- 📧 **邮箱**: 1521170425@qq.com
+- 🐛 **Issues**: [github.com/laby-umr/laby-umr.github.io/issues](https://github.com/laby-umr/laby-umr.github.io/issues)
+- 🌐 **网站**: [laby-umr.github.io](https://laby-umr.github.io)
 
 ## 🙏 致谢
 
 感谢以下开源项目：
 
-- [Docusaurus](https://docusaurus.io/) - 优秀的文档生成工具
-- [Mermaid](https://mermaid.js.org/) - 强大的图表绘制工具
-- [React](https://reactjs.org/) - 前端框架
-- [Spring Cloud](https://spring.io/projects/spring-cloud) - 微服务框架
+- [Docusaurus 3.9](https://docusaurus.io/) - 强大的文档生成框架
+- [Mermaid](https://mermaid.js.org/) - 图表绘制工具
+- [React 19](https://reactjs.org/) - 现代前端框架
+- [GitHub Pages](https://pages.github.com/) - 免费静态网站托管
+- [GitHub Actions](https://github.com/features/actions) - CI/CD 自动化
+
+## 📊 项目状态
+
+![GitHub last commit](https://img.shields.io/github/last-commit/laby-umr/laby-umr.github.io)
+![GitHub commit activity](https://img.shields.io/github/commit-activity/m/laby-umr/laby-umr.github.io)
+![Website](https://img.shields.io/website?url=https%3A%2F%2Flaby-umr.github.io)
 
 ---
 
@@ -457,8 +502,8 @@ USE_SSH=true yarn deploy
 
 **⭐ 如果这个项目对你有帮助，请给个 Star 支持一下！⭐**
 
-Made with ❤️ by [Laby](https://github.com/MasterLiu93)
+Made with ❤️ by [Laby](https://github.com/laby-umr)
 
-使用 [Docusaurus](https://docusaurus.io/) 构建
+Built with [Docusaurus 3.9.2](https://docusaurus.io/) | Deployed by [GitHub Actions](https://github.com/features/actions)
 
 </div>

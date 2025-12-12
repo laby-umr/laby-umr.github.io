@@ -126,6 +126,9 @@ const config = {
         },
       },
     ],
+    // 本地搜索插件（已禁用，改用 Algolia DocSearch）
+    // 收到 Algolia 配置信息前，可以暂时取消注释继续使用本地搜索
+    /*
     [
       require.resolve("@easyops-cn/docusaurus-search-local"),
       {
@@ -143,6 +146,7 @@ const config = {
         searchBarShortcut: false, // 禁用快捷键以避免错误
       },
     ],
+    */
     // Blog API 配置插件
     function blogApiConfigPlugin(context, options) {
       return {
@@ -247,6 +251,44 @@ const config = {
         defaultMode: 'dark',
         disableSwitch: false,
         respectPrefersColorScheme: false,
+      },
+      // Algolia DocSearch 配置
+      // ✅ 已配置 Algolia DocSearch v4 + AI 助手
+      algolia: {
+        // Algolia 提供的 Application ID
+        appId: 'Z8PAZK675G',
+        
+        // 公开的 Search API Key（安全，可以暴露在前端）
+        apiKey: 'aac29efdff8fd36c7e557850f37d75e7',
+        
+        // 索引名称
+        indexName: 'laby-umr',
+        
+        // 可选：上下文搜索
+        contextualSearch: true,
+        
+        // 可选：搜索页面路径（默认启用）
+        searchPagePath: 'search',
+        
+        // 可选：自定义搜索参数
+        searchParameters: {},
+        
+        // 🆕 DocSearch v4 新特性：AI 助手配置
+        insights: true, // 启用搜索分析
+        
+        // 🤖 AI 助手配置（可选）
+        // TODO: 在 Algolia 控制台创建 Assistant 后，取消注释并替换下面的 ID
+        // 访问：https://dashboard.algolia.com/apps/Z8PAZK675G/ai
+        // askAi: 'YOUR_ALGOLIA_ASSISTANT_ID',  // 替换为真实的 Assistant ID（格式：ast_xxxxxxxx）
+        
+        // 可选：自定义占位符和翻译
+        placeholder: '搜索文档...',
+        translations: {
+          button: {
+            buttonText: '搜索',
+            buttonAriaLabel: '搜索文档',
+          },
+        },
       },
       // 添加Giscus评论系统
       giscus: {
