@@ -83,12 +83,19 @@ jobs:
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           port: 22
-          # 避免拉取镜像慢导致超时（例如大层下载、国内网络慢）
           command_timeout: 60m
           timeout: 60m
           script: |
+            set -e
+            echo "切换到部署目录..."
             cd ${{ env.DEPLOY_PATH }}
-            mv docker-compose.deploy.yml docker-compose.yml
-            # 减少输出，避免 log 过长；拉取慢时给足时间
-            docker compose pull --quiet
+            echo "替换 docker-compose 配置..."
+            mv -f docker-compose.deploy.yml docker-compose.yml
+            echo "登录到 GHCR..."
+            echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+            echo "拉取最新镜像（可能需要较长时间）..."
+            docker compose pull
+            echo "启动服务..."
             docker compose up -d --remove-orphans
+            echo "部署完成！"
+            docker compose ps
