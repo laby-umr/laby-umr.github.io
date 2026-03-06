@@ -3,15 +3,15 @@ FROM node:20-alpine AS builder
 
 WORKDIR /app
 
-# 安装依赖（利用层缓存）
+# 安装依赖（与 CI/GitHub Pages 一致，优先用 npm）
 COPY package.json package-lock.json* yarn.lock* ./
-RUN corepack enable yarn 2>/dev/null || true && \
-    if [ -f yarn.lock ]; then yarn install --frozen-lockfile; else npm ci 2>/dev/null || npm install; fi
+RUN if [ -f package-lock.json ]; then npm ci; elif [ -f yarn.lock ]; then corepack enable yarn && yarn install --frozen-lockfile; else npm install; fi
 
 COPY . .
 
-# 构建静态站点
+# 构建静态站点（忽略 SSG 非关键警告，避免日志刷屏）
 ENV NODE_OPTIONS=--max-old-space-size=4096
+ENV DOCUSAURUS_IGNORE_SSG_WARNINGS=true
 RUN npm run build
 
 # ========== 阶段二：运行 ==========

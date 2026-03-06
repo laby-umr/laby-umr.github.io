@@ -10,17 +10,13 @@
 |--------|----------|------|
 | **CI** (`.github/workflows/ci.yml`) | 每次 push / 每个 PR 到 main 或 master | 安装依赖并执行 `npm run build`，用于检查是否构建通过 |
 | **Deploy to GitHub Pages** (`.github/workflows/deploy.yml`) | push 到 main/master | 构建站点并部署到 GitHub Pages |
-| **Deploy to Server** (`.github/workflows/deploy-to-server.yml`) | push 到 main/master | 构建镜像 → 推送到 GHCR → SSH 到 120.48.86.168 拉取并启动容器 |
+| **Deploy to Server** (`.github/workflows/deploy-to-server.yml`) | push 到 main/master | 构建镜像 → 推送到 GHCR → SSH 到 120.48.86.168 拉取并启动 |
 
 推送到 main/master 后，在仓库 **Actions** 页可查看运行结果。
 
 ### 自动部署到自建服务器 (120.48.86.168，CentOS 7)
 
-**Deploy to Server** 会在每次 push 到 main/master 时自动把最新镜像部署到 `120.48.86.168`。需要做两件事：
-
----
-
-#### 1. 弄到 SSH 私钥并配置到 GitHub（SSH_PRIVATE_KEY 从哪来）
+**Deploy to Server** 会在每次 push 到 main/master 时自动把最新镜像部署到 `120.48.86.168`。需要做两件事：配置 GitHub Secrets（SSH）以及服务器安装 Docker/Compose。
 
 SSH 私钥不是从别处“申请”的，而是**你自己生成一对密钥**：公钥放到服务器，私钥内容填到 GitHub。
 
@@ -88,7 +84,9 @@ mkdir -p /opt/laby-blog
 # echo 你的GitHub个人访问令牌 | docker login ghcr.io -u 你的GitHub用户名 --password-stdin
 ```
 
-完成后，每次 push 到 main/master 会自动构建、推送镜像，并在该服务器上执行 `docker compose pull` 和 `docker compose up -d`。站点访问地址：`http://120.48.86.168:8089`。
+完成后，每次 push 到 main/master 会：构建镜像 → 推送到 GHCR →（若已配 SSH）SSH 到服务器执行 `docker compose pull` 和 `docker compose up -d`。站点访问地址：`http://120.48.86.168:8089`。
+
+**若不想开放服务器 22 端口给 GitHub**：在仓库 Variables 里设置 `ENABLE_SSH_DEPLOY=false`，这样 Actions 只负责构建/推送镜像；在服务器上用 **cron 定时** 执行 `docker compose pull && docker compose up -d` 即可。
 
 若使用 GHCR 镜像手动部署，服务器上可：
 
@@ -97,8 +95,6 @@ mkdir -p /opt/laby-blog
 docker pull ghcr.io/laby-umr/laby-umr.github.io:latest
 docker run -d -p 8089:80 --name laby-blog ghcr.io/laby-umr/laby-umr.github.io:latest
 ```
-
-（镜像地址中的 `laby-umr/laby-umr.github.io` 为「用户名/仓库名」，请按你的实际 GitHub 仓库名替换。）
 
 ---
 
