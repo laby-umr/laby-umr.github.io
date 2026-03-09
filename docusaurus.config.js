@@ -221,6 +221,8 @@ const config = {
           blogDescription: '关注前后端开发、DevOps和系统架构设计的技术博客',
           // 优化：添加摘要截断标记
           truncateMarker: /<!--\s*truncate\s*-->/,
+          // 忽略未截断的博客文章警告
+          onUntruncatedBlogPosts: 'ignore',
           feedOptions: {
             type: 'all',
             title: 'Laby的博客',
