@@ -5,7 +5,6 @@ on:
     branches:
       - main
       - master
-  # 允许手动触发工作流
   workflow_dispatch:
 
 permissions:
@@ -13,36 +12,24 @@ permissions:
   pages: write
   id-token: write
 
-# 确保只有一个部署任务同时运行
-concurrency:
-  group: "pages"
-  cancel-in-progress: false
-
 jobs:
   deploy:
-    name: Deploy to GitHub Pages
     runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      
-      - name: Setup Node
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
-          cache: npm
+          node-version: '20'
+          cache: 'npm'
 
       - name: Install dependencies
         run: npm ci
 
-      - name: Build website
+      - name: Build
         run: npm run build
-        env:
-          NODE_OPTIONS: --max-old-space-size=4096
 
       - name: Setup Pages
         uses: actions/configure-pages@v4
