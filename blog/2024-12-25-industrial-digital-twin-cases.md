@@ -3,6 +3,7 @@ slug: industrial-digital-twin-cases
 title: 工业领域数字孪生可视化大屏落地案例详解
 authors: [Laby]
 tags: [数字孪生, 可视化大屏, 工业互联网, 案例分析]
+image: /img/blog/blog-2.jpg
 ---
 
 # 工业领域数字孪生可视化大屏落地案例详解

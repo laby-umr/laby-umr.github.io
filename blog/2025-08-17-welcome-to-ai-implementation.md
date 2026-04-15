@@ -3,6 +3,7 @@ slug: welcome-to-ai-implementation
 title: 欢迎来到AI大模型落地实践博客
 authors: [Laby]
 tags: [欢迎, AI, 大模型, 介绍]
+image: /img/blog/blog-5.jpg
 ---
 
 # 欢迎来到AI大模型落地实践博客

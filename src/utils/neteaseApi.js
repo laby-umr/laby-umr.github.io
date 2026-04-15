@@ -3,12 +3,78 @@
  * 使用公开的网易云音乐 API
  */
 
-// 网易云音乐 API 基础地址
-// 可选的公开API列表（如果一个不行就换另一个）：
-// - https://netease-cloud-music-api-eta-six.vercel.app
-// - https://music-api.gdstudio.xyz
-// - https://api.injahow.cn/meting/
-const API_BASE = 'https://netease-cloud-music-api-eta-six.vercel.app';
+// 网易云音乐 API 基础地址列表（按优先级排序）
+const API_ENDPOINTS = [
+  'https://netease-cloud-music-api-iota-wine.vercel.app',
+  'https://netease-music-api-gilt.vercel.app',
+  'https://music-api.gdstudio.xyz',
+  'https://netease-cloud-music-api-eta-six.vercel.app',
+];
+
+let currentApiIndex = 0;
+let API_BASE = API_ENDPOINTS[currentApiIndex];
+
+/**
+ * 尝试下一个API端点
+ */
+function switchToNextApi() {
+  currentApiIndex = (currentApiIndex + 1) % API_ENDPOINTS.length;
+  API_BASE = API_ENDPOINTS[currentApiIndex];
+  console.log(`Switching to API endpoint: ${API_BASE}`);
+  return API_BASE;
+}
+
+/**
+ * 带超时和重试的fetch
+ */
+async function fetchWithRetry(url, options = {}, timeout = 10000, retries = 2) {
+  for (let i = 0; i <= retries; i++) {
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), timeout);
+      
+      const response = await fetch(url, {
+        ...options,
+        signal: controller.signal,
+      });
+      
+      clearTimeout(timeoutId);
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
+      return response;
+    } catch (error) {
+      console.error(`Fetch attempt ${i + 1} failed:`, error.message);
+      
+      if (i === retries) {
+        // 最后一次重试失败，尝试切换API
+        if (i === retries && currentApiIndex < API_ENDPOINTS.length - 1) {
+          switchToNextApi();
+          // 用新的API再试一次
+          try {
+            const newUrl = url.replace(API_ENDPOINTS[currentApiIndex - 1] || API_ENDPOINTS[API_ENDPOINTS.length - 1], API_BASE);
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), timeout);
+            const response = await fetch(newUrl, {
+              ...options,
+              signal: controller.signal,
+            });
+            clearTimeout(timeoutId);
+            if (response.ok) return response;
+          } catch (e) {
+            console.error('Retry with new API failed:', e);
+          }
+        }
+        throw error;
+      }
+      
+      // 等待后重试
+      await new Promise(resolve => setTimeout(resolve, 1000 * (i + 1)));
+    }
+  }
+}
 
 /**
  * 获取歌曲详情
@@ -16,7 +82,7 @@ const API_BASE = 'https://netease-cloud-music-api-eta-six.vercel.app';
  */
 export async function getSongDetail(id) {
   try {
-    const response = await fetch(`${API_BASE}/song/detail?ids=${id}`);
+    const response = await fetchWithRetry(`${API_BASE}/song/detail?ids=${id}`);
     const data = await response.json();
     if (data.songs && data.songs.length > 0) {
       const song = data.songs[0];
@@ -42,16 +108,29 @@ export async function getSongDetail(id) {
  */
 export async function getSongUrl(id) {
   try {
-    const response = await fetch(`${API_BASE}/song/url?id=${id}`);
+    // 尝试使用API获取高质量音频
+    const response = await fetchWithRetry(`${API_BASE}/song/url/v1?id=${id}&level=standard`);
     const data = await response.json();
+    
+    console.log('Song URL response:', data); // 调试日志
+    
     if (data.data && data.data.length > 0 && data.data[0].url) {
       return data.data[0].url;
     }
-    // 备用方案：直接构造URL
+    
+    // 备用方案1：尝试旧版API
+    const response2 = await fetchWithRetry(`${API_BASE}/song/url?id=${id}`);
+    const data2 = await response2.json();
+    if (data2.data && data2.data.length > 0 && data2.data[0].url) {
+      return data2.data[0].url;
+    }
+    
+    // 备用方案2：直接构造URL（可能不可用）
+    console.warn('使用备用URL方案');
     return `https://music.163.com/song/media/outer/url?id=${id}.mp3`;
   } catch (error) {
     console.error('获取歌曲URL失败:', error);
-    // 备用方案
+    // 最终备用方案
     return `https://music.163.com/song/media/outer/url?id=${id}.mp3`;
   }
 }
@@ -62,7 +141,7 @@ export async function getSongUrl(id) {
  */
 export async function getLyric(id) {
   try {
-    const response = await fetch(`${API_BASE}/lyric?id=${id}`);
+    const response = await fetchWithRetry(`${API_BASE}/lyric?id=${id}`);
     const data = await response.json();
     if (data.lrc && data.lrc.lyric) {
       return parseLyric(data.lrc.lyric);
@@ -109,7 +188,7 @@ function parseLyric(lyricStr) {
  */
 export async function searchSongs(keyword, limit = 10) {
   try {
-    const response = await fetch(`${API_BASE}/search?keywords=${encodeURIComponent(keyword)}&limit=${limit}`);
+    const response = await fetchWithRetry(`${API_BASE}/search?keywords=${encodeURIComponent(keyword)}&limit=${limit}`);
     const data = await response.json();
     if (data.result && data.result.songs) {
       return data.result.songs.map(song => ({
@@ -133,18 +212,40 @@ export async function searchSongs(keyword, limit = 10) {
  */
 export async function getPlaylistSongs(playlistId, limit = 20) {
   try {
-    const response = await fetch(`${API_BASE}/playlist/detail?id=${playlistId}`);
+    const response = await fetchWithRetry(`${API_BASE}/playlist/detail?id=${playlistId}`);
     const data = await response.json();
+    
+    console.log('Playlist response:', data); // 调试日志
+    
     if (data.playlist && data.playlist.tracks) {
       const tracks = data.playlist.tracks.slice(0, limit);
       
-      // 获取每首歌的播放URL和歌词
+      // 获取所有歌曲ID
+      const trackIds = tracks.map(t => t.id).join(',');
+      
+      // 批量获取播放URL
+      let urlMap = {};
+      try {
+        const urlResponse = await fetchWithRetry(`${API_BASE}/song/url/v1?id=${trackIds}&level=standard`);
+        const urlData = await urlResponse.json();
+        if (urlData.data) {
+          urlData.data.forEach(item => {
+            if (item.url) {
+              urlMap[item.id] = item.url;
+            }
+          });
+        }
+      } catch (err) {
+        console.error('批量获取URL失败，将使用备用方案:', err);
+      }
+      
+      // 获取每首歌的歌词
       const songsWithDetails = await Promise.all(
         tracks.map(async (song) => {
-          const [url, lyrics] = await Promise.all([
-            getSongUrl(song.id),
-            getLyric(song.id),
-          ]);
+          const lyrics = await getLyric(song.id);
+          const url = urlMap[song.id] || `https://music.163.com/song/media/outer/url?id=${song.id}.mp3`;
+          
+          console.log(`Song ${song.id} URL:`, url); // 调试日志
           
           return {
             id: song.id,
@@ -221,3 +322,17 @@ export const MY_PLAYLIST_ID = '2318463841'; // 你的网易云歌单
 
 // 每次加载的歌曲数量
 export const PLAYLIST_LIMIT = 15;
+
+/**
+ * 获取当前使用的API端点
+ */
+export function getCurrentApiEndpoint() {
+  return API_BASE;
+}
+
+/**
+ * 手动切换到下一个API端点
+ */
+export function switchApi() {
+  return switchToNextApi();
+}

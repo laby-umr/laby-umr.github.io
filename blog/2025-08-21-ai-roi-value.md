@@ -3,6 +3,7 @@ slug: ai-roi-value
 title: AI大模型投资回报分析：从成本到价值的系统评估
 authors: [Laby]
 tags: [AI大模型, ROI分析, 投资回报, 价值评估]
+image: /img/blog/blog-14.jpg
 ---
 
 # AI大模型投资回报分析：从成本到价值的系统评估

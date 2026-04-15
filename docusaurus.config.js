@@ -54,7 +54,7 @@ const config = {
   // useful metadata like html lang.
   // i18n 配置 - 应用 3.9.2 优化
   i18n: {
-    defaultLocale: 'zh-Hans',
+    defaultLocale: 'en',
     locales: ['zh-Hans', 'en'],
     localeConfigs: {
       'zh-Hans': {
@@ -337,13 +337,13 @@ const config = {
             type: 'docSidebar',
             sidebarId: 'tutorialSidebar',
             position: 'left',
-            label: '知识库导航',
+            label: '文档',
           },
           {to: '/blog', label: '博客', position: 'left'},
           {to: '/projects', label: '项目', position: 'left'},
           {to: '/music', label: '音乐', position: 'left'},
           {to: '/contact', label: '联系我', position: 'left'},
-          {to: '/about', label: '关于我', position: 'right'},
+          {to: '/about', label: '关于我', position: 'left'},
           // 添加语言切换菜单
           {
             type: 'localeDropdown',

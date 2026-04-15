@@ -3,6 +3,7 @@ slug: enterprise-ai-implementation
 title: 企业级AI大模型落地实施方案：从战略到执行
 authors: [Laby]
 tags: [AI大模型, 企业落地, 实施策略, 数字化转型]
+image: /img/blog/blog-8.jpg
 ---
 
 # 企业级AI大模型落地实施方案：从战略到执行

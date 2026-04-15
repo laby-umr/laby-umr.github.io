@@ -3,6 +3,7 @@ slug: ai-architecture-deployment
 title: AI大模型技术架构与部署实践指南
 authors: [Laby]
 tags: [AI大模型, 技术架构, 部署实践, 系统设计]
+image: /img/blog/blog-13.jpg
 ---
 
 # AI大模型技术架构与部署实践指南

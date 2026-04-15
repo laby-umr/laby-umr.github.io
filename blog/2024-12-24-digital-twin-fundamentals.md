@@ -3,6 +3,7 @@ slug: digital-twin-fundamentals
 title: 数字孪生技术基础与企业级应用场景全解析
 authors: [Laby]
 tags: [数字孪生, 可视化大屏, 工业4.0, 智能制造]
+image: /img/blog/blog-1.jpg
 ---
 
 # 数字孪生技术基础与企业级应用场景全解析

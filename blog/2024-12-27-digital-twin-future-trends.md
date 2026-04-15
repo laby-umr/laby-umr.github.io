@@ -3,6 +3,7 @@ slug: digital-twin-future-trends
 title: 数字孪生技术未来发展趋势与挑战分析
 authors: [Laby]
 tags: [数字孪生, 趋势预测, AI融合, 元宇宙]
+image: /img/blog/blog-4.jpg
 ---
 
 # 数字孪生技术未来发展趋势与挑战分析

@@ -3,6 +3,7 @@ slug: digital-twin-tech-architecture
 title: 数字孪生可视化大屏技术架构与开发实践指南
 authors: [Laby]
 tags: [数字孪生, 可视化大屏, 技术架构, 开发实践]
+image: /img/blog/blog-3.jpg
 ---
 
 # 数字孪生可视化大屏技术架构与开发实践指南

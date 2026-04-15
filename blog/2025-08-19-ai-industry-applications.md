@@ -3,6 +3,7 @@ slug: ai-industry-applications
 title: AI大模型行业应用案例：重塑商业与生产力格局
 authors: [Laby]
 tags: [AI大模型, 行业应用, 案例研究, 数字化转型]
+image: /img/blog/blog-9.jpg
 ---
 
 # AI大模型行业应用案例：重塑商业与生产力格局
